@@ -69,12 +69,17 @@ def compute_verdict(inp: VerdictInput) -> VerdictOutput:
   if oos_profit < 0:
     reasons.append("OOS con PnL negativo")
 
-  if is_sharpe > 0 and oos_sharpe < is_sharpe * inp.oos_sharpe_ratio_min:
-    reasons.append(
-      f"Sharpe OOS ({oos_sharpe:.2f}) < {inp.oos_sharpe_ratio_min:.0%} del IS ({is_sharpe:.2f})"
-    )
-  elif is_sharpe <= 0 and oos_sharpe < is_sharpe:
-    reasons.append("Sharpe OOS degradó respecto a IS (IS ya negativo)")
+  # Degradación IS→OOS solo si OOS no falla ya por rentabilidad. Con Sharpe
+  # negativo el ratio 50% del IS es ambiguo (p. ej. -1.51 vs -1.90).
+  sharpe_degradation_evaluated = oos_profit >= 0 and oos_sharpe >= 0
+  details["sharpe_degradation_evaluated"] = sharpe_degradation_evaluated
+  if sharpe_degradation_evaluated:
+    if is_sharpe > 0 and oos_sharpe < is_sharpe * inp.oos_sharpe_ratio_min:
+      reasons.append(
+        f"Sharpe OOS ({oos_sharpe:.2f}) < {inp.oos_sharpe_ratio_min:.0%} del IS ({is_sharpe:.2f})"
+      )
+    elif is_sharpe <= 0 and oos_sharpe < is_sharpe:
+      reasons.append("Sharpe OOS degradó respecto a IS (IS ya negativo)")
 
   if inp.max_param_divergence > DEFAULT_MAX_PARAM_DIVERGENCE:
     reasons.append(

@@ -251,6 +251,11 @@ def main(
     False,
     help="Adoptar .fthypt parcial ≥95%% en lugar de re-hyperopt (reanudación barata)",
   ),
+  wf_epochs: int | None = typer.Option(
+    None,
+    "--wf-epochs",
+    help="Epochs hyperopt por ventana walk-forward (default: igual que --epochs del perfil)",
+  ),
 ) -> None:
   """Validación Fase 4 — IS/OOS, semillas, walk-forward, veredicto."""
   try:
@@ -265,6 +270,7 @@ def main(
       skip_hyperopt=skip_hyperopt,
       resume_run_id=resume_run_id,
       adopt_partial_hyperopt=adopt_partial_hyperopt,
+      wf_epochs=wf_epochs,
     )
   except ValidationRunActiveError as exc:
     console.print(f"[red]{exc}[/red]")
@@ -283,9 +289,11 @@ def _run_validation(
   skip_hyperopt: bool,
   resume_run_id: str | None,
   adopt_partial_hyperopt: bool,
+  wf_epochs: int | None,
 ) -> None:
   defaults = PROFILE_DEFAULTS[profile]
   epochs_n = epochs if epochs is not None else defaults["epochs"]
+  wf_epochs_n = wf_epochs if wf_epochs is not None else epochs_n
   seeds_n = seeds if seeds is not None else defaults["seeds"]
   min_trades_n = int(defaults["min_trades"])
   opt_spaces = hyperopt_spaces_for(strategy)
@@ -330,6 +338,7 @@ def _run_validation(
       "split": split.to_dict(),
       "oos_regime_distribution": regime_distribution_for_timerange(split.oos_timerange),
       "epochs": epochs_n,
+      "wf_epochs": wf_epochs_n,
       "seeds": seeds_n,
       "min_trades": min_trades_n,
       "hyperopt_spaces": opt_spaces,
@@ -479,7 +488,9 @@ def _run_validation(
     oos_profits_wf: list[float] = []
 
     if do_wf:
-      console.print("[cyan]==> Walk-forward 12m/3m[/cyan]")
+      console.print(
+        f"[cyan]==> Walk-forward 12m/3m ({wf_epochs_n} epochs/ventana)[/cyan]"
+      )
       windows = generate_walk_forward_windows(split.full_start, split.full_end)
       report["steps"]["walk_forward_windows"] = [w.to_dict() for w in windows]
       oos_segments: list[OosSegmentResult] = []
@@ -490,7 +501,7 @@ def _run_validation(
         archived, _ = _hyperopt_and_archive(
           strategy,
           window.train_timerange,
-          epochs=epochs_n,
+          epochs=wf_epochs_n,
           seed=42,
           enable_protections=enable_protections,
           archive_dir=params_archive,

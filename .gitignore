@@ -14,6 +14,15 @@ pipeline/output/
 *.html
 !docs/**/*.html
 
+# Validación — artefactos pesados de run (en disco; no en GitHub)
+user_data/validation_reports/**/hyperopt_checkpoints/
+user_data/validation_reports/**/*.fthypt
+user_data/validation_reports/**/*.pkl
+user_data/validation_reports/**/is_seed*.zip
+user_data/validation_reports/**/oos_seed*.zip
+user_data/validation_reports/.run_lock.json
+user_data/validation_reports/.run_failed.flag
+
 # Python
 __pycache__/
 *.py[cod]

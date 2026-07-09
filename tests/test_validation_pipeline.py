@@ -115,6 +115,30 @@ def test_oos_negative_is_sobreajustada() -> None:
     )
   )
   assert out.verdict == Verdict.SOBREAJUSTADA
+  assert out.details["sharpe_degradation_evaluated"] is False
+  assert not any("Sharpe OOS" in r for r in out.reasons)
+
+
+def test_negative_sharpe_oos_skips_degradation_ratio() -> None:
+  """OOS mejor en Sharpe (-1.51 vs -1.90) pero PnL negativo: sin ratio absurdo."""
+  seed = SeedRunResult(
+    seed=42,
+    is_metrics={"sharpe": -1.90, "trades": 150, "profit_total": -0.2},
+    oos_metrics={"sharpe": -1.51, "trades": 50, "profit_total": -0.1},
+    params_file="x.json",
+  )
+  out = compute_verdict(
+    VerdictInput(
+      strategy="MeanRevBB",
+      baseline_oos_metrics=None,
+      seed_results=[seed],
+      walk_forward_efficiency=None,
+      max_param_divergence=0.0,
+    )
+  )
+  assert out.verdict == Verdict.SOBREAJUSTADA
+  assert out.details["sharpe_degradation_evaluated"] is False
+  assert out.reasons == ["OOS con PnL negativo"]
 
 
 def test_grid_dca_hyperopt_spaces_buy_only() -> None:

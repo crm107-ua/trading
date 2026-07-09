@@ -80,9 +80,34 @@ El motor dice DUDOSA con un motivo marginal (p. ej. divergencia 0.26 vs umbral 0
 
 ## Después de congelar
 
-1. Batch de las otras cuatro (`scripts/run_validation_batch.ps1`) sin retocar umbrales.
-2. Aceptar lo que salga.
-3. Bisect `-j` y higiene de config en paralelo o después; no mezclar con calibración.
+1. **Decidir perfil WF del batch** (ver sección siguiente) y dejarlo escrito **antes** de lanzar TrendRider.
+2. Batch de las otras cuatro (`scripts/run_validation_batch.ps1`) sin retocar umbrales.
+3. Aceptar lo que salga.
+4. Bisect `-j` y higiene de config en paralelo o después; no mezclar con calibración.
+
+## Decisión pre-registrada: epochs walk-forward del batch
+
+**Congelar esta decisión antes del primer `TrendRider` — no después de ver resultados del batch.**
+
+MeanRevBB (control) **no se toca**: su WF corre a **300 epochs/ventana** como está definido en el perfil `full` en curso. Cambiarlo a mitad rompería la coherencia interna del control.
+
+Para las **otras cuatro** estrategias, elegir **una** opción y documentarla en el commit que lance el batch:
+
+| Opción | Comando | Aritmética (~) | Trade-off |
+|--------|---------|----------------|-----------|
+| **A — WF completo** | `--profile full` (sin `--wf-epochs`) | ~12 h semillas + ~60 h WF × 4 ≈ **2 semanas** | Máxima precisión por ventana; WFE comparable en *método* con MeanRevBB. |
+| **B — WF reducido (recomendado a valorar)** | `--profile full --wf-epochs 100` | ~12 h semillas + ~20 h WF × 4 ≈ **5–6 días** | El WF mide **estabilidad temporal**, no el óptimo global; con 4–6 parámetros, 100 epochs exploran razonablemente. |
+
+**Nota de comparabilidad:** si el batch usa `--wf-epochs 100`, el **veredicto** (WFE vs umbral 0.5) sigue siendo válido estrategia a estrategia dentro del batch. El WFE de MeanRevBB (300/ventana) **no es directamente comparable en precisión** con el del batch (100/ventana); sí en veredicto emitido bajo umbrales congelados. Registrar en el commit del batch qué opción se eligió.
+
+**Reanudación barata (obligatoria antes del batch):** usar `--adopt-partial-hyperopt` (o `HYPEROPT_ADOPT_PARTIAL=1`) en **todos** los runs del batch y en resumes tras apagados. La ausencia de esta flag ya costó rehacer semillas enteras dos veces; no repetir.
+
+Checklist escrito antes de `run_validation_batch.ps1`:
+
+- [ ] Umbrales congelados en git (post-calibración MeanRevBB).
+- [ ] Opción WF A o B decidida y anotada (esta sección + commit message).
+- [ ] `--adopt-partial-hyperopt` activo en el script de batch o en cada comando manual.
+- [ ] MeanRevBB `report.json` cerrado; no mezclar calibración con batch en curso.
 
 ## Referencia de umbrales actuales (`verdict.py`)
 
@@ -95,3 +120,5 @@ El motor dice DUDOSA con un motivo marginal (p. ej. divergencia 0.26 vs umbral 0
 
 Hard-fail → SOBREAJUSTADA: PnL OOS negativo, degradación Sharpe, WFE bajo.  
 Otros motivos (divergencia, trades IS) → DUDOSA.
+
+**Caso borde (Sharpes negativos):** si OOS ya falla por PnL negativo (o Sharpe OOS &lt; 0), el motor **no** evalúa degradación IS→OOS — el ratio 50% del IS no está definido de forma útil cuando ambos son negativos. Ver `sharpe_degradation_evaluated` en `details` del veredicto.

@@ -4,10 +4,12 @@ Orquestador: `python -m pipeline.run_validation <Estrategia> [opciones]`
 
 ## Perfiles
 
-| Perfil | Epochs | Semillas | Walk-forward | min_trades |
-|--------|--------|----------|--------------|------------|
-| `smoke` | 30 | 1 | no | 30 |
-| `full` | 300 | 3 | sí (12m/3m) | 100 |
+| Perfil | Epochs (semillas) | WF epochs | Semillas | Walk-forward | min_trades |
+|--------|-------------------|-----------|----------|--------------|------------|
+| `smoke` | 30 | — | 1 | no | 30 |
+| `full` | 300 | 300 (default) | 3 | sí (12m/3m) | 100 |
+
+`--wf-epochs N` override solo el hyperopt de cada ventana walk-forward; las semillas siguen usando `--epochs` del perfil. Ver decisión pre-registrada en [`calibration_protocol.md`](calibration_protocol.md) antes del batch de las otras cuatro.
 
 ```bash
 # CI / fontanería (sin hyperopt)
@@ -41,8 +43,10 @@ Ver **protocolo pre-registrado** (leer *antes* del `report.json`): [`docs/calibr
 **No ejecutar hasta congelar umbrales.** La calibración puede hacerse en cuanto MeanRevBB emita `report.json`; el bisect de `-j` no bloquea la calibración.
 
 ```powershell
-.\scripts\run_validation_batch.ps1
-# o una sola: .\scripts\run_validation_batch.ps1 -Strategy TrendRider
+# Tras decidir WF en calibration_protocol.md (opción A o B):
+.\scripts\run_validation_batch.ps1 -AdoptPartialHyperopt
+.\scripts\run_validation_batch.ps1 -WfEpochs 100 -AdoptPartialHyperopt   # opción B
+# una sola: .\scripts\run_validation_batch.ps1 -Strategy TrendRider -WfEpochs 100 -AdoptPartialHyperopt
 ```
 
 Si tras calibración MeanRevBB queda DUDOSA/SOBREAJUSTADA por números, el control funcionó.

@@ -4,7 +4,9 @@
 # Respeta .run_lock.json entre estrategias (aborta si la anterior no liberó el lock).
 
 param(
-  [string]$Strategy = ""
+  [string]$Strategy = "",
+  [int]$WfEpochs = 0,
+  [switch]$AdoptPartialHyperopt
 )
 
 $ErrorActionPreference = "Stop"
@@ -24,8 +26,10 @@ if ($Strategy) {
 Write-Host "==> Batch validación full (post-calibración)"
 Write-Host "    Estrategias: $($Batch -join ', ')"
 Write-Host "    HYPEROPT_JOB_WORKERS=$(if ($env:HYPEROPT_JOB_WORKERS) { $env:HYPEROPT_JOB_WORKERS } else { '1' })"
+Write-Host "    WF epochs/ventana: $(if ($WfEpochs -gt 0) { $WfEpochs } else { '300 (perfil full)' })"
+Write-Host "    adopt-partial-hyperopt: $(if ($AdoptPartialHyperopt) { 'ON' } else { 'OFF — activar antes del batch' })"
 Write-Host ""
-Write-Host "CONFIRME: umbrales congelados en git antes de continuar."
+Write-Host "CONFIRME: umbrales congelados + decisión WF (calibration_protocol.md) antes de continuar."
 Write-Host "Ctrl+C para abortar; Enter para lanzar."
 [void](Read-Host)
 
@@ -46,7 +50,10 @@ foreach ($s in $Batch) {
   Write-Host "========================================"
   Write-Host "==> $s --profile full"
   Write-Host "========================================"
-  python -m pipeline.run_validation $s --profile full
+  $args = @($s, "--profile", "full")
+  if ($WfEpochs -gt 0) { $args += @("--wf-epochs", "$WfEpochs") }
+  if ($AdoptPartialHyperopt) { $args += "--adopt-partial-hyperopt" }
+  python -m pipeline.run_validation @args
   if ($LASTEXITCODE -eq 2) {
     Write-Host "[yellow]Veredicto SOBREAJUSTADA — continuar con siguiente estrategia[/yellow]"
   } elseif ($LASTEXITCODE -ne 0) {

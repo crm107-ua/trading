@@ -3,6 +3,7 @@
 param(
   [string]$Strategy = "MeanRevBB",
   [int]$Epochs = 300,
+  [int]$Seeds = 3,
   [int]$IntervalSec = 300,
   [int]$StaleCycles = 4,
   [string]$FlagFile = "user_data/validation_reports/.run_failed.flag"
@@ -21,6 +22,36 @@ function Write-Alert([string]$Message) {
   Write-Host $line -ForegroundColor Red
   $line | Out-File -FilePath $FlagFile -Encoding utf8 -Append
   try { [console]::beep(880, 400); Start-Sleep -Milliseconds 150; [console]::beep(660, 400) } catch {}
+}
+
+function Get-RunHyperoptContext([string]$StrategyName, [int]$SeedTotal) {
+  $ctx = @{
+    phaseLabel = ""
+    archNum = 0
+    archTotal = $SeedTotal
+  }
+  $lockPath = "user_data/validation_reports/.run_lock.json"
+  if (-not (Test-Path $lockPath)) { return $ctx }
+
+  $lock = Get-Content $lockPath -Raw | ConvertFrom-Json
+  if ($lock.strategy -ne $StrategyName) { return $ctx }
+
+  $completed = 0
+  $ckPath = "user_data/validation_reports/$StrategyName/$($lock.run_id)/checkpoint.json"
+  if (Test-Path $ckPath) {
+    $ck = Get-Content $ckPath -Raw | ConvertFrom-Json
+    if ($ck.completed_seeds) { $completed = @($ck.completed_seeds).Count }
+  }
+
+  if ($completed -ge $SeedTotal) {
+    $ctx.phaseLabel = "WF"
+    return $ctx
+  }
+
+  $archNum = $completed + 1
+  $ctx.archNum = $archNum
+  $ctx.phaseLabel = "semilla $archNum/$SeedTotal  arch $archNum/$SeedTotal"
+  return $ctx
 }
 
 Write-Host "Vigilante: $Strategy cada ${IntervalSec}s (stale tras $StaleCycles ciclos sin progreso)"
@@ -45,10 +76,13 @@ while ($true) {
   $f = Get-ChildItem "user_data/hyperopt_results/strategy_${Strategy}_*.fthypt" -ErrorAction SilentlyContinue |
     Sort-Object LastWriteTime -Descending | Select-Object -First 1
 
+  $runCtx = Get-RunHyperoptContext -StrategyName $Strategy -SeedTotal $Seeds
+
   if ($f) {
     $n = (Get-Content $f.FullName | Measure-Object -Line).Lines
     $pct = [math]::Round(100 * $n / $Epochs, 1)
-    Write-Host "$(Get-Date -Format HH:mm:ss)  $($f.Name)  $n/$Epochs ($pct%)  lock=$(if ($lockOut -match 'LOCKED') {'ON'} else {'OFF'})"
+    $phase = if ($runCtx.phaseLabel) { "  $($runCtx.phaseLabel)" } else { "" }
+    Write-Host "$(Get-Date -Format HH:mm:ss)$phase  $($f.Name)  epoch $n/$Epochs ($pct%)  lock=$(if ($lockOut -match 'LOCKED') {'ON'} else {'OFF'})"
 
     if ($n -eq $lastCount -and $lockOut -match "LOCKED") {
       $stale++

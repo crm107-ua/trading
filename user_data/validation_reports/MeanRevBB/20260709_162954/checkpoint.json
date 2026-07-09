@@ -11,7 +11,77 @@
     "winrate": 0.35648148148148145,
     "profit_factor": 0.4207573831368695
   },
-  "completed_seeds": [],
-  "seed_results": [],
-  "seed_params_raw": []
+  "completed_seeds": [
+    42
+  ],
+  "seed_results": [
+    {
+      "seed": 42,
+      "is_metrics": {
+        "trades": 318,
+        "profit_total_abs": -6338.14008365,
+        "profit_total": -0.633814008365,
+        "sharpe": -1.903312851528066,
+        "sortino": -3.7284003823095313,
+        "max_drawdown_account": 0.6477757624249997,
+        "winrate": 0.3333333333333333,
+        "profit_factor": 0.3560857993814078
+      },
+      "oos_metrics": {
+        "trades": 130,
+        "profit_total_abs": -3079.9004815,
+        "profit_total": -0.30799004815,
+        "sharpe": -1.51213974155564,
+        "sortino": -3.6884311253653377,
+        "max_drawdown_account": 0.31737578200114663,
+        "winrate": 0.3384615384615385,
+        "profit_factor": 0.4416172453159313
+      },
+      "params_file": "C:\\Users\\carom\\Desktop\\trading\\user_data\\validation_reports\\MeanRevBB\\20260709_162954\\params\\is_seed42.json",
+      "param_divergence_vs_seed0": null
+    }
+  ],
+  "seed_params_raw": [
+    {
+      "strategy_name": "MeanRevBB",
+      "params": {
+        "roi": {
+          "0": 100
+        },
+        "stoploss": {
+          "stoploss": -0.1
+        },
+        "trailing": {
+          "trailing_stop": false,
+          "trailing_stop_positive": null,
+          "trailing_stop_positive_offset": 0.0,
+          "trailing_only_offset_is_reached": false
+        },
+        "max_open_trades": {
+          "max_open_trades": 4
+        },
+        "buy": {
+          "bb_period": 18,
+          "bb_std": 2.4,
+          "buy_bb_offset": 0.0,
+          "buy_rsi": 20
+        },
+        "sell": {
+          "sell_bb_mid_tolerance": 0.001,
+          "sell_rsi": 51
+        }
+      },
+      "ft_stratparam_v": 1,
+      "export_time": "2026-07-09 20:21:43.685569+00:00"
+    }
+  ],
+  "hyperopt_checkpoints": {
+    "42": [
+      ".last_result.json",
+      "hyperopt_tickerdata.pkl",
+      "strategy_MeanRevBB_2026-07-09_11-42-36.fthypt",
+      "strategy_MeanRevBB_2026-07-09_11-58-32.fthypt",
+      "strategy_MeanRevBB_2026-07-09_16-30-35.fthypt"
+    ]
+  }
 }
