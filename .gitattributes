@@ -1,0 +1,2 @@
+user_data/hyperopt_results/** filter=lfs diff=lfs merge=lfs -text
+user_data/data/** filter=lfs diff=lfs merge=lfs -text

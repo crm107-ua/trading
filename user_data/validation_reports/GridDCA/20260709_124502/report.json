@@ -1,0 +1,76 @@
+{
+  "strategy": "GridDCA",
+  "profile": "smoke",
+  "conclusive": false,
+  "conclusive_note": "NO CONCLUYENTE \u2014 perfil smoke (epochs/seeds reducidos). No citar veredicto como validaci\u00f3n.",
+  "run_id": "20260709_124502",
+  "git_hash": "unknown",
+  "config_files": [
+    "user_data/config/base.json",
+    "user_data/config/backtest.json"
+  ],
+  "config_merged_sha256": "80384c1e4fc6d3afec8d6d4dde2e76642db97e6f4edeb94fcdd34d58ad3f427e",
+  "timerange_requested": "20210101-",
+  "split": {
+    "full_timerange": "20210101-20260709",
+    "full_start": "2021-01-01",
+    "full_end": "2026-07-09",
+    "is_start": "2021-01-01",
+    "is_end": "2024-11-11",
+    "oos_start": "2024-11-12",
+    "oos_end": "2026-07-09",
+    "is_timerange": "20210101-20241111",
+    "oos_timerange": "20241112-20260709",
+    "is_ratio": 0.7
+  },
+  "oos_regime_distribution": {
+    "timerange": "20241112-20260709",
+    "start": "2024-11-12",
+    "end": "2026-07-09",
+    "candles_4h": 3626,
+    "distribution_pct": {
+      "RANGE": 51.5,
+      "BEAR": 27.0,
+      "BULL": 21.5
+    },
+    "counts": {
+      "RANGE": 1868,
+      "BEAR": 979,
+      "BULL": 779
+    }
+  },
+  "epochs": 30,
+  "seeds": 1,
+  "min_trades": 30,
+  "hyperopt_spaces": [
+    "buy"
+  ],
+  "hyperopt_job_workers": 1,
+  "hyperopt_reproducibility_note": "La secuencia hyperopt depende de --random-state y -j. Cambiar -j invalida comparaci\u00f3n con runs previos; re-lanzar la estrategia completa.",
+  "docker_runtime": {
+    "freqtrade_image": "freqtradeorg/freqtrade@sha256:87aa5c6d65359b34e9d99a0bb260a38c0efe0315253811e6f48c2afe8f278a6a",
+    "freqtrade_image_digest": "sha256:87aa5c6d65359b34e9d99a0bb260a38c0efe0315253811e6f48c2afe8f278a6a",
+    "freqtrade_image_pinned_default": "freqtradeorg/freqtrade@sha256:87aa5c6d65359b34e9d99a0bb260a38c0efe0315253811e6f48c2afe8f278a6a",
+    "python_version": "3.14.6",
+    "hyperopt_job_workers": 1
+  },
+  "enable_protections": true,
+  "walk_forward_enabled": false,
+  "steps": {
+    "baseline_oos_defaults": {
+      "trades": 1039,
+      "profit_total_abs": -2120.84977187,
+      "profit_total": -0.212084977187,
+      "sharpe": -4.9799804970819235,
+      "sortino": -12.047865479049715,
+      "max_drawdown_account": 0.21343546747943642,
+      "winrate": 0.3849855630413859,
+      "profit_factor": 0.6717588366605127
+    }
+  },
+  "verdict": "DUDOSA",
+  "reasons": [],
+  "notes": [
+    "skip_hyperopt=True"
+  ]
+}

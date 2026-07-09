@@ -1,0 +1,41 @@
+{
+  "strategy": "GridDCA",
+  "profile": "smoke",
+  "run_id": "20260709_111810",
+  "git_hash": "unknown",
+  "timerange_requested": "20210101-",
+  "split": {
+    "full_timerange": "20210101-20260709",
+    "full_start": "2021-01-01",
+    "full_end": "2026-07-09",
+    "is_start": "2021-01-01",
+    "is_end": "2024-11-11",
+    "oos_start": "2024-11-12",
+    "oos_end": "2026-07-09",
+    "is_timerange": "20210101-20241111",
+    "oos_timerange": "20241112-20260709",
+    "is_ratio": 0.7
+  },
+  "epochs": 30,
+  "seeds": 1,
+  "min_trades": 30,
+  "enable_protections": true,
+  "walk_forward_enabled": false,
+  "steps": {
+    "baseline_oos_defaults": {
+      "trades": 92,
+      "profit_total_abs": 337.57743787000004,
+      "profit_total": 0.03375774378700001,
+      "sharpe": 2.2085923791263573,
+      "sortino": 10.874811096058062,
+      "max_drawdown_account": 0.025729201245537434,
+      "winrate": 0.2717391304347826,
+      "profit_factor": 1.5378953311177803
+    }
+  },
+  "verdict": "DUDOSA",
+  "reasons": [],
+  "notes": [
+    "skip_hyperopt=True"
+  ]
+}

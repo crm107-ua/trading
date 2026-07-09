@@ -1,0 +1,17 @@
+{
+  "run_id": "20260709_124502",
+  "strategy": "GridDCA",
+  "baseline_oos": {
+    "trades": 1039,
+    "profit_total_abs": -2120.84977187,
+    "profit_total": -0.212084977187,
+    "sharpe": -4.9799804970819235,
+    "sortino": -12.047865479049715,
+    "max_drawdown_account": 0.21343546747943642,
+    "winrate": 0.3849855630413859,
+    "profit_factor": 0.6717588366605127
+  },
+  "completed_seeds": [],
+  "seed_results": [],
+  "seed_params_raw": []
+}
