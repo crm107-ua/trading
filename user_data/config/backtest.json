@@ -1,0 +1,20 @@
+{
+    "dry_run": true,
+    "datadir": "user_data/data",
+    "export": "trades",
+    "exportfilename": "user_data/backtest_results/backtest-result.json",
+    "pairlists": [
+        {
+            "method": "StaticPairList"
+        }
+    ],
+    "exchange": {
+        "pair_whitelist": [
+            "BTC/USDT",
+            "ETH/USDT",
+            "BNB/USDT",
+            "SOL/USDT",
+            "XRP/USDT"
+        ]
+    }
+}

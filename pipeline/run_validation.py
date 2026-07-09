@@ -1,0 +1,567 @@
+"""
+Orquestador Fase 4 — IS/OOS, semillas, walk-forward y veredicto.
+
+Perfiles:
+  smoke  — 30 epochs, 1 semilla, sin walk-forward (CI / fontanería)
+  full   — 300 epochs, 3 semillas, walk-forward 12m/3m
+
+  python -m pipeline.run_validation GridDCA --profile smoke
+  python -m pipeline.run_validation validate MeanRevBB --profile full
+"""
+
+from __future__ import annotations
+
+import json
+import shutil
+import subprocess
+from contextlib import contextmanager
+from dataclasses import asdict
+from datetime import datetime, timezone
+from enum import Enum
+from pathlib import Path
+from typing import Iterator
+
+import typer
+from rich.console import Console
+from rich.table import Table
+
+from pipeline.config_hash import config_metadata
+from pipeline.freqtrade_cli import (
+  docker_runtime_info,
+  hyperopt_job_workers,
+  parse_backtest_metrics,
+  run_backtest,
+  run_hyperopt,
+)
+from pipeline.hyperopt_checkpoint import archive_hyperopt_results
+from pipeline.params_manager import (
+  archive_strategy_params,
+  clear_strategy_params,
+  install_strategy_params,
+  param_divergence,
+  params_file_exists,
+  read_strategy_params,
+  verify_params_loaded,
+)
+from pipeline.timerange_split import compute_is_oos_split, resolve_data_end
+from pipeline.verdict import Verdict
+from pipeline.verdict_engine import SeedRunResult, VerdictInput, compute_verdict
+from pipeline.regime_stats import regime_distribution_for_timerange
+from pipeline.run_lock import ValidationRunActiveError, acquire_lock, release_lock
+from pipeline.strategy_spaces import hyperopt_spaces_for
+from pipeline.walk_forward import (
+  OosSegmentResult,
+  generate_walk_forward_windows,
+  stitch_oos_equity,
+  walk_forward_efficiency,
+)
+
+console = Console()
+ROOT = Path(__file__).resolve().parents[1]
+REPORTS_DIR = ROOT / "user_data" / "validation_reports"
+DATA_DIR = ROOT / "user_data" / "data" / "binance"
+CHECKPOINT_NAME = "checkpoint.json"
+
+
+class Profile(str, Enum):
+  smoke = "smoke"
+  full = "full"
+
+
+PROFILE_DEFAULTS = {
+  Profile.smoke: {"epochs": 30, "seeds": 1, "walk_forward": False, "min_trades": 30},
+  Profile.full: {"epochs": 300, "seeds": 3, "walk_forward": True, "min_trades": 100},
+}
+
+
+def _git_hash() -> str:
+  try:
+    out = subprocess.check_output(
+      ["git", "rev-parse", "HEAD"],
+      cwd=ROOT,
+      text=True,
+      stderr=subprocess.DEVNULL,
+    )
+    return out.strip()
+  except (subprocess.CalledProcessError, FileNotFoundError):
+    return "unknown"
+
+
+def _seed_values(count: int) -> list[int]:
+  return [42, 123, 456][:count]
+
+
+def _run_dir(strategy: str, run_id: str) -> Path:
+  path = REPORTS_DIR / strategy / run_id
+  path.mkdir(parents=True, exist_ok=True)
+  return path
+
+
+def _checkpoint_path(run_path: Path) -> Path:
+  return run_path / CHECKPOINT_NAME
+
+
+def _save_checkpoint(run_path: Path, payload: dict) -> None:
+  _checkpoint_path(run_path).write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def _load_checkpoint(run_path: Path) -> dict | None:
+  path = _checkpoint_path(run_path)
+  if not path.is_file():
+    return None
+  return json.loads(path.read_text(encoding="utf-8"))
+
+
+@contextmanager
+def _validation_lock(*, strategy: str, run_id: str, profile: str) -> Iterator[None]:
+  acquire_lock(strategy=strategy, run_id=run_id, profile=profile)
+  try:
+    yield
+  finally:
+    release_lock()
+
+
+def _seed_result_from_dict(data: dict) -> SeedRunResult:
+  return SeedRunResult(
+    seed=int(data["seed"]),
+    is_metrics=dict(data["is_metrics"]),
+    oos_metrics=dict(data["oos_metrics"]),
+    params_file=str(data["params_file"]),
+    param_divergence_vs_seed0=float(data.get("param_divergence_vs_seed0") or 0.0),
+  )
+
+
+def _hyperopt_and_archive(
+  strategy: str,
+  timerange: str,
+  *,
+  epochs: int,
+  seed: int,
+  enable_protections: bool,
+  archive_dir: Path,
+  label: str,
+  min_trades: int,
+  spaces: list[str],
+) -> tuple[Path | None, str]:
+  """Hyperopt IS con params limpios; archiva el json generado."""
+  clear_strategy_params(strategy)
+  if params_file_exists(strategy):
+    raise RuntimeError(f"FAIL: {strategy}.json no se limpió antes de hyperopt")
+
+  result = run_hyperopt(
+    strategy,
+    timerange,
+    epochs=epochs,
+    random_state=seed,
+    enable_protections=enable_protections,
+    min_trades=min_trades,
+    spaces=spaces,
+  )
+  if result.returncode != 0:
+    raise RuntimeError(f"hyperopt falló (seed={seed})\n{result.output[-3000:]}")
+
+  archived = archive_strategy_params(strategy, archive_dir, label)
+  if archived is None:
+    raise RuntimeError(f"hyperopt no exportó {strategy}.json (seed={seed})")
+
+  return archived, result.output
+
+
+def _archive_seed_hyperopt(run_path: Path, seed: int) -> list[str]:
+  dest = run_path / "hyperopt_checkpoints" / f"is_seed{seed}"
+  return archive_hyperopt_results(dest)
+
+
+def _backtest_with_params(
+  strategy: str,
+  timerange: str,
+  params_file: Path,
+  *,
+  enable_protections: bool,
+  allow_defaults: bool,
+) -> tuple[dict, str, Path]:
+  clear_strategy_params(strategy)
+  install_strategy_params(strategy, params_file)
+
+  result, zip_path = run_backtest(strategy, timerange, enable_protections=enable_protections)
+  ok, issues = verify_params_loaded(params_file, result.output, allow_defaults=allow_defaults)
+  if not ok:
+    raise RuntimeError(
+      "param load check falló:\n  " + "\n  ".join(issues) + f"\n{result.output[-2000:]}"
+    )
+  if result.returncode != 0:
+    raise RuntimeError(f"backtest falló\n{result.output[-3000:]}")
+  if zip_path is None:
+    raise RuntimeError("sin zip de backtest tras ejecución")
+  metrics = parse_backtest_metrics(zip_path, strategy)
+  return metrics, result.output, zip_path
+
+
+def _baseline_oos_backtest(
+  strategy: str,
+  oos_timerange: str,
+  *,
+  enable_protections: bool,
+) -> tuple[dict, Path]:
+  """OOS con defaults — sin json de params."""
+  removed = clear_strategy_params(strategy)
+  if params_file_exists(strategy):
+    raise RuntimeError("FAIL: no se pudo limpiar params antes de baseline OOS")
+  _ = removed
+
+  result, zip_path = run_backtest(strategy, oos_timerange, enable_protections=enable_protections)
+  if params_file_exists(strategy):
+    raise RuntimeError("baseline OOS contaminado: apareció json de params inesperado")
+
+  if result.returncode != 0:
+    raise RuntimeError(f"baseline OOS falló\n{result.output[-2000:]}")
+  if zip_path is None:
+    raise RuntimeError("sin zip baseline OOS")
+  return parse_backtest_metrics(zip_path, strategy), zip_path
+
+
+def main(
+  strategy: str = typer.Argument(..., help="Estrategia Freqtrade"),
+  timerange: str = typer.Option("20210101-", help="Ventana completa"),
+  profile: Profile = typer.Option(Profile.smoke, help="smoke o full"),
+  epochs: int | None = typer.Option(None, help="Override epochs"),
+  seeds: int | None = typer.Option(None, help="Override semillas"),
+  enable_protections: bool = typer.Option(True, help="Protecciones en todos los pasos"),
+  skip_walk_forward: bool = typer.Option(False, help="Omitir walk-forward"),
+  skip_hyperopt: bool = typer.Option(False, help="Solo split + baseline"),
+  resume_run_id: str | None = typer.Option(
+    None, help="Reanudar run interrumpido (mismo run_id, salta semillas completadas)"
+  ),
+) -> None:
+  """Validación Fase 4 — IS/OOS, semillas, walk-forward, veredicto."""
+  try:
+    _run_validation(
+      strategy=strategy,
+      timerange=timerange,
+      profile=profile,
+      epochs=epochs,
+      seeds=seeds,
+      enable_protections=enable_protections,
+      skip_walk_forward=skip_walk_forward,
+      skip_hyperopt=skip_hyperopt,
+      resume_run_id=resume_run_id,
+    )
+  except ValidationRunActiveError as exc:
+    console.print(f"[red]{exc}[/red]")
+    raise typer.Exit(code=3) from exc
+
+
+def _run_validation(
+  *,
+  strategy: str,
+  timerange: str,
+  profile: Profile,
+  epochs: int | None,
+  seeds: int | None,
+  enable_protections: bool,
+  skip_walk_forward: bool,
+  skip_hyperopt: bool,
+  resume_run_id: str | None,
+) -> None:
+  defaults = PROFILE_DEFAULTS[profile]
+  epochs_n = epochs if epochs is not None else defaults["epochs"]
+  seeds_n = seeds if seeds is not None else defaults["seeds"]
+  min_trades_n = int(defaults["min_trades"])
+  opt_spaces = hyperopt_spaces_for(strategy)
+  do_wf = defaults["walk_forward"] and not skip_walk_forward
+
+  checkpoint: dict | None = None
+  if resume_run_id:
+    run_id = resume_run_id
+    run_path = _run_dir(strategy, run_id)
+    checkpoint = _load_checkpoint(run_path)
+    if checkpoint is None:
+      raise RuntimeError(f"sin checkpoint.json en {run_path}")
+    console.print(f"[yellow]==> Reanudando run_id={run_id}[/yellow]")
+  else:
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    run_path = _run_dir(strategy, run_id)
+
+  params_archive = run_path / "params"
+  params_archive.mkdir(exist_ok=True)
+
+  if not (DATA_DIR / "BTC_USDT-1h.feather").exists():
+    console.print("[red]Falta user_data/data — ejecutar scripts/download_data.ps1[/red]")
+    raise typer.Exit(code=1)
+
+  data_end = resolve_data_end(DATA_DIR)
+  split = compute_is_oos_split(timerange, data_end=data_end)
+
+  with _validation_lock(strategy=strategy, run_id=run_id, profile=profile.value):
+    report: dict = {
+      "strategy": strategy,
+      "profile": profile.value,
+      "conclusive": profile == Profile.full,
+      "conclusive_note": (
+        "Veredicto vinculante — perfil full con semillas y walk-forward completos."
+        if profile == Profile.full
+        else "NO CONCLUYENTE — perfil smoke (epochs/seeds reducidos). No citar veredicto como validación."
+      ),
+      "run_id": run_id,
+      "git_hash": _git_hash(),
+      **config_metadata(),
+      "timerange_requested": timerange,
+      "split": split.to_dict(),
+      "oos_regime_distribution": regime_distribution_for_timerange(split.oos_timerange),
+      "epochs": epochs_n,
+      "seeds": seeds_n,
+      "min_trades": min_trades_n,
+      "hyperopt_spaces": opt_spaces,
+      "hyperopt_job_workers": hyperopt_job_workers(),
+      "hyperopt_reproducibility_note": (
+        "La secuencia hyperopt depende de --random-state y -j. "
+        "Cambiar -j invalida comparación con runs previos; re-lanzar la estrategia completa."
+      ),
+      "docker_runtime": docker_runtime_info(),
+      "enable_protections": enable_protections,
+      "walk_forward_enabled": do_wf,
+      "steps": {},
+      "verdict": Verdict.DUDOSA.value,
+      "reasons": [],
+    }
+
+    console.print(f"[bold]==> Validación {strategy}[/bold] profile={profile.value}")
+    console.print(f"    IS:  {split.is_timerange}")
+    console.print(f"    OOS: {split.oos_timerange}")
+
+    completed_seeds: set[int] = set()
+    seed_results: list[SeedRunResult] = []
+    seed_params_raw: list[dict] = []
+    baseline_oos: dict
+
+    if checkpoint:
+      completed_seeds = {int(s) for s in checkpoint.get("completed_seeds", [])}
+      seed_results = [_seed_result_from_dict(s) for s in checkpoint.get("seed_results", [])]
+      seed_params_raw = list(checkpoint.get("seed_params_raw", []))
+      if checkpoint.get("baseline_oos"):
+        baseline_oos = dict(checkpoint["baseline_oos"])
+        report["steps"]["baseline_oos_defaults"] = baseline_oos
+        console.print("[dim]Baseline OOS — restaurado desde checkpoint[/dim]")
+    else:
+      baseline_oos = {}
+
+    if not checkpoint or not checkpoint.get("baseline_oos"):
+      console.print("[cyan]==> Baseline OOS (defaults, params limpios)[/cyan]")
+      try:
+        baseline_oos, baseline_zip = _baseline_oos_backtest(
+          strategy,
+          split.oos_timerange,
+          enable_protections=enable_protections,
+        )
+        report["steps"]["baseline_oos_defaults"] = baseline_oos
+        shutil.copy2(baseline_zip, run_path / "baseline_oos.zip")
+      finally:
+        clear_strategy_params(strategy)
+      _save_checkpoint(
+        run_path,
+        {
+          "run_id": run_id,
+          "strategy": strategy,
+          "baseline_oos": baseline_oos,
+          "completed_seeds": sorted(completed_seeds),
+          "seed_results": [asdict(s) for s in seed_results],
+          "seed_params_raw": seed_params_raw,
+        },
+      )
+
+    if skip_hyperopt:
+      report["notes"] = ["skip_hyperopt=True"]
+      _write_report(run_path, report)
+      return
+
+    for seed in _seed_values(seeds_n):
+      if seed in completed_seeds:
+        console.print(f"[dim]==> Semilla {seed} — ya en checkpoint, omitiendo[/dim]")
+        continue
+
+      label = f"is_seed{seed}"
+      console.print(f"[cyan]==> Hyperopt IS seed={seed} ({epochs_n} epochs)[/cyan]")
+      archived, _ = _hyperopt_and_archive(
+        strategy,
+        split.is_timerange,
+        epochs=epochs_n,
+        seed=seed,
+        enable_protections=enable_protections,
+        archive_dir=params_archive,
+        label=label,
+        min_trades=min_trades_n,
+        spaces=opt_spaces,
+      )
+      hyperopt_files = _archive_seed_hyperopt(run_path, seed)
+
+      console.print(f"[cyan]==> Backtest IS seed={seed} (params archivados)[/cyan]")
+      is_metrics, _, is_zip = _backtest_with_params(
+        strategy,
+        split.is_timerange,
+        archived,
+        enable_protections=enable_protections,
+        allow_defaults=False,
+      )
+      shutil.copy2(is_zip, run_path / f"is_seed{seed}.zip")
+
+      console.print(f"[cyan]==> Backtest OOS seed={seed}[/cyan]")
+      oos_metrics, _, oos_zip = _backtest_with_params(
+        strategy,
+        split.oos_timerange,
+        archived,
+        enable_protections=enable_protections,
+        allow_defaults=False,
+      )
+      shutil.copy2(oos_zip, run_path / f"oos_seed{seed}.zip")
+
+      raw = read_strategy_params(strategy) or json.loads(archived.read_text(encoding="utf-8"))
+      seed_params_raw.append(raw)
+      clear_strategy_params(strategy)
+
+      seed_results.append(
+        SeedRunResult(
+          seed=seed,
+          is_metrics=is_metrics,
+          oos_metrics=oos_metrics,
+          params_file=str(archived),
+        )
+      )
+      completed_seeds.add(seed)
+      _save_checkpoint(
+        run_path,
+        {
+          "run_id": run_id,
+          "strategy": strategy,
+          "baseline_oos": baseline_oos,
+          "completed_seeds": sorted(completed_seeds),
+          "seed_results": [asdict(s) for s in seed_results],
+          "seed_params_raw": seed_params_raw,
+          "hyperopt_checkpoints": {str(seed): hyperopt_files},
+        },
+      )
+
+    # Divergencia entre semillas
+    max_div = 0.0
+    if len(seed_params_raw) > 1:
+      for i in range(1, len(seed_params_raw)):
+        div = param_divergence(seed_params_raw[0], seed_params_raw[i])
+        seed_results[i].param_divergence_vs_seed0 = div
+        max_div = max(max_div, div)
+    report["steps"]["seeds"] = [asdict(s) for s in seed_results]
+    report["max_param_divergence"] = max_div
+
+    # Walk-forward
+    wfe_value: float | None = None
+    is_profits_wf: list[float] = []
+    oos_profits_wf: list[float] = []
+
+    if do_wf:
+      console.print("[cyan]==> Walk-forward 12m/3m[/cyan]")
+      windows = generate_walk_forward_windows(split.full_start, split.full_end)
+      report["steps"]["walk_forward_windows"] = [w.to_dict() for w in windows]
+      oos_segments: list[OosSegmentResult] = []
+
+      for window in windows:
+        wf_label = f"wf{window.index}_train"
+        console.print(f"    ventana {window.index}: train {window.train_timerange}")
+        archived, _ = _hyperopt_and_archive(
+          strategy,
+          window.train_timerange,
+          epochs=epochs_n,
+          seed=42,
+          enable_protections=enable_protections,
+          archive_dir=params_archive,
+          label=wf_label,
+          min_trades=min_trades_n,
+          spaces=opt_spaces,
+        )
+        is_m, _, _ = _backtest_with_params(
+          strategy,
+          window.train_timerange,
+          archived,
+          enable_protections=enable_protections,
+          allow_defaults=False,
+        )
+        is_profits_wf.append(float(is_m.get("profit_total_abs") or 0))
+
+        console.print(f"    ventana {window.index}: test {window.test_timerange}")
+        oos_m, _, _ = _backtest_with_params(
+          strategy,
+          window.test_timerange,
+          archived,
+          enable_protections=enable_protections,
+          allow_defaults=False,
+        )
+        clear_strategy_params(strategy)
+
+        seg = OosSegmentResult(
+          window_index=window.index,
+          profit_ratio=float(oos_m.get("profit_total") or 0),
+          profit_abs=float(oos_m.get("profit_total_abs") or 0),
+          trades=int(oos_m.get("trades") or 0),
+          sharpe=float(oos_m.get("sharpe") or 0),
+          starting_capital=0.0,
+          ending_capital=0.0,
+        )
+        oos_segments.append(seg)
+        oos_profits_wf.append(seg.profit_abs)
+
+      stitched = stitch_oos_equity(oos_segments)
+      wfe_value = walk_forward_efficiency(is_profits_wf, oos_profits_wf)
+      report["steps"]["walk_forward_stitched"] = stitched
+      report["steps"]["walk_forward_efficiency"] = wfe_value
+
+    # Veredicto
+    verdict_out = compute_verdict(
+      VerdictInput(
+        strategy=strategy,
+        baseline_oos_metrics=baseline_oos,
+        seed_results=seed_results,
+        walk_forward_efficiency=wfe_value,
+        max_param_divergence=max_div,
+      )
+    )
+    report["verdict"] = verdict_out.verdict.value
+    report["reasons"] = verdict_out.reasons
+    report["verdict_details"] = verdict_out.details
+
+    _write_report(run_path, report)
+    _print_summary(report, seed_results, verdict_out.verdict, verdict_out.reasons)
+
+    if verdict_out.verdict == Verdict.SOBREAJUSTADA:
+      raise typer.Exit(code=2)
+
+
+def _write_report(run_path: Path, report: dict) -> None:
+  out = run_path / "report.json"
+  out.write_text(json.dumps(report, indent=2), encoding="utf-8")
+  console.print(f"[green]Reporte: {out}[/green]")
+
+
+def _print_summary(
+  report: dict,
+  seeds: list[SeedRunResult],
+  verdict: Verdict,
+  reasons: list[str],
+) -> None:
+  table = Table(title=f"Veredicto {report['strategy']}: {verdict.value}")
+  table.add_column("Semilla")
+  table.add_column("IS Sharpe")
+  table.add_column("OOS Sharpe")
+  table.add_column("OOS PnL")
+  for s in seeds:
+    table.add_row(
+      str(s.seed),
+      f"{float(s.is_metrics.get('sharpe', 0)):.2f}",
+      f"{float(s.oos_metrics.get('sharpe', 0)):.2f}",
+      f"{float(s.oos_metrics.get('profit_total_abs', 0)):.0f}",
+    )
+  console.print(table)
+  if reasons:
+    console.print("[yellow]Motivos:[/yellow]")
+    for r in reasons:
+      console.print(f"  - {r}")
+
+
+if __name__ == "__main__":
+  typer.run(main)

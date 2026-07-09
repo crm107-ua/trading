@@ -1,0 +1,9 @@
+{
+    "_comment": "Overrides para lookahead-analysis (ordenes market forzadas por Freqtrade).",
+    "entry_pricing": {
+        "price_side": "other"
+    },
+    "exit_pricing": {
+        "price_side": "other"
+    }
+}

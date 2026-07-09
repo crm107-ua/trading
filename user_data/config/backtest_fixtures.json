@@ -1,0 +1,9 @@
+{
+    "datadir": "user_data/fixtures/data",
+    "exchange": {
+        "pair_whitelist": [
+            "BTC/USDT",
+            "ETH/USDT"
+        ]
+    }
+}

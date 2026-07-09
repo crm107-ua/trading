@@ -1,0 +1,19 @@
+{
+    "_comment": "PLANTILLA PARA OPERACIÓN REAL — NO USAR DIRECTAMENTE. Ejecutar scripts/go_live.py (Fase 6) para generar live.json con confirmación explícita.",
+    "dry_run": false,
+    "order_types": {
+        "stoploss_on_exchange": true
+    },
+    "exchange": {
+        "key": "${FREQTRADE__EXCHANGE__KEY}",
+        "secret": "${FREQTRADE__EXCHANGE__SECRET}"
+    },
+  "_security_checklist": [
+    "Claves API sin permiso de retiro (withdrawal)",
+    "Whitelist de IP configurada en Binance",
+    "Veredicto ROBUSTA del pipeline de validación",
+    "≥ 4 semanas de dry-run con brecha aceptable",
+    "monitor.py en ejecución",
+    "Capital inicial ≤ cantidad que puedes perder al 100%"
+  ]
+}
