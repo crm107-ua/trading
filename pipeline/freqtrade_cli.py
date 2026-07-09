@@ -31,6 +31,21 @@ def hyperopt_job_workers() -> int:
   return max(1, DEFAULT_HYPEROPT_JOB_WORKERS)
 
 
+def hyperopt_timeout_seconds(epochs: int) -> int | None:
+  """
+  Timeout subprocess hyperopt.
+
+  300 epochs × ~1.2 min ≈ 6 h; el default anterior (7200 s) mataba la seed 42 en epoch 299.
+  Override: ``HYPEROPT_TIMEOUT_SECONDS`` (0 = sin límite).
+  """
+  raw = os.environ.get("HYPEROPT_TIMEOUT_SECONDS")
+  if raw is not None:
+    n = int(raw)
+    return None if n <= 0 else n
+  # ~2 min/epoch de margen sobre ~1.2 min observado en MeanRevBB -j 1
+  return max(14_400, int(epochs * 120))
+
+
 def docker_runtime_info() -> dict:
   """Metadatos del contenedor para reproducibilidad en report.json."""
   image_ref = pinned_image_ref()
@@ -184,7 +199,7 @@ def run_hyperopt(
   ]
   if enable_protections:
     args.append("--enable-protections")
-  return run_freqtrade(args, timeout=7200)
+  return run_freqtrade(args, timeout=hyperopt_timeout_seconds(epochs))
 
 
 def latest_backtest_zip() -> Path | None:
