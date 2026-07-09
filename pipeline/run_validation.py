@@ -34,6 +34,7 @@ from pipeline.freqtrade_cli import (
   run_hyperopt,
 )
 from pipeline.hyperopt_checkpoint import archive_hyperopt_results
+from pipeline.hyperopt_resume import adopt_partial_enabled, try_adopt_partial_hyperopt
 from pipeline.params_manager import (
   archive_strategy_params,
   clear_strategy_params,
@@ -142,11 +143,25 @@ def _hyperopt_and_archive(
   label: str,
   min_trades: int,
   spaces: list[str],
+  adopt_partial: bool = False,
 ) -> tuple[Path | None, str]:
   """Hyperopt IS con params limpios; archiva el json generado."""
   clear_strategy_params(strategy)
   if params_file_exists(strategy):
     raise RuntimeError(f"FAIL: {strategy}.json no se limpió antes de hyperopt")
+
+  if adopt_partial_enabled(adopt_partial):
+    adoption = try_adopt_partial_hyperopt(strategy, epochs=epochs, seed=seed)
+    if adoption is not None:
+      console.print(
+        f"[yellow]==> Hyperopt adoptado desde {adoption.source_file} "
+        f"({adoption.epochs_done}/{adoption.epochs_requested}, "
+        f"ratio={adoption.completion_ratio:.1%})[/yellow]"
+      )
+      archived = archive_strategy_params(strategy, archive_dir, label)
+      if archived is None:
+        raise RuntimeError(f"adopción no exportó {strategy}.json (seed={seed})")
+      return archived, adoption.note
 
   result = run_hyperopt(
     strategy,
@@ -232,6 +247,10 @@ def main(
   resume_run_id: str | None = typer.Option(
     None, help="Reanudar run interrumpido (mismo run_id, salta semillas completadas)"
   ),
+  adopt_partial_hyperopt: bool = typer.Option(
+    False,
+    help="Adoptar .fthypt parcial ≥95%% en lugar de re-hyperopt (reanudación barata)",
+  ),
 ) -> None:
   """Validación Fase 4 — IS/OOS, semillas, walk-forward, veredicto."""
   try:
@@ -245,6 +264,7 @@ def main(
       skip_walk_forward=skip_walk_forward,
       skip_hyperopt=skip_hyperopt,
       resume_run_id=resume_run_id,
+      adopt_partial_hyperopt=adopt_partial_hyperopt,
     )
   except ValidationRunActiveError as exc:
     console.print(f"[red]{exc}[/red]")
@@ -262,6 +282,7 @@ def _run_validation(
   skip_walk_forward: bool,
   skip_hyperopt: bool,
   resume_run_id: str | None,
+  adopt_partial_hyperopt: bool,
 ) -> None:
   defaults = PROFILE_DEFAULTS[profile]
   epochs_n = epochs if epochs is not None else defaults["epochs"]
@@ -320,6 +341,7 @@ def _run_validation(
       "docker_runtime": docker_runtime_info(),
       "enable_protections": enable_protections,
       "walk_forward_enabled": do_wf,
+      "adopt_partial_hyperopt": adopt_partial_enabled(adopt_partial_hyperopt),
       "steps": {},
       "verdict": Verdict.DUDOSA.value,
       "reasons": [],
@@ -391,6 +413,7 @@ def _run_validation(
         label=label,
         min_trades=min_trades_n,
         spaces=opt_spaces,
+        adopt_partial=adopt_partial_hyperopt,
       )
       hyperopt_files = _archive_seed_hyperopt(run_path, seed)
 
@@ -474,6 +497,7 @@ def _run_validation(
           label=wf_label,
           min_trades=min_trades_n,
           spaces=opt_spaces,
+          adopt_partial=adopt_partial_hyperopt,
         )
         is_m, _, _ = _backtest_with_params(
           strategy,

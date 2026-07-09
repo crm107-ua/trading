@@ -75,6 +75,40 @@ Durante el primer intento de MeanRevBB `full`, `hyperopt_pickle_check.py` (sin `
 
 **Matiz:** `hyperopt_tickerdata.pkl` es **contingente** — Freqtrade lo materializa en disco según versión/modo de hyperopt; otras corridas (p. ej. la actual a digest pinneado) pueden avanzar sin que el archivo exista en el volumen. La moraleja operativa no cambia: **no tocar `user_data/` ni herramientas de diagnóstico mientras `run_validation` esté activo** (salvo `--force` explícito). El fallo de aquella corrida fue borrar un artefacto que *esa* ejecución sí esperaba en disco, no la ausencia universal del `.pkl`.
 
+### Incidente: timeout subprocess 7200 s en epoch 299/300 (2026-07-09)
+
+El orquestador mató el hyperopt de seed 42 a las **7200 s (2 h)** con **299/300** epochs ya escritas en `.fthypt`. El proceso murió en **silencio** hasta que alguien miró el contador congelado.
+
+| Qué pasó | Detalle |
+|----------|---------|
+| Síntoma | `.fthypt` congelado en 299/300; sin `checkpoint.json` |
+| Causa | `run_hyperopt` usaba `timeout=7200` fijo |
+| Fix | `hyperopt_timeout_seconds(epochs)` → **36000 s** para 300 epochs (~2 min/epoch de margen) |
+| Override | `HYPEROPT_TIMEOUT_SECONDS=0` → sin límite |
+
+**Walk-forward:** cada ventana llama al mismo `run_hyperopt` con **`epochs` del perfil** (300 en `full`). Con ventana IS 2021→2026 hay **18 ventanas** × 300 epochs — el timeout **por ventana** es el mismo (36 000 s); las ventanas cortas suelen ir más rápido por menos datos, pero el peor caso sigue acotado por la misma fórmula. Planificar **días** de CPU, no horas.
+
+### Adopción de `.fthypt` parcial (reanudación barata)
+
+Si un run muere tras ≥95 % de epochs, el archivo en `user_data/hyperopt_results/` suele ser válido. Para el **batch futuro** (no el run vivo):
+
+```powershell
+python -m pipeline.run_validation MeanRevBB --profile full --adopt-partial-hyperopt
+# o: $env:HYPEROPT_ADOPT_PARTIAL=1
+```
+
+- Umbral: `HYPEROPT_ADOPT_MIN_RATIO` (default **0.95**).
+- Valida con `freqtrade hyperopt-list` y exporta el mejor epoch a `<Estrategia>.json`.
+- **No** sustituye `--resume-run-id` (semillas completadas en `checkpoint.json`).
+
+### Vigilante de muerte silenciosa
+
+```powershell
+pwsh scripts/watch_validation.ps1 -Strategy MeanRevBB -IntervalSec 300 -StaleCycles 4
+```
+
+Cada intervalo: progreso `.fthypt`, `run_lock check`, PID vivo. Si el contador no sube **4 ciclos** con lock ON, o el PID murió → **beep** + `user_data/validation_reports/.run_failed.flag`.
+
 ## Hyperopt y reproducibilidad
 
 - **Workers (`-j`)** — forma parte de la secuencia de puntos evaluados (junto a `--random-state`). Todas las semillas de un batch y el walk-forward deben usar el **mismo** `-j`. Si cambia `-j`, re-lanzar la estrategia completa, no semillas sueltas.

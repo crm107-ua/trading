@@ -1,0 +1,17 @@
+{
+  "run_id": "20260709_162954",
+  "strategy": "MeanRevBB",
+  "baseline_oos": {
+    "trades": 648,
+    "profit_total_abs": -8093.46196241,
+    "profit_total": -0.809346196241,
+    "sharpe": -6.494706135840455,
+    "sortino": -9.825543899595521,
+    "max_drawdown_account": 0.8184899468555247,
+    "winrate": 0.35648148148148145,
+    "profit_factor": 0.4207573831368695
+  },
+  "completed_seeds": [],
+  "seed_results": [],
+  "seed_params_raw": []
+}

@@ -301,3 +301,35 @@ def test_merged_config_hash_stable() -> None:
   assert h1 == h2
   assert len(meta["config_merged_sha256"]) == 64
   assert "user_data/config/base.json" in meta["config_files"]
+
+
+def test_count_fthypt_epochs_and_best_row(tmp_path: Path) -> None:
+  from pipeline.hyperopt_resume import best_epoch_row, count_fthypt_epochs, strategy_json_from_epoch_row
+
+  f = tmp_path / "strategy_Test_2026-01-01_00-00-00.fthypt"
+  rows = [
+    {"loss": 2.0, "params_details": {"buy": {"x": 1}}, "params_not_optimized": {"stoploss": {"stoploss": -0.1}}},
+    {"loss": 1.0, "params_details": {"buy": {"x": 2}, "sell": {"y": 3}}, "params_not_optimized": {}},
+  ]
+  f.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+  assert count_fthypt_epochs(f) == 2
+  best = best_epoch_row(f)
+  assert best is not None
+  assert best["loss"] == 1.0
+  payload = strategy_json_from_epoch_row("Test", best)
+  assert payload["strategy_name"] == "Test"
+  assert payload["params"]["buy"]["x"] == 2
+
+
+def test_hyperopt_timeout_scales_with_epochs() -> None:
+  from pipeline.freqtrade_cli import hyperopt_timeout_seconds
+
+  assert hyperopt_timeout_seconds(300) == 36_000
+  assert hyperopt_timeout_seconds(30) == 14_400
+
+
+def test_adopt_min_ratio_env(monkeypatch: pytest.MonkeyPatch) -> None:
+  from pipeline.hyperopt_resume import adopt_min_completion_ratio
+
+  monkeypatch.setenv("HYPEROPT_ADOPT_MIN_RATIO", "0.9")
+  assert adopt_min_completion_ratio() == 0.9
