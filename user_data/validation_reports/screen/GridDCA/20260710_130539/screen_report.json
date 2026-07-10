@@ -1,0 +1,63 @@
+{
+  "strategy": "GridDCA",
+  "run_id": "20260710_130539",
+  "timerange": "20210101-",
+  "datadir": "/freqtrade/user_data/data/binance",
+  "variants": [
+    {
+      "name": "defaults",
+      "strategy_parameters": {},
+      "zip_path": "C:\\Users\\carom\\Desktop\\trading\\user_data\\backtest_results\\backtest-result-2026-07-10_11-02-23.zip",
+      "trades": 8829,
+      "profit_net_abs": -9721.24706021,
+      "profit_gross_abs": -9703.58906021,
+      "total_fees_abs": 17.657999999998598,
+      "sharpe": -14.278617124903231,
+      "max_drawdown_account": 0.9723105831495743,
+      "friction_ratio": null,
+      "params_verified": true,
+      "verify_issues": []
+    },
+    {
+      "name": "lower_dca_threshold",
+      "strategy_parameters": {
+        "dca_min_drop_pct": 0.015
+      },
+      "zip_path": "C:\\Users\\carom\\Desktop\\trading\\user_data\\backtest_results\\backtest-result-2026-07-10_13-35-09.zip",
+      "trades": 8839,
+      "profit_net_abs": -9719.77503029,
+      "profit_gross_abs": -9702.097030290002,
+      "total_fees_abs": 17.677999999998622,
+      "sharpe": -14.28607509154868,
+      "max_drawdown_account": 0.9721647714150358,
+      "friction_ratio": null,
+      "params_verified": true,
+      "verify_issues": []
+    },
+    {
+      "name": "pullback_plus_grid",
+      "strategy_parameters": {
+        "buy_rsi_max": 52,
+        "dca_min_drop_pct": 0.015
+      },
+      "zip_path": "C:\\Users\\carom\\Desktop\\trading\\user_data\\backtest_results\\backtest-result-2026-07-10_14-02-34.zip",
+      "trades": 9932,
+      "profit_net_abs": -9841.95742742,
+      "profit_gross_abs": -9822.093427419999,
+      "total_fees_abs": 19.864000000001294,
+      "sharpe": -15.145937208406531,
+      "max_drawdown_account": 0.9844573102357758,
+      "friction_ratio": null,
+      "params_verified": true,
+      "verify_issues": []
+    }
+  ],
+  "verdict": "DESCARTADA",
+  "reasons": [
+    "ninguna variante con PnL bruto > 0"
+  ],
+  "invalid": null,
+  "params_verified_all": true,
+  "prior_defaults_from": "user_data\\validation_reports\\screen\\GridDCA\\20260710_103033\\screen_report.json",
+  "protocol": "docs/screen_protocol.md"
+}

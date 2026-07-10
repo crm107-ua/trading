@@ -8,6 +8,8 @@ $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 
-docker compose run --rm freqtrade python user_data/tools/signal_truncation_check.py `
+docker compose run --rm --entrypoint python freqtrade user_data/tools/signal_truncation_check.py `
   --strategy $Strategy `
-  --timerange $Timerange
+  --timerange $Timerange `
+  --config user_data/config/base.json `
+  --config user_data/config/backtest.json

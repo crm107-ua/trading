@@ -85,7 +85,9 @@ def rotation_entry_mask_daily(
     raise ValueError("confirm_days debe ser > 0")
   dts = pd.to_datetime(dates, utc=True)
   day = dts.floor("D") if isinstance(dts, pd.DatetimeIndex) else dts.dt.floor("D")
-  daily_rank = rank.groupby(day).last()
+  # Ranking diario solo con el cierre del día ya conocido: .last() por día y shift(1)
+  # evita lookahead intradía (truncation check fallaba con full=1 trunc=0).
+  daily_rank = rank.groupby(day).last().shift(1)
   daily_entry = rotation_entry_mask(daily_rank, top_n=top_n, confirm_bars=confirm_days)
   day_series = pd.Series(day, index=rank.index)
   return day_series.map(daily_entry).fillna(False).astype(bool)
