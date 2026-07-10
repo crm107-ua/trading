@@ -1,0 +1,64 @@
+{
+  "strategy": "RelativeMomentum",
+  "run_id": "20260710_145227",
+  "timerange": "20210101-",
+  "datadir": "/freqtrade/user_data/data/binance",
+  "variants": [
+    {
+      "name": "defaults",
+      "strategy_parameters": {},
+      "zip_path": "C:\\Users\\carom\\Desktop\\trading\\user_data\\backtest_results\\backtest-result-2026-07-10_15-04-33.zip",
+      "trades": 7359,
+      "profit_net_abs": -9994.438249460001,
+      "profit_gross_abs": -9979.720249460004,
+      "total_fees_abs": 14.717999999997282,
+      "sharpe": -10.84578954080791,
+      "max_drawdown_account": 0.9994438249459963,
+      "friction_ratio": null,
+      "params_verified": true,
+      "verify_issues": []
+    },
+    {
+      "name": "fast_window",
+      "strategy_parameters": {
+        "momentum_window": 7,
+        "confirm_bars": 1
+      },
+      "zip_path": "C:\\Users\\carom\\Desktop\\trading\\user_data\\backtest_results\\backtest-result-2026-07-10_15-15-43.zip",
+      "trades": 5515,
+      "profit_net_abs": -9994.43980101,
+      "profit_gross_abs": -9983.40980101,
+      "total_fees_abs": 11.029999999999326,
+      "sharpe": -7.231731834415659,
+      "max_drawdown_account": 0.999459154702309,
+      "friction_ratio": null,
+      "params_verified": true,
+      "verify_issues": []
+    },
+    {
+      "name": "top2_wide_exit",
+      "strategy_parameters": {
+        "top_n": 2,
+        "exit_rank_k": 3
+      },
+      "zip_path": "C:\\Users\\carom\\Desktop\\trading\\user_data\\backtest_results\\backtest-result-2026-07-10_15-29-43.zip",
+      "trades": 6184,
+      "profit_net_abs": -9994.440698360002,
+      "profit_gross_abs": -9982.072698360003,
+      "total_fees_abs": 12.367999999998585,
+      "sharpe": -7.877253433809309,
+      "max_drawdown_account": 0.9994440698359944,
+      "friction_ratio": null,
+      "params_verified": true,
+      "verify_issues": []
+    }
+  ],
+  "verdict": "DESCARTADA",
+  "reasons": [
+    "ninguna variante con PnL bruto > 0"
+  ],
+  "invalid": null,
+  "params_verified_all": true,
+  "prior_defaults_from": null,
+  "protocol": "docs/screen_protocol.md"
+}
