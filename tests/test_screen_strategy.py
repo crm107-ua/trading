@@ -59,6 +59,80 @@ def test_parse_backtest_zip_gross_and_fees(tmp_path: Path) -> None:
   assert m.profit_gross_abs == 142.0
 
 
+def test_parse_backtest_zip_fee_open_close_as_ratio(tmp_path: Path) -> None:
+  """Freqtrade exporta fee_open/fee_close como ratio — multiplicar por stake."""
+  payload = {
+    "strategy": {
+      "XSecMomentum": {
+        "total_trades": 2,
+        "profit_total_abs": 50.0,
+        "trades": [
+          {"fee_open": 0.001, "fee_close": 0.001, "stake_amount": 1000.0},
+          {"fee_open": 0.001, "fee_close": 0.001, "stake_amount": 2000.0},
+        ],
+      }
+    }
+  }
+  z = tmp_path / "ratio-fees.zip"
+  with zipfile.ZipFile(z, "w") as zf:
+    zf.writestr("backtest-result.json", json.dumps(payload))
+  m = parse_backtest_zip(z, "XSecMomentum")
+  assert m.total_fees_abs == pytest.approx(6.0)
+  assert m.profit_gross_abs == pytest.approx(56.0)
+
+
+def test_fee_sanity_flags_impossibly_low_fees() -> None:
+  from screen_strategy import fee_sanity_warnings
+
+  bad = VariantMetrics(
+    name="buggy",
+    strategy_parameters={},
+    zip_path="x",
+    trades=350,
+    profit_net_abs=40_000,
+    profit_gross_abs=40_000.7,
+    total_fees_abs=0.70,
+    sharpe=0.0,
+    max_drawdown_account=0.5,
+    friction_ratio=0.0,
+  )
+  warns = fee_sanity_warnings(bad)
+  assert len(warns) == 1
+  assert "parseo sospechoso" in warns[0]
+
+  ok = VariantMetrics(
+    name="ok",
+    strategy_parameters={},
+    zip_path="x",
+    trades=350,
+    profit_net_abs=40_000,
+    profit_gross_abs=48_000,
+    total_fees_abs=7854.0,
+    sharpe=0.0,
+    max_drawdown_account=0.5,
+    friction_ratio=0.16,
+  )
+  assert fee_sanity_warnings(ok) == []
+
+
+def test_fee_sanity_skips_low_trade_count() -> None:
+  from screen_strategy import fee_sanity_warnings
+
+  m = VariantMetrics(
+    name="few",
+    strategy_parameters={},
+    zip_path="x",
+    trades=50,
+    profit_net_abs=100,
+    profit_gross_abs=100.1,
+    total_fees_abs=0.1,
+    sharpe=0.0,
+    max_drawdown_account=0.1,
+    friction_ratio=0.0,
+  )
+  assert fee_sanity_warnings(m) == []
+
+
 def test_evaluate_screen_pass_and_discard() -> None:
   ok = VariantMetrics(
     name="a",

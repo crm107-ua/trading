@@ -35,6 +35,10 @@ Alguna variante tiene PnL bruto > 0 pero **no** cumple fricción (< 50% comision
 | `sharpe` | informativo (no gate del screen) |
 | `max_drawdown_account` | informativo |
 
+### Sanity-check de fees (automático)
+
+Si alguna variante tiene `trades > 100` y `total_fees_abs < trades × 10 USDT × 0.001`, el reporte se marca `invalid: fees_suspicious`, el veredicto queda anulado y `fee_sanity.warnings` documenta el motivo. Cubre regresiones del parseo ratio-vs-USDT (fallo-en-vacío #9).
+
 ## Artefactos
 
 - `screen_report.json` en `user_data/validation_reports/screen/<Estrategia>/<run_id>/`

@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import json
 import shutil
-import subprocess
 from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -49,7 +48,13 @@ from pipeline.timerange_split import compute_is_oos_split, resolve_data_end
 from pipeline.verdict import Verdict
 from pipeline.verdict_engine import SeedRunResult, VerdictInput, compute_verdict
 from pipeline.regime_stats import regime_distribution_for_timerange
-from pipeline.run_lock import ValidationRunActiveError, acquire_lock, release_lock
+from pipeline.git_provenance import current_git_hash, record_step_git
+from pipeline.run_lock import (
+  ValidationRunActiveError,
+  acquire_lock,
+  release_lock,
+  touch_lock_heartbeat,
+)
 from pipeline.strategy_spaces import hyperopt_spaces_for
 from pipeline.strategy_warmup import earliest_train_start, warmup_days
 from pipeline.walk_forward import (
@@ -75,19 +80,6 @@ PROFILE_DEFAULTS = {
   Profile.smoke: {"epochs": 30, "seeds": 1, "walk_forward": False, "min_trades": 30},
   Profile.full: {"epochs": 300, "seeds": 3, "walk_forward": True, "min_trades": 100},
 }
-
-
-def _git_hash() -> str:
-  try:
-    out = subprocess.check_output(
-      ["git", "rev-parse", "HEAD"],
-      cwd=ROOT,
-      text=True,
-      stderr=subprocess.DEVNULL,
-    )
-    return out.strip()
-  except (subprocess.CalledProcessError, FileNotFoundError):
-    return "unknown"
 
 
 def _seed_values(count: int) -> list[int]:
@@ -344,7 +336,7 @@ def _run_validation(
         else "NO CONCLUYENTE — perfil smoke (epochs/seeds reducidos). No citar veredicto como validación."
       ),
       "run_id": run_id,
-      "git_hash": _git_hash(),
+      "git_hash": current_git_hash(),
       **config_metadata(),
       "timerange_requested": timerange,
       "split": split.to_dict(),
@@ -367,6 +359,9 @@ def _run_validation(
       "verdict": Verdict.DUDOSA.value,
       "reasons": [],
     }
+
+    record_step_git(report, "validation_start")
+    touch_lock_heartbeat()
 
     console.print(f"[bold]==> Validación {strategy}[/bold] profile={profile.value}")
     console.print(f"    IS:  {split.is_timerange}")
@@ -413,9 +408,13 @@ def _run_validation(
       )
 
     if skip_hyperopt:
+      record_step_git(report, "verdict")
       report["notes"] = ["skip_hyperopt=True"]
       _write_report(run_path, report)
       return
+
+    record_step_git(report, "seeds")
+    touch_lock_heartbeat()
 
     for seed in _seed_values(seeds_n):
       if seed in completed_seeds:
@@ -471,6 +470,7 @@ def _run_validation(
         )
       )
       completed_seeds.add(seed)
+      touch_lock_heartbeat()
       _save_checkpoint(
         run_path,
         {
@@ -500,6 +500,8 @@ def _run_validation(
     oos_profits_wf: list[float] = []
 
     if do_wf:
+      record_step_git(report, "walk_forward")
+      touch_lock_heartbeat()
       wf_warmup_days = warmup_days(strategy)
       wf_train_min = earliest_train_start(split.full_start, strategy)
       console.print(
@@ -566,11 +568,15 @@ def _run_validation(
         )
         oos_segments.append(seg)
         oos_profits_wf.append(seg.profit_abs)
+        touch_lock_heartbeat()
 
       stitched = stitch_oos_equity(oos_segments)
       wfe_value = walk_forward_efficiency(is_profits_wf, oos_profits_wf)
       report["steps"]["walk_forward_stitched"] = stitched
       report["steps"]["walk_forward_efficiency"] = wfe_value
+
+    record_step_git(report, "verdict")
+    touch_lock_heartbeat()
 
     # Veredicto
     verdict_out = compute_verdict(

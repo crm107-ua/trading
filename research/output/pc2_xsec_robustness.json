@@ -1,0 +1,235 @@
+{
+  "datadir": "research\\data_local\\binance",
+  "params": {
+    "window": 14,
+    "top_n": 3,
+    "fee": 0.001,
+    "freq": "W"
+  },
+  "annual_subperiods": [
+    {
+      "period": "2022_raw",
+      "cagr": -0.7802237824099452,
+      "sharpe": -1.453696575177708,
+      "max_drawdown": -0.8134176402710762,
+      "final_wealth": 0.2209187835151523,
+      "days": 365
+    },
+    {
+      "period": "2022_bear_flat",
+      "cagr": -0.6039959633665518,
+      "sharpe": -1.1320414902689295,
+      "max_drawdown": -0.7247724319816955,
+      "final_wealth": 0.3972614385597521,
+      "days": 365
+    },
+    {
+      "period": "2023_raw",
+      "cagr": 0.9982775200353537,
+      "sharpe": 0.8873521539286029,
+      "max_drawdown": -0.31007567229698096,
+      "final_wealth": 1.9935487684221167,
+      "days": 365
+    },
+    {
+      "period": "2023_bear_flat",
+      "cagr": 0.7382602557998688,
+      "sharpe": 0.7181357586111511,
+      "max_drawdown": -0.38694028187897755,
+      "final_wealth": 1.734974325110365,
+      "days": 365
+    },
+    {
+      "period": "2024_raw",
+      "cagr": 2.966425939217576,
+      "sharpe": 1.4678032166149038,
+      "max_drawdown": -0.37129450364758554,
+      "final_wealth": 3.9626869762799477,
+      "days": 366
+    },
+    {
+      "period": "2024_bear_flat",
+      "cagr": 2.255845650701038,
+      "sharpe": 1.274014921521759,
+      "max_drawdown": -0.46957812022288903,
+      "final_wealth": 3.2532160700081634,
+      "days": 366
+    },
+    {
+      "period": "2025_raw",
+      "cagr": -0.1590322686523642,
+      "sharpe": -0.18536427377390088,
+      "max_drawdown": -0.5832564533300904,
+      "final_wealth": 0.8414663640022599,
+      "days": 365
+    },
+    {
+      "period": "2025_bear_flat",
+      "cagr": -0.03374781735556287,
+      "sharpe": -0.04067426187819237,
+      "max_drawdown": -0.5504241277109795,
+      "final_wealth": 0.9663657137607888,
+      "days": 365
+    },
+    {
+      "period": "2026_raw",
+      "cagr": 3.027055690617823,
+      "sharpe": 1.6460008708394753,
+      "max_drawdown": -0.31164861778147246,
+      "final_wealth": 2.0639991594947698,
+      "days": 191
+    },
+    {
+      "period": "2026_bear_flat",
+      "cagr": 4.184411270868039,
+      "sharpe": 3.337635379123185,
+      "max_drawdown": -0.06900426972626827,
+      "final_wealth": 2.3538602978936813,
+      "days": 191
+    }
+  ],
+  "btc_regime_1d": {
+    "counts": {
+      "RANGE": 828,
+      "BULL": 447,
+      "BEAR": 377
+    },
+    "fraction": {
+      "RANGE": 0.5012,
+      "BULL": 0.2706,
+      "BEAR": 0.2282
+    },
+    "note": "Clasificador pandas (ADX+EMA200); desviaci\u00f3n documentada vs quant_core 4h en producci\u00f3n."
+  },
+  "full_sample": {
+    "without_bear_filter": {
+      "period": "full_raw",
+      "cagr": 0.38287350474442183,
+      "sharpe": 0.34293529182012916,
+      "max_drawdown": -0.8134176402710762,
+      "final_wealth": 4.328761727609787,
+      "days": 1652
+    },
+    "with_bear_flat": {
+      "period": "full_bear_flat",
+      "cagr": 0.5052582809784569,
+      "sharpe": 0.4920807414497473,
+      "max_drawdown": -0.7247724319816955,
+      "final_wealth": 6.350908745482961,
+      "days": 1652
+    },
+    "bear_filter_delta_wealth": 1.4671421402050104
+  },
+  "leave_one_out_dexe": {
+    "period": "loo_exclude_dexe",
+    "cagr": 0.488192897638432,
+    "sharpe": 0.48133574054071365,
+    "max_drawdown": -0.7213718482258298,
+    "final_wealth": 6.031881466857619,
+    "days": 1652
+  },
+  "pair_liquidity_contribution": [
+    {
+      "pair": "ZEC/USDT",
+      "log_pnl_contribution": 0.9350634862830817,
+      "mean_daily_volume": 222039.70182866635,
+      "in_universe": true
+    },
+    {
+      "pair": "SOL/USDT",
+      "log_pnl_contribution": 0.5926773044631085,
+      "mean_daily_volume": 4455851.640916212,
+      "in_universe": true
+    },
+    {
+      "pair": "XRP/USDT",
+      "log_pnl_contribution": 0.2938594607566766,
+      "mean_daily_volume": 405098049.53960335,
+      "in_universe": true
+    },
+    {
+      "pair": "AAVE/USDT",
+      "log_pnl_contribution": 0.2801951612891491,
+      "mean_daily_volume": 191776.97354967773,
+      "in_universe": true
+    },
+    {
+      "pair": "BTC/USDT",
+      "log_pnl_contribution": 0.19503011712763418,
+      "mean_daily_volume": 69386.15839035845,
+      "in_universe": true
+    },
+    {
+      "pair": "NEAR/USDT",
+      "log_pnl_contribution": 0.16897931891638207,
+      "mean_daily_volume": 13783079.300396627,
+      "in_universe": true
+    },
+    {
+      "pair": "DOGE/USDT",
+      "log_pnl_contribution": 0.16328459178253343,
+      "mean_daily_volume": 2039657884.8762517,
+      "in_universe": true
+    },
+    {
+      "pair": "DEXE/USDT",
+      "log_pnl_contribution": 0.15425326574912002,
+      "mean_daily_volume": 363937.74117971334,
+      "in_universe": true
+    },
+    {
+      "pair": "XLM/USDT",
+      "log_pnl_contribution": 0.13361170279796233,
+      "mean_daily_volume": 132957208.56500247,
+      "in_universe": true
+    },
+    {
+      "pair": "ETH/USDT",
+      "log_pnl_contribution": 0.08628414242882528,
+      "mean_daily_volume": 568565.5975662766,
+      "in_universe": true
+    },
+    {
+      "pair": "TRX/USDT",
+      "log_pnl_contribution": 0.07459296086104257,
+      "mean_daily_volume": 868656567.2432326,
+      "in_universe": true
+    },
+    {
+      "pair": "UNI/USDT",
+      "log_pnl_contribution": -0.016712042878660717,
+      "mean_daily_volume": 3990481.6293569664,
+      "in_universe": true
+    },
+    {
+      "pair": "ADA/USDT",
+      "log_pnl_contribution": -0.045968592436132945,
+      "mean_daily_volume": 211273131.6320129,
+      "in_universe": true
+    },
+    {
+      "pair": "BNB/USDT",
+      "log_pnl_contribution": -0.1803188692852433,
+      "mean_daily_volume": 892934.2806232028,
+      "in_universe": true
+    },
+    {
+      "pair": "LTC/USDT",
+      "log_pnl_contribution": -0.22501802003490828,
+      "mean_daily_volume": 748894.429847278,
+      "in_universe": true
+    },
+    {
+      "pair": "SKL/USDT",
+      "log_pnl_contribution": -0.6587092985793074,
+      "mean_daily_volume": 92470503.30619733,
+      "in_universe": true
+    }
+  ],
+  "dexe_highlight": {
+    "pair": "DEXE/USDT",
+    "log_pnl_contribution": 0.15425326574912002,
+    "mean_daily_volume": 363937.74117971334,
+    "in_universe": true
+  }
+}

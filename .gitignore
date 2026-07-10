@@ -1,12 +1,19 @@
 # Secretos — live.json con claves reales (usar live.example.json como plantilla)
 user_data/config/live.json
+.env
 
-# Datos y artefactos de ejecución (parcialmente versionados — ver .gitattributes LFS)
+# Datos y artefactos de ejecución (NO sincronizar entre PCs — solo git)
+user_data/data/
 user_data/logs/
 user_data/backtest_results/
+user_data/hyperopt_results/
 user_data/plot/
 user_data/freqaimodels/
 user_data/notebooks/.ipynb_checkpoints/
+
+# Parámetros optimizados por estrategia (generados en hyperopt/validación)
+user_data/strategies/*.json
+!user_data/strategies/*.example.json
 
 # Reportes generados
 reports/
@@ -14,14 +21,14 @@ pipeline/output/
 *.html
 !docs/**/*.html
 
-# Validación — artefactos pesados de run (en disco; no en GitHub)
-user_data/validation_reports/**/hyperopt_checkpoints/
-user_data/validation_reports/**/*.fthypt
-user_data/validation_reports/**/*.pkl
-user_data/validation_reports/**/is_seed*.zip
-user_data/validation_reports/**/oos_seed*.zip
-user_data/validation_reports/.run_lock.json
-user_data/validation_reports/.run_failed.flag
+# Validación — artefactos de run (en disco local; no en GitHub ni entre PCs)
+user_data/validation_reports/**
+!user_data/validation_reports/.gitkeep
+
+# Research local PC2 (datadir 1d descargado aparte de PC1)
+research/data_local/
+
+# Python
 
 # Python
 __pycache__/

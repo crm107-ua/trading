@@ -11,6 +11,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture(scope="module")
 def fixture_backtest_zip() -> Path:

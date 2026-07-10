@@ -69,6 +69,9 @@ PARAMS_TEMPLATE = {
 
 HYPEROPT_RISK_EPOCH_THRESHOLD = 280
 HYPEROPT_TARGET_EPOCHS = 300
+FEE_RATE_SANITY = 0.001
+STAKE_MIN_SANITY_USDT = 10.0
+FEE_SANITY_MIN_TRADES = 100
 
 
 @dataclass
@@ -354,13 +357,74 @@ def _strategy_block(zip_path: Path, strategy: str) -> dict:
 
 
 def _total_fees_from_trades(trades: list[dict]) -> float:
+  """
+  Suma comisiones en USDT.
+
+  Freqtrade exporta ``fee_open``/``fee_close`` como **ratio** (p. ej. 0.001), no como coste
+  absoluto — hay que multiplicar por ``stake_amount``.
+  """
   total = 0.0
   for t in trades:
-    for key in ("fee", "fee_open", "fee_close"):
+    stake = float(t.get("stake_amount") or t.get("max_stake_amount") or 0)
+    fo = t.get("fee_open")
+    fc = t.get("fee_close")
+    if stake > 0 and fo is not None and fc is not None:
+      total += stake * (abs(float(fo)) + abs(float(fc)))
+      continue
+    for key in ("fee", "fee_cost", "fee_cost_open", "fee_cost_close"):
       val = t.get(key)
       if val is not None:
         total += abs(float(val))
   return total
+
+
+def fee_sanity_warnings(
+  metrics: VariantMetrics,
+  *,
+  stake_min_usdt: float = STAKE_MIN_SANITY_USDT,
+  fee_rate: float = FEE_RATE_SANITY,
+  min_trades: int = FEE_SANITY_MIN_TRADES,
+  label_suffix: str = "",
+) -> list[str]:
+  """
+  Detecta comisiones imposiblemente bajas (p. ej. parser que suma ratios en vez de USDT).
+
+  Umbral: ``trades × stake_min × fee_rate`` — una sola pierna al tipo mínimo por trade.
+  """
+  if metrics.trades <= min_trades:
+    return []
+  floor = metrics.trades * stake_min_usdt * fee_rate
+  if metrics.total_fees_abs >= floor:
+    return []
+  name = metrics.name + label_suffix
+  return [
+    f"{name}: fees {metrics.total_fees_abs:.2f} USDT < umbral {floor:.2f} "
+    f"(trades={metrics.trades} × stake_min={stake_min_usdt} × {fee_rate}) — parseo sospechoso"
+  ]
+
+
+def collect_fee_sanity_warnings(metrics: list[VariantMetrics]) -> list[str]:
+  warnings: list[str] = []
+  for m in metrics:
+    warnings.extend(fee_sanity_warnings(m))
+    if m.leave_one_out_trades is not None and m.leave_one_out_profit_net_abs is not None:
+      loo_stub = VariantMetrics(
+        name=m.name,
+        strategy_parameters={},
+        zip_path="",
+        trades=int(m.leave_one_out_trades),
+        profit_net_abs=float(m.leave_one_out_profit_net_abs),
+        profit_gross_abs=float(m.leave_one_out_profit_gross_abs or 0),
+        total_fees_abs=max(
+          0.0,
+          float(m.leave_one_out_profit_gross_abs or 0) - float(m.leave_one_out_profit_net_abs),
+        ),
+        sharpe=0.0,
+        max_drawdown_account=float(m.leave_one_out_max_drawdown or 0),
+        friction_ratio=None,
+      )
+      warnings.extend(fee_sanity_warnings(loo_stub, label_suffix=" [LOO]"))
+  return warnings
 
 
 def parse_backtest_zip(zip_path: Path, strategy: str) -> VariantMetrics:
@@ -732,10 +796,15 @@ def run_screen(
   invalid: str | None = None
   verdict: ScreenVerdict | None = None
   reasons: list[str] = []
+  fee_warnings: list[str] = []
 
   if results:
+    fee_warnings = collect_fee_sanity_warnings(results)
     twins, twin_details = detect_identical_variants(results)
-    if twins:
+    if fee_warnings:
+      invalid = "fees_suspicious"
+      reasons = fee_warnings
+    elif twins:
       invalid = "variants_identical"
       reasons = twin_details
     elif all(m.params_verified for m in results):
@@ -763,6 +832,13 @@ def run_screen(
     "protocol": "docs/screen_protocol.md",
     "bias_controls": bias_controls,
     "hypothesis_attempt": hypothesis_attempt,
+    "fee_sanity": {
+      "suspicious": bool(fee_warnings),
+      "warnings": fee_warnings,
+      "stake_min_usdt": STAKE_MIN_SANITY_USDT,
+      "fee_rate": FEE_RATE_SANITY,
+      "min_trades": FEE_SANITY_MIN_TRADES,
+    },
   }
   out_path = out_dir / "screen_report.json"
   if not dry_run:
