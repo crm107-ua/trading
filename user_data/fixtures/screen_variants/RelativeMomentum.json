@@ -1,0 +1,26 @@
+# Criterios pre-registrados del screen — ver docs/screen_protocol.md
+# Variantes manuales (sin hyperopt) para RelativeMomentum.
+
+{
+  "strategy": "RelativeMomentum",
+  "variants": [
+    {
+      "name": "defaults",
+      "strategy_parameters": {}
+    },
+    {
+      "name": "fast_window",
+      "strategy_parameters": {
+        "momentum_window": 7,
+        "confirm_bars": 1
+      }
+    },
+    {
+      "name": "top2_wide_exit",
+      "strategy_parameters": {
+        "top_n": 2,
+        "exit_rank_k": 3
+      }
+    }
+  ]
+}
