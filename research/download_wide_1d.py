@@ -70,7 +70,7 @@ def main() -> int:
   pairs = fetch_top_usdt_pairs(limit=limit)
   MANIFEST.parent.mkdir(parents=True, exist_ok=True)
   MANIFEST.write_text(json.dumps({"pairs": pairs, "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ")}, indent=2), encoding="utf-8")
-  print(f"Top {len(pairs)} pares USDT → {MANIFEST}")
+  print(f"Top {len(pairs)} pares USDT -> {MANIFEST}")
   for i in range(0, len(pairs), batch):
     chunk = pairs[i : i + batch]
     print(f"Descarga lote {i // batch + 1}: {chunk}")
