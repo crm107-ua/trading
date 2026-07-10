@@ -1,0 +1,71 @@
+"""Tests mínimos del motor research/xsec_lab.py"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "research"))
+
+from xsec_lab import (  # noqa: E402
+  compute_metrics,
+  portfolio_return,
+  weights_equal,
+)
+
+
+def _two_asset_prices() -> pd.DataFrame:
+  idx = pd.date_range("2024-01-01", periods=10, freq="D", tz="UTC")
+  return pd.DataFrame(
+    {
+      "A/USDT": [100, 101, 102, 103, 104, 105, 106, 107, 108, 109],
+      "B/USDT": [200, 198, 196, 194, 192, 190, 188, 186, 184, 182],
+    },
+    index=idx,
+  )
+
+
+def test_constant_weights_track_single_asset() -> None:
+  prices = _two_asset_prices()
+
+  def all_a(p: pd.DataFrame, t: pd.Timestamp) -> pd.Series:
+    w = pd.Series(0.0, index=p.columns)
+    w["A/USDT"] = 1.0
+    return w
+
+  rets, _ = portfolio_return(prices, all_a, "W", fee_per_rotation=0.0)
+  single = np.log(prices["A/USDT"] / prices["A/USDT"].shift(1)).fillna(0.0)
+  np.testing.assert_allclose(rets.values, single.values, atol=1e-10)
+
+
+def test_no_rebalance_change_means_zero_turnover_cost_with_equal_weight() -> None:
+  prices = _two_asset_prices()
+  rets, turnover = portfolio_return(prices, weights_equal, "M", fee_per_rotation=0.001)
+  # Primer día sin retorno; con fee solo en rebalanceos
+  assert turnover >= 0.0
+  rets0, turnover0 = portfolio_return(prices, weights_equal, "M", fee_per_rotation=0.0)
+  # Misma trayectoria sin fee si no hubiera rebalanceos con cambio — al menos no más rica con fee
+  m_fee = compute_metrics(rets, turnover=turnover)
+  m_nofee = compute_metrics(rets0, turnover=turnover0)
+  assert m_fee.final_wealth <= m_nofee.final_wealth + 1e-9
+
+
+def test_friction_reduces_wealth_when_rebalance_has_turnover() -> None:
+  prices = _two_asset_prices()
+  rets_a, _ = portfolio_return(prices, weights_equal, "W", fee_per_rotation=0.0)
+  rets_b, _ = portfolio_return(prices, weights_equal, "W", fee_per_rotation=0.01)
+  wa = compute_metrics(rets_a).final_wealth
+  wb = compute_metrics(rets_b).final_wealth
+  assert wb < wa
+
+
+def test_compute_metrics_sharpe_finite() -> None:
+  idx = pd.date_range("2024-01-01", periods=100, freq="D", tz="UTC")
+  r = pd.Series(np.random.default_rng(0).normal(0.0005, 0.01, len(idx)), index=idx)
+  m = compute_metrics(r)
+  assert np.isfinite(m.sharpe)
+  assert m.max_drawdown <= 0.0
