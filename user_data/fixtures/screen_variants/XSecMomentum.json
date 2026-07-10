@@ -1,0 +1,34 @@
+{
+  "strategy": "XSecMomentum",
+  "hypothesis_attempt": 10,
+  "note": "Variantes pre-registradas antes del screen (#10). Baseline = línea E2 research.",
+  "variants": [
+    {
+      "name": "research_baseline",
+      "rationale": "E2: w=14, top-3, exit K=4 (banda muerta)",
+      "strategy_parameters": {
+        "momentum_window": 14,
+        "top_n": 3,
+        "exit_rank_k": 4
+      }
+    },
+    {
+      "name": "conservative",
+      "rationale": "Ventana larga, menos concentración (top-2)",
+      "strategy_parameters": {
+        "momentum_window": 30,
+        "top_n": 2,
+        "exit_rank_k": 4
+      }
+    },
+    {
+      "name": "wide",
+      "rationale": "Ventana corta, más nombres (top-4)",
+      "strategy_parameters": {
+        "momentum_window": 7,
+        "top_n": 4,
+        "exit_rank_k": 5
+      }
+    }
+  ]
+}

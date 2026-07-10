@@ -1,0 +1,24 @@
+{
+  "max_open_trades": 3,
+  "exchange": {
+    "pair_whitelist": [
+      "AAVE/USDT",
+      "ADA/USDT",
+      "BNB/USDT",
+      "BTC/USDT",
+      "DEXE/USDT",
+      "DOGE/USDT",
+      "ETH/USDT",
+      "LTC/USDT",
+      "NEAR/USDT",
+      "SKL/USDT",
+      "SOL/USDT",
+      "TRX/USDT",
+      "UNI/USDT",
+      "XLM/USDT",
+      "XRP/USDT",
+      "ZEC/USDT"
+    ]
+  },
+  "pairlists": [{ "method": "StaticPairList" }]
+}

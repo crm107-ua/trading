@@ -85,6 +85,12 @@ class VariantMetrics:
   friction_ratio: float | None
   params_verified: bool = True
   verify_issues: list[str] = field(default_factory=list)
+  dominant_pair: str | None = None
+  leave_one_out_excluded: str | None = None
+  leave_one_out_profit_net_abs: float | None = None
+  leave_one_out_profit_gross_abs: float | None = None
+  leave_one_out_max_drawdown: float | None = None
+  leave_one_out_trades: int | None = None
 
 
 @dataclass
@@ -408,6 +414,122 @@ def evaluate_screen(metrics: list[VariantMetrics]) -> ScreenVerdict:
   return ScreenVerdict(verdict="DESCARTADA", reasons=["ninguna variante con PnL bruto > 0"])
 
 
+def evaluate_rotation_screen(metrics: list[VariantMetrics], *, hypothesis_attempt: int) -> ScreenVerdict:
+  """
+  Criterios rotación/cross-sectional (#10+): estándar + leave-one-out bruto>0 + max DD < 60%.
+  """
+  reasons: list[str] = []
+  passed: list[str] = []
+
+  for m in metrics:
+    if m.profit_gross_abs <= 0:
+      continue
+    ok_trades = m.trades >= 30
+    ok_friction = m.total_fees_abs < 0.5 * m.profit_gross_abs
+    ok_dd = m.max_drawdown_account < 0.60
+    ok_loo = (
+      m.leave_one_out_profit_gross_abs is not None and m.leave_one_out_profit_gross_abs > 0
+    )
+    if ok_trades and ok_friction and ok_dd and ok_loo:
+      passed.append(m.name)
+    else:
+      if not ok_trades:
+        reasons.append(f"{m.name}: trades {m.trades} < 30")
+      if not ok_friction:
+        reasons.append(
+          f"{m.name}: comisiones {m.total_fees_abs:.2f} >= 50% bruto {m.profit_gross_abs:.2f}"
+        )
+      if not ok_dd:
+        reasons.append(f"{m.name}: max DD {m.max_drawdown_account:.1%} >= 60%")
+      if not ok_loo:
+        loo = m.leave_one_out_profit_gross_abs
+        reasons.append(
+          f"{m.name}: leave-one-out bruto <= 0 (excl. {m.leave_one_out_excluded}, bruto={loo})"
+        )
+
+  if passed:
+    return ScreenVerdict(
+      verdict="PASA",
+      reasons=[
+        f"intento #{hypothesis_attempt} — variantes que pasan (rotación): {', '.join(passed)}",
+      ],
+    )
+  if any(m.profit_gross_abs > 0 for m in metrics):
+    return ScreenVerdict(
+      verdict="ZONA_GRIS",
+      reasons=reasons or [f"intento #{hypothesis_attempt}: bruto>0 sin cumplir controles rotación"],
+    )
+  return ScreenVerdict(
+    verdict="DESCARTADA",
+    reasons=[f"intento #{hypothesis_attempt}: ninguna variante con PnL bruto > 0"],
+  )
+
+
+def dominant_pair_from_zip(zip_path: Path, strategy: str) -> str | None:
+  """Par con mayor PnL absoluto agregado en trades del zip."""
+  block = _strategy_block(zip_path, strategy)
+  trades = list(block.get("trades") or [])
+  by_pair: dict[str, float] = {}
+  for t in trades:
+    pair = str(t.get("pair") or "")
+    if not pair:
+      continue
+    profit = float(t.get("profit_abs") or t.get("profit_ratio") or 0.0)
+    by_pair[pair] = by_pair.get(pair, 0.0) + profit
+  if not by_pair:
+    return None
+  return max(by_pair, key=by_pair.get)
+
+
+def _read_pair_whitelist(config_path: Path) -> list[str]:
+  data = json.loads(config_path.read_text(encoding="utf-8"))
+  wl = data.get("exchange", {}).get("pair_whitelist") or []
+  return list(wl)
+
+
+def _write_temp_pairlist_config(base_path: Path, pairs: list[str], dest: Path) -> Path:
+  data = json.loads(base_path.read_text(encoding="utf-8"))
+  data.setdefault("exchange", {})["pair_whitelist"] = pairs
+  data["pairlists"] = [{"method": "StaticPairList"}]
+  dest.parent.mkdir(parents=True, exist_ok=True)
+  dest.write_text(json.dumps(data, indent=2), encoding="utf-8")
+  return dest
+
+
+def run_leave_one_out_backtest(
+  strategy: str,
+  timerange: str,
+  *,
+  datadir: str,
+  extra_configs: list[Path],
+  overrides: dict,
+  staging_dir: Path,
+  exclude_pair: str,
+  pairlist_source: Path,
+  container_name: str,
+  variant_label: str,
+) -> VariantMetrics:
+  whitelist = [p for p in _read_pair_whitelist(pairlist_source) if p != exclude_pair]
+  if len(whitelist) < 3:
+    raise ScreenAbortError(f"leave-one-out deja universo < 3 pares tras excluir {exclude_pair}")
+  temp_cfg = staging_dir / f"loo_exclude_{exclude_pair.replace('/', '_')}.json"
+  _write_temp_pairlist_config(pairlist_source, whitelist, temp_cfg)
+  configs = [c for c in extra_configs if c != pairlist_source] + [temp_cfg]
+  zip_path, _, _ = _run_docker_backtest(
+    strategy,
+    timerange,
+    datadir=datadir,
+    extra_configs=configs,
+    overrides=overrides,
+    staging_dir=staging_dir,
+    container_name=container_name,
+    variant_label=f"{variant_label}_loo",
+  )
+  m = parse_backtest_zip(zip_path, strategy)
+  m.name = f"{variant_label}_loo"
+  return m
+
+
 def latest_backtest_zip() -> Path | None:
   if LAST_RESULT.is_file():
     data = json.loads(LAST_RESULT.read_text(encoding="utf-8"))
@@ -531,6 +653,9 @@ def run_screen(
   dry_run: bool = False,
   skip_defaults: bool = False,
   prior_report: Path | None = None,
+  bias_controls: bool = False,
+  hypothesis_attempt: int | None = None,
+  pairlist_config: Path | None = None,
 ) -> dict:
   assert_screen_allowed(strategy)
 
@@ -579,6 +704,29 @@ def run_screen(
       raise ScreenAbortError(
         f"params no verificados para variante '{name}': {'; '.join(issues)}"
       )
+
+    if bias_controls and pairlist_config is not None:
+      dom = dominant_pair_from_zip(zip_path, strategy)
+      metrics.dominant_pair = dom
+      if dom:
+        loo = run_leave_one_out_backtest(
+          strategy,
+          timerange,
+          datadir=datadir,
+          extra_configs=extra_configs,
+          overrides=params,
+          staging_dir=out_dir,
+          exclude_pair=dom,
+          pairlist_source=pairlist_config,
+          container_name=f"{container}-loo",
+          variant_label=name,
+        )
+        metrics.leave_one_out_excluded = dom
+        metrics.leave_one_out_profit_net_abs = loo.profit_net_abs
+        metrics.leave_one_out_profit_gross_abs = loo.profit_gross_abs
+        metrics.leave_one_out_max_drawdown = loo.max_drawdown_account
+        metrics.leave_one_out_trades = loo.trades
+
     results.append(metrics)
 
   invalid: str | None = None
@@ -591,7 +739,11 @@ def run_screen(
       invalid = "variants_identical"
       reasons = twin_details
     elif all(m.params_verified for m in results):
-      verdict = evaluate_screen(results)
+      if bias_controls:
+        attempt = hypothesis_attempt if hypothesis_attempt is not None else 10
+        verdict = evaluate_rotation_screen(results, hypothesis_attempt=attempt)
+      else:
+        verdict = evaluate_screen(results)
       reasons = verdict.reasons
     else:
       invalid = "params_unverified"
@@ -609,6 +761,8 @@ def run_screen(
     "params_verified_all": all(m.params_verified for m in results) if results else False,
     "prior_defaults_from": prior_defaults_path,
     "protocol": "docs/screen_protocol.md",
+    "bias_controls": bias_controls,
+    "hypothesis_attempt": hypothesis_attempt,
   }
   out_path = out_dir / "screen_report.json"
   if not dry_run:
@@ -633,6 +787,23 @@ def main() -> int:
   )
   parser.add_argument("--skip-defaults", action="store_true", help="Omitir variante defaults (re-screen)")
   parser.add_argument("--prior-report", type=Path, default=None, help="Reporte con defaults de ayer")
+  parser.add_argument(
+    "--bias-controls",
+    action="store_true",
+    help="Controles rotacion: leave-one-out + max DD 60 pct (ver screen_protocol.md)",
+  )
+  parser.add_argument(
+    "--hypothesis-attempt",
+    type=int,
+    default=None,
+    help="Número de intento en docs/hypothesis_registry.md (p. ej. 10)",
+  )
+  parser.add_argument(
+    "--screen-config",
+    type=Path,
+    default=None,
+    help="Config adicional (p. ej. user_data/config/screen_xsec.json)",
+  )
   parser.add_argument("--parse-zip", type=Path, help="Solo parsear zip existente (sin backtests)")
   parser.add_argument("--inside-docker", action="store_true", help=argparse.SUPPRESS)
   args = parser.parse_args()
@@ -644,9 +815,16 @@ def main() -> int:
 
   extra: list[Path] = []
   datadir = f"/freqtrade/{args.datadir.replace(chr(92), '/')}"
+  pairlist_cfg: Path | None = None
   if args.fixtures:
-    extra.append(ROOT / "user_data/config/backtest_relative_momentum_fixtures.json")
-    datadir = "/freqtrade/tests/fixtures/data_relative_momentum/binance"
+    extra.append(ROOT / "user_data/config/backtest_xsec_momentum_fixtures.json")
+    datadir = "/freqtrade/tests/fixtures/data_xsec_momentum/binance"
+  if args.screen_config:
+    pairlist_cfg = args.screen_config.resolve()
+    extra.append(pairlist_cfg)
+  elif args.strategy == "XSecMomentum" and not args.fixtures:
+    pairlist_cfg = (ROOT / "user_data/config/screen_xsec.json").resolve()
+    extra.append(pairlist_cfg)
 
   try:
     from pipeline.run_lock import read_lock
@@ -668,6 +846,9 @@ def main() -> int:
       extra_configs=extra,
       skip_defaults=args.skip_defaults,
       prior_report=args.prior_report,
+      bias_controls=args.bias_controls,
+      hypothesis_attempt=args.hypothesis_attempt,
+      pairlist_config=pairlist_cfg,
     )
   except ScreenAbortError as exc:
     print(f"SCREEN ABORTADO: {exc}", file=sys.stderr)

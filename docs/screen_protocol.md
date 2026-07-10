@@ -45,6 +45,31 @@ Alguna variante tiene PnL bruto > 0 pero **no** cumple fricción (< 50% comision
 - Screen aprobado → candidato a `python -m pipeline.run_validation <Estrategia> --profile full`
 - Veredicto full (ROBUSTA/DUDOSA/SOBREAJUSTADA) es independiente del screen
 
+## Rotación / cross-sectional (2026-07-10)
+
+Aplica a estrategias de ranking multi-par (p. ej. **XSecMomentum**, intento **#10**).
+
+### Criterios adicionales (PRE-REGISTRADOS)
+
+Además de los tres criterios estándar del screen, **PASA** solo si **todas** se cumplen:
+
+1. Criterios estándar: PnL bruto > 0, comisiones < 50% bruto, trades ≥ 30
+2. **Leave-one-out bruto > 0**: re-backtest excluyendo el par de mayor contribución al PnL
+3. **Max drawdown < 60%** (`max_drawdown_account < 0.60`)
+
+El reporte debe citar el número de intento del registro de hipótesis.
+
+### Ejecución
+
+```powershell
+python user_data/tools/screen_strategy.py XSecMomentum `
+  --timerange 20210101- `
+  --screen-config user_data/config/screen_xsec.json `
+  --bias-controls --hypothesis-attempt 10
+```
+
+Modo `--bias-controls`: duplica backtests (baseline + leave-one-out por variante).
+
 ## Aislamiento de estado (post-lock — ver `docs/validation_incidents.md`)
 
 Mientras haya un `run_validation` activo, el screen **no** debe escribir en `user_data/backtest_results/` ni mutar `user_data/hyperopt_results/.last_result.json` compartidos con el pipeline.
