@@ -1,0 +1,75 @@
+{
+  "e1_top1_w14_W": {
+    "name": "e1",
+    "window": 14,
+    "top_n": 1,
+    "freq": "W",
+    "dominant_pair_full_sample": "SOL/USDT",
+    "results": [
+      {
+        "label": "e1_baseline",
+        "final_wealth": 46.5885054380766,
+        "max_drawdown": -0.8398003215550294,
+        "sharpe": 0.600368843970127,
+        "cagr": 1.0063255389201506,
+        "n_pairs_at_end": 1
+      },
+      {
+        "label": "e1_pit",
+        "final_wealth": 46.5885054380766,
+        "max_drawdown": -0.8398003215550294,
+        "sharpe": 0.600368843970127,
+        "cagr": 1.0063255389201506,
+        "n_pairs_at_end": 1
+      },
+      {
+        "label": "e1_exclude_dominant",
+        "final_wealth": 15.504719117844164,
+        "max_drawdown": -0.7761439548667233,
+        "sharpe": 0.48950794810039594,
+        "cagr": 0.6435769613084514,
+        "n_pairs_at_end": 1
+      }
+    ],
+    "pit_wealth_ratio_vs_baseline": 1.0,
+    "exclude_dominant_wealth_ratio": 0.33280138463450726,
+    "baseline_max_dd": -0.8398003215550294
+  },
+  "e2_top3_w14_W": {
+    "name": "e2",
+    "window": 14,
+    "top_n": 3,
+    "freq": "W",
+    "dominant_pair_full_sample": "DEXE/USDT",
+    "results": [
+      {
+        "label": "e2_baseline",
+        "final_wealth": 10.367432960738457,
+        "max_drawdown": -0.8872832401154831,
+        "sharpe": 0.39873616980394205,
+        "cagr": 0.527939517121045,
+        "n_pairs_at_end": 3
+      },
+      {
+        "label": "e2_pit",
+        "final_wealth": 10.367432960738457,
+        "max_drawdown": -0.8872832401154831,
+        "sharpe": 0.39873616980394205,
+        "cagr": 0.527939517121045,
+        "n_pairs_at_end": 3
+      },
+      {
+        "label": "e2_exclude_dominant",
+        "final_wealth": 7.073447161403805,
+        "max_drawdown": -0.8753073510399357,
+        "sharpe": 0.33414070008969093,
+        "cagr": 0.42563653320997474,
+        "n_pairs_at_end": 3
+      }
+    ],
+    "pit_wealth_ratio_vs_baseline": 1.0,
+    "exclude_dominant_wealth_ratio": 0.6822756595765799,
+    "baseline_max_dd": -0.8872832401154831
+  },
+  "e1_top1_max_dd_note": "top-1 concentra varianza \u2014 comparar max_drawdown con E2 top-3"
+}

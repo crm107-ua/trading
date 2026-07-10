@@ -69,3 +69,24 @@ def test_compute_metrics_sharpe_finite() -> None:
   m = compute_metrics(r)
   assert np.isfinite(m.sharpe)
   assert m.max_drawdown <= 0.0
+
+
+def test_pit_universe_excludes_late_listings() -> None:
+  from xsec_lab import pair_listing_dates, weights_top_n_momentum_pit
+
+  idx = pd.date_range("2024-01-01", periods=60, freq="D", tz="UTC")
+  prices = pd.DataFrame(
+    {
+      "OLD/USDT": np.linspace(100, 120, len(idx)),
+      "NEW/USDT": np.linspace(50, 80, len(idx)),
+    },
+    index=idx,
+  )
+  listing = {
+    "OLD/USDT": pd.Timestamp("2023-01-01", tz="UTC"),
+    "NEW/USDT": pd.Timestamp("2024-03-01", tz="UTC"),
+  }
+  as_of = idx[-1]
+  w = weights_top_n_momentum_pit(prices, as_of, window=14, top_n=1, listing_dates=listing)
+  assert w["NEW/USDT"] == 0.0
+  assert w["OLD/USDT"] == 1.0

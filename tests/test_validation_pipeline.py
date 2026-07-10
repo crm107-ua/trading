@@ -39,6 +39,22 @@ def test_walk_forward_generates_multiple_windows() -> None:
   assert windows[0].test_start > windows[0].train_end
 
 
+def test_walk_forward_respects_warmup_offset() -> None:
+  from pipeline.strategy_warmup import earliest_train_start, warmup_days
+
+  data_start = date(2021, 1, 1)
+  min_start = earliest_train_start(data_start, "MeanRevBB")
+  assert min_start > data_start
+  windows = generate_walk_forward_windows(
+    data_start,
+    date(2026, 7, 1),
+    earliest_train_start=min_start,
+  )
+  assert windows
+  assert windows[0].train_start >= min_start
+  assert warmup_days("MeanRevBB") >= 34
+
+
 def test_stitch_oos_carries_capital() -> None:
   from pipeline.walk_forward import OosSegmentResult
 

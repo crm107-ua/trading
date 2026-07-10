@@ -32,6 +32,7 @@ from pipeline.freqtrade_cli import (
   parse_backtest_metrics,
   run_backtest,
   run_hyperopt,
+  stop_ephemeral_freqtrade_containers,
 )
 from pipeline.hyperopt_checkpoint import archive_hyperopt_results
 from pipeline.hyperopt_resume import adopt_partial_enabled, try_adopt_partial_hyperopt
@@ -50,6 +51,7 @@ from pipeline.verdict_engine import SeedRunResult, VerdictInput, compute_verdict
 from pipeline.regime_stats import regime_distribution_for_timerange
 from pipeline.run_lock import ValidationRunActiveError, acquire_lock, release_lock
 from pipeline.strategy_spaces import hyperopt_spaces_for
+from pipeline.strategy_warmup import earliest_train_start, warmup_days
 from pipeline.walk_forward import (
   OosSegmentResult,
   generate_walk_forward_windows,
@@ -144,11 +146,13 @@ def _hyperopt_and_archive(
   min_trades: int,
   spaces: list[str],
   adopt_partial: bool = False,
+  context: str | None = None,
 ) -> tuple[Path | None, str]:
   """Hyperopt IS con params limpios; archiva el json generado."""
+  ctx = context or f"seed={seed}"
   clear_strategy_params(strategy)
   if params_file_exists(strategy):
-    raise RuntimeError(f"FAIL: {strategy}.json no se limpió antes de hyperopt")
+    raise RuntimeError(f"FAIL: {strategy}.json no se limpió antes de hyperopt ({ctx})")
 
   if adopt_partial_enabled(adopt_partial):
     adoption = try_adopt_partial_hyperopt(strategy, epochs=epochs, seed=seed)
@@ -160,7 +164,7 @@ def _hyperopt_and_archive(
       )
       archived = archive_strategy_params(strategy, archive_dir, label)
       if archived is None:
-        raise RuntimeError(f"adopción no exportó {strategy}.json (seed={seed})")
+        raise RuntimeError(f"adopción no exportó {strategy}.json ({ctx})")
       return archived, adoption.note
 
   result = run_hyperopt(
@@ -173,11 +177,13 @@ def _hyperopt_and_archive(
     spaces=spaces,
   )
   if result.returncode != 0:
-    raise RuntimeError(f"hyperopt falló (seed={seed})\n{result.output[-3000:]}")
+    from pipeline.freqtrade_cli import _extract_error_tail
+
+    raise RuntimeError(f"hyperopt falló ({ctx})\n{_extract_error_tail(result.output)}")
 
   archived = archive_strategy_params(strategy, archive_dir, label)
   if archived is None:
-    raise RuntimeError(f"hyperopt no exportó {strategy}.json (seed={seed})")
+    raise RuntimeError(f"hyperopt no exportó {strategy}.json ({ctx})")
 
   return archived, result.output
 
@@ -275,6 +281,12 @@ def main(
   except ValidationRunActiveError as exc:
     console.print(f"[red]{exc}[/red]")
     raise typer.Exit(code=3) from exc
+  finally:
+    stopped = stop_ephemeral_freqtrade_containers()
+    if stopped:
+      console.print(
+        f"[dim]contenedores efímeros detenidos al salir: {len(stopped)}[/dim]"
+      )
 
 
 def _run_validation(
@@ -488,15 +500,28 @@ def _run_validation(
     oos_profits_wf: list[float] = []
 
     if do_wf:
+      wf_warmup_days = warmup_days(strategy)
+      wf_train_min = earliest_train_start(split.full_start, strategy)
       console.print(
-        f"[cyan]==> Walk-forward 12m/3m ({wf_epochs_n} epochs/ventana)[/cyan]"
+        f"[cyan]==> Walk-forward 12m/3m ({wf_epochs_n} epochs/ventana, "
+        f"warmup>={wf_warmup_days}d, train desde {wf_train_min.isoformat()})[/cyan]"
       )
-      windows = generate_walk_forward_windows(split.full_start, split.full_end)
+      windows = generate_walk_forward_windows(
+        split.full_start,
+        split.full_end,
+        earliest_train_start=wf_train_min,
+      )
+      report["steps"]["walk_forward_warmup"] = {
+        "warmup_days": wf_warmup_days,
+        "earliest_train_start": wf_train_min.isoformat(),
+        "data_start": split.full_start.isoformat(),
+      }
       report["steps"]["walk_forward_windows"] = [w.to_dict() for w in windows]
       oos_segments: list[OosSegmentResult] = []
 
       for window in windows:
         wf_label = f"wf{window.index}_train"
+        wf_ctx = f"{wf_label} seed=42"
         console.print(f"    ventana {window.index}: train {window.train_timerange}")
         archived, _ = _hyperopt_and_archive(
           strategy,
@@ -508,7 +533,8 @@ def _run_validation(
           label=wf_label,
           min_trades=min_trades_n,
           spaces=opt_spaces,
-          adopt_partial=adopt_partial_hyperopt,
+          adopt_partial=False,
+          context=wf_ctx,
         )
         is_m, _, _ = _backtest_with_params(
           strategy,

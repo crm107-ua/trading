@@ -426,3 +426,119 @@ def list_available_1d_pairs(datadir: Path | str = DEFAULT_DATADIR) -> list[dict]
       }
     )
   return out
+
+
+def pair_listing_dates(datadir: Path | str = DEFAULT_DATADIR) -> dict[str, pd.Timestamp]:
+  """Primera vela 1d disponible por par (proxy listing para controles PIT)."""
+  return {
+    x["pair"]: pd.Timestamp(x["start"], tz="UTC")
+    for x in list_available_1d_pairs(datadir)
+  }
+
+
+def weights_top_n_momentum_pit(
+  prices: pd.DataFrame,
+  as_of: pd.Timestamp,
+  *,
+  window: int,
+  top_n: int,
+  listing_dates: dict[str, pd.Timestamp],
+  min_history_days: int | None = None,
+) -> pd.Series:
+  """
+  Top-N momentum con universo point-in-time: solo pares listados antes de ``as_of``.
+
+  ``min_history_days``: días mínimos desde listing hasta ``as_of`` (default ``window+1``).
+  """
+  lookback = min_history_days if min_history_days is not None else window + 1
+  cutoff = as_of - pd.Timedelta(days=lookback)
+  eligible = [
+    c
+    for c in prices.columns
+    if c in listing_dates and listing_dates[c] <= cutoff and prices.loc[:as_of, c].notna().sum() >= window + 2
+  ]
+  if not eligible:
+    return pd.Series(0.0, index=prices.columns)
+  sub = prices[eligible]
+  w_sub = weights_top_n_momentum(sub, as_of, window=window, top_n=top_n)
+  w = pd.Series(0.0, index=prices.columns)
+  w.loc[w_sub.index] = w_sub
+  return w
+
+
+def weights_top_n_momentum_excluding(
+  prices: pd.DataFrame,
+  as_of: pd.Timestamp,
+  *,
+  window: int,
+  top_n: int,
+  exclude: set[str],
+) -> pd.Series:
+  """Top-N momentum omitiendo pares en ``exclude``."""
+  cols = [c for c in prices.columns if c not in exclude]
+  if not cols:
+    return pd.Series(0.0, index=prices.columns)
+  sub = prices[cols]
+  w_sub = weights_top_n_momentum(sub, as_of, window=window, top_n=top_n)
+  w = pd.Series(0.0, index=prices.columns)
+  w.loc[w_sub.index] = w_sub
+  return w
+
+
+def dominant_pair_full_sample(prices: pd.DataFrame, window: int) -> str | None:
+  """Par con mayor momentum en la última fecha (proxy del 'ganador' retrospectivo)."""
+  scores = momentum_score(prices, window).iloc[-1].dropna()
+  if scores.empty:
+    return None
+  return str(scores.idxmax())
+
+
+@dataclass(frozen=True)
+class BiasControlResult:
+  label: str
+  final_wealth: float
+  max_drawdown: float
+  sharpe: float
+  cagr: float
+  n_pairs_at_end: int
+
+
+def run_bias_control(
+  prices: pd.DataFrame,
+  *,
+  window: int,
+  top_n: int,
+  freq: RebalanceFreq,
+  fee: float,
+  listing_dates: dict[str, pd.Timestamp],
+  label: str,
+  mode: Literal["baseline", "pit", "exclude_dominant"],
+) -> BiasControlResult:
+  exclude_dom: set[str] = set()
+  if mode == "exclude_dominant":
+    dom = dominant_pair_full_sample(prices, window)
+    if dom:
+      exclude_dom = {dom}
+
+  def fn(p: pd.DataFrame, t: pd.Timestamp) -> pd.Series:
+    if mode == "pit":
+      return weights_top_n_momentum_pit(
+        p, t, window=window, top_n=top_n, listing_dates=listing_dates
+      )
+    if mode == "exclude_dominant":
+      return weights_top_n_momentum_excluding(
+        p, t, window=window, top_n=top_n, exclude=exclude_dom
+      )
+    return weights_top_n_momentum(p, t, window=window, top_n=top_n)
+
+  rets, turnover = portfolio_return(prices, fn, freq, fee_per_rotation=fee)
+  m = compute_metrics(rets, turnover=turnover)
+  last_w = fn(prices, prices.index[-1])
+  return BiasControlResult(
+    label=label,
+    final_wealth=m.final_wealth,
+    max_drawdown=m.max_drawdown,
+    sharpe=m.sharpe,
+    cagr=m.cagr,
+    n_pairs_at_end=int((last_w > 0).sum()),
+  )

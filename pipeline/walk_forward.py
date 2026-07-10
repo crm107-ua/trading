@@ -36,13 +36,21 @@ def generate_walk_forward_windows(
   data_start: date,
   data_end: date,
   *,
+  earliest_train_start: date | None = None,
   train_months: int = 12,
   test_months: int = 3,
   step_months: int = 3,
 ) -> list[WalkForwardWindow]:
-  """Genera ventanas rodantes mientras el tramo test cabe en ``data_end``."""
+  """
+  Genera ventanas rodantes mientras el tramo test cabe en ``data_end``.
+
+  ``earliest_train_start``: primer train_start permitido (p. ej. ``data_start + warmup``).
+  Si es posterior a ``data_start``, la ventana 0 se desplaza — no se entrena sin warmup.
+  """
   windows: list[WalkForwardWindow] = []
-  train_start = data_start
+  train_start = earliest_train_start or data_start
+  if train_start < data_start:
+    train_start = data_start
   idx = 0
 
   while True:

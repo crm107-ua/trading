@@ -91,19 +91,72 @@ class CommandResult:
     return (self.stdout or "") + (self.stderr or "")
 
 
-def run_freqtrade(args: list[str], *, timeout: int | None = None) -> CommandResult:
-  cmd = ["docker", "compose", "run", "--rm", "freqtrade", *args]
+def stop_ephemeral_freqtrade_containers() -> list[str]:
+  """
+  Detiene contenedores ``*-freqtrade-run-*`` huérfanos (hyperopt/backtest efímeros).
+
+  Cuando el orquestador muere (timeout, crash), ``docker compose run`` puede seguir
+  vivo dentro del contenedor efímero.
+  """
   proc = subprocess.run(
-    cmd,
-    cwd=ROOT,
+    ["docker", "ps", "-q", "--filter", "name=freqtrade-run-"],
     capture_output=True,
     text=True,
     encoding="utf-8",
     errors="replace",
-    timeout=timeout,
     check=False,
   )
-  return CommandResult(proc.returncode, proc.stdout or "", proc.stderr or "")
+  stopped: list[str] = []
+  for cid in (proc.stdout or "").strip().split():
+    if not cid:
+      continue
+    subprocess.run(
+      ["docker", "stop", cid],
+      capture_output=True,
+      text=True,
+      encoding="utf-8",
+      errors="replace",
+      check=False,
+    )
+    stopped.append(cid)
+  return stopped
+
+
+def _extract_error_tail(output: str, *, max_chars: int = 4000) -> str:
+  """Prioriza líneas ERROR/Traceback; si no hay, devuelve el final del log."""
+  lines = output.splitlines()
+  markers = ("ERROR", "Error", "Traceback", "Exception", "CRITICAL", "fatal", "Timeout")
+  err_lines = [ln for ln in lines if any(m in ln for m in markers)]
+  if err_lines:
+    return "\n".join(err_lines[-50:])
+  return output[-max_chars:]
+
+
+def run_freqtrade(args: list[str], *, timeout: int | None = None) -> CommandResult:
+  cmd = ["docker", "compose", "run", "--rm", "freqtrade", *args]
+  try:
+    proc = subprocess.run(
+      cmd,
+      cwd=ROOT,
+      capture_output=True,
+      text=True,
+      encoding="utf-8",
+      errors="replace",
+      timeout=timeout,
+      check=False,
+    )
+    return CommandResult(proc.returncode, proc.stdout or "", proc.stderr or "")
+  except subprocess.TimeoutExpired as exc:
+    stop_ephemeral_freqtrade_containers()
+    out = (exc.stdout or "") + (exc.stderr or "")
+    msg = _extract_error_tail(out) if out else ""
+    return CommandResult(
+      -1,
+      exc.stdout or "",
+      (exc.stderr or "")
+      + "\n[orquestador: timeout subprocess — contenedor efímero detenido]\n"
+      + msg,
+    )
 
 
 def base_config_args() -> list[str]:
