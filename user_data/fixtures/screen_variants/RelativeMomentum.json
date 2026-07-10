@@ -1,8 +1,6 @@
-# Criterios pre-registrados del screen — ver docs/screen_protocol.md
-# Variantes manuales (sin hyperopt) para RelativeMomentum.
-
 {
   "strategy": "RelativeMomentum",
+  "rationale": "Momentum cross-sectional 1d/1h — variantes acortan ventana o amplían top-N/salida.",
   "variants": [
     {
       "name": "defaults",

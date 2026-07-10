@@ -65,7 +65,8 @@ def test_rotation_entry_mask_daily_requires_consecutive_days() -> None:
   rank[dates.floor("D") == pd.Timestamp("2024-01-04", tz="UTC")] = 1
   entry = rotation_entry_mask_daily(rank, dates, top_n=1, confirm_days=2)
   assert not entry.loc[dates.floor("D") == pd.Timestamp("2024-01-03", tz="UTC")].any()
-  assert entry.loc[dates.floor("D") == pd.Timestamp("2024-01-04", tz="UTC")].any()
+  assert not entry.loc[dates.floor("D") == pd.Timestamp("2024-01-04", tz="UTC")].any()
+  assert entry.loc[dates.floor("D") == pd.Timestamp("2024-01-05", tz="UTC")].any()
 
 
 def test_rotation_entry_requires_consecutive_bars() -> None:

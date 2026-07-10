@@ -304,7 +304,9 @@ def _load_variants(strategy: str, variants_path: Path | None) -> list[dict]:
   path = variants_path or (VARIANTS_DIR / f"{strategy}.json")
   if not path.is_file():
     return [{"name": "defaults", "strategy_parameters": {}}]
-  payload = json.loads(path.read_text(encoding="utf-8"))
+  raw = path.read_text(encoding="utf-8")
+  lines = [ln for ln in raw.splitlines() if not ln.lstrip().startswith("#")]
+  payload = json.loads("\n".join(lines))
   return list(payload.get("variants") or [{"name": "defaults", "strategy_parameters": {}}])
 
 

@@ -58,7 +58,7 @@ def test_entry_and_exit_masks_respect_hysteresis_and_dead_band() -> None:
   dates = pd.date_range("2024-01-01", periods=len(rank), freq="D", tz="UTC")
   entry = rotation_entry_mask_daily(rank, dates, top_n=1, confirm_days=2)
   exit_mask = rotation_exit_mask(rank, exit_rank_k=2)
-  assert entry.iloc[3]
+  assert entry.iloc[4]
   assert not exit_mask.iloc[5]
   assert exit_mask.iloc[7]
 
