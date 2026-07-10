@@ -1,0 +1,63 @@
+{
+  "strategy": "BreakoutVol",
+  "run_id": "20260710_124547",
+  "timerange": "20210101-",
+  "datadir": "/freqtrade/user_data/data/binance",
+  "variants": [
+    {
+      "name": "defaults",
+      "strategy_parameters": {},
+      "zip_path": "C:\\Users\\carom\\Desktop\\trading\\user_data\\backtest_results\\backtest-result-2026-07-10_10-16-19.zip",
+      "trades": 1540,
+      "profit_net_abs": -9355.14747158,
+      "profit_gross_abs": -9352.06747158,
+      "total_fees_abs": 3.079999999999772,
+      "sharpe": -5.990429816510464,
+      "max_drawdown_account": 0.9371158578170015,
+      "friction_ratio": null,
+      "params_verified": true,
+      "verify_issues": []
+    },
+    {
+      "name": "longer_breakout",
+      "strategy_parameters": {
+        "buy_breakout_period": 35
+      },
+      "zip_path": "C:\\Users\\carom\\Desktop\\trading\\user_data\\backtest_results\\backtest-result-2026-07-10_12-46-32.zip",
+      "trades": 1270,
+      "profit_net_abs": -8940.15179038,
+      "profit_gross_abs": -8937.61179038,
+      "total_fees_abs": 2.5399999999998313,
+      "sharpe": -4.862600347004778,
+      "max_drawdown_account": 0.897936372353001,
+      "friction_ratio": null,
+      "params_verified": true,
+      "verify_issues": []
+    },
+    {
+      "name": "selective_volume",
+      "strategy_parameters": {
+        "buy_breakout_period": 30,
+        "buy_volume_factor": 22
+      },
+      "zip_path": "C:\\Users\\carom\\Desktop\\trading\\user_data\\backtest_results\\backtest-result-2026-07-10_12-47-11.zip",
+      "trades": 905,
+      "profit_net_abs": -8431.74265127,
+      "profit_gross_abs": -8429.93265127,
+      "total_fees_abs": 1.8099999999999115,
+      "sharpe": -4.178159492401447,
+      "max_drawdown_account": 0.843174265127,
+      "friction_ratio": null,
+      "params_verified": true,
+      "verify_issues": []
+    }
+  ],
+  "verdict": "DESCARTADA",
+  "reasons": [
+    "ninguna variante con PnL bruto > 0"
+  ],
+  "invalid": null,
+  "params_verified_all": true,
+  "prior_defaults_from": "user_data\\validation_reports\\screen\\BreakoutVol\\20260710_101548\\screen_report.json",
+  "protocol": "docs/screen_protocol.md"
+}

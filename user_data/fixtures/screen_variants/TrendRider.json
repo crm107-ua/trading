@@ -1,16 +1,10 @@
 {
   "strategy": "TrendRider",
-  "rationale": "391/474 cierres del switcher fueron stops — ATR 2× puede ser prieto; variantes ensanchan stop o endurecen filtro de entrada.",
+  "rationale": "391/474 cierres del switcher fueron stops — ATR 2× no es cargable vía .json (atr_stop_multiplier es atributo de clase); variantes endurecen filtro de entrada.",
   "variants": [
     {
       "name": "defaults",
       "strategy_parameters": {}
-    },
-    {
-      "name": "wider_atr_stop",
-      "strategy_parameters": {
-        "atr_stop_multiplier": 3.0
-      }
     },
     {
       "name": "stricter_trend_filter",

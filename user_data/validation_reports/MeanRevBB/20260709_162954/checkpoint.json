@@ -12,7 +12,8 @@
     "profit_factor": 0.4207573831368695
   },
   "completed_seeds": [
-    42
+    42,
+    123
   ],
   "seed_results": [
     {
@@ -38,6 +39,31 @@
         "profit_factor": 0.4416172453159313
       },
       "params_file": "C:\\Users\\carom\\Desktop\\trading\\user_data\\validation_reports\\MeanRevBB\\20260709_162954\\params\\is_seed42.json",
+      "param_divergence_vs_seed0": 0.0
+    },
+    {
+      "seed": 123,
+      "is_metrics": {
+        "trades": 406,
+        "profit_total_abs": -6905.54615918,
+        "profit_total": -0.690554615918,
+        "sharpe": -2.1706882822753815,
+        "sortino": -3.9547604389740774,
+        "max_drawdown_account": 0.7117129833201704,
+        "winrate": 0.3497536945812808,
+        "profit_factor": 0.3877023011659174
+      },
+      "oos_metrics": {
+        "trades": 191,
+        "profit_total_abs": -3391.55950888,
+        "profit_total": -0.339155950888,
+        "sharpe": -1.5437434771562717,
+        "sortino": -4.287286287626558,
+        "max_drawdown_account": 0.3491204844737128,
+        "winrate": 0.3612565445026178,
+        "profit_factor": 0.5618192571735102
+      },
+      "params_file": "C:\\Users\\carom\\Desktop\\trading\\user_data\\validation_reports\\MeanRevBB\\20260709_162954\\params\\is_seed123.json",
       "param_divergence_vs_seed0": null
     }
   ],
@@ -73,15 +99,49 @@
       },
       "ft_stratparam_v": 1,
       "export_time": "2026-07-09 20:21:43.685569+00:00"
+    },
+    {
+      "strategy_name": "MeanRevBB",
+      "params": {
+        "roi": {
+          "0": 100
+        },
+        "stoploss": {
+          "stoploss": -0.1
+        },
+        "trailing": {
+          "trailing_stop": false,
+          "trailing_stop_positive": null,
+          "trailing_stop_positive_offset": 0.0,
+          "trailing_only_offset_is_reached": false
+        },
+        "max_open_trades": {
+          "max_open_trades": 4
+        },
+        "buy": {
+          "bb_period": 21,
+          "bb_std": 2.1,
+          "buy_bb_offset": 0.0,
+          "buy_rsi": 20
+        },
+        "sell": {
+          "sell_bb_mid_tolerance": 0.001,
+          "sell_rsi": 59
+        }
+      },
+      "ft_stratparam_v": 1,
+      "export_time": "2026-07-10 11:20:04.531353+00:00"
     }
   ],
   "hyperopt_checkpoints": {
-    "42": [
+    "123": [
       ".last_result.json",
       "hyperopt_tickerdata.pkl",
       "strategy_MeanRevBB_2026-07-09_11-42-36.fthypt",
       "strategy_MeanRevBB_2026-07-09_11-58-32.fthypt",
-      "strategy_MeanRevBB_2026-07-09_16-30-35.fthypt"
+      "strategy_MeanRevBB_2026-07-09_16-30-35.fthypt",
+      "strategy_MeanRevBB_2026-07-09_20-22-37.fthypt",
+      "strategy_MeanRevBB_2026-07-10_08-00-53.fthypt"
     ]
   }
 }

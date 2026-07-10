@@ -1,0 +1,33 @@
+{
+  "strategy_name": "RegimeSwitcher",
+  "params": {
+    "roi": {
+      "0": 100
+    },
+    "stoploss": {
+      "stoploss": -0.1
+    },
+    "trailing": {
+      "trailing_stop": false,
+      "trailing_stop_positive": null,
+      "trailing_stop_positive_offset": 0.0,
+      "trailing_only_offset_is_reached": false
+    },
+    "max_open_trades": {
+      "max_open_trades": 4
+    },
+    "buy": {
+      "trend_ema_fast": 12,
+      "trend_ema_slow": 26,
+      "trend_adx": 28,
+      "trend_volume_factor": 20,
+      "range_buy_rsi": 28,
+      "range_bb_period": 20,
+      "range_bb_std": 2.0
+    },
+    "sell": {
+      "range_sell_rsi": 50
+    }
+  },
+  "ft_stratparam_v": 1
+}

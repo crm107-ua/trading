@@ -1,16 +1,10 @@
 {
   "strategy": "RegimeSwitcher",
-  "rationale": "Stop ATR prieto en rama trend; rama range puede necesitar RSI más estricto o trend más selectivo según régimen dominante.",
+  "rationale": "atr_stop_multiplier no es cargable vía .json; variantes ajustan RSI range o filtro trend.",
   "variants": [
     {
       "name": "defaults",
       "strategy_parameters": {}
-    },
-    {
-      "name": "wider_atr_stop",
-      "strategy_parameters": {
-        "atr_stop_multiplier": 3.0
-      }
     },
     {
       "name": "tighter_range_faster_exit",

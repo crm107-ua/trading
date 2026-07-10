@@ -1,0 +1,32 @@
+{
+  "strategy_name": "MeanRevBB",
+  "params": {
+    "roi": {
+      "0": 100
+    },
+    "stoploss": {
+      "stoploss": -0.1
+    },
+    "trailing": {
+      "trailing_stop": false,
+      "trailing_stop_positive": null,
+      "trailing_stop_positive_offset": 0.0,
+      "trailing_only_offset_is_reached": false
+    },
+    "max_open_trades": {
+      "max_open_trades": 4
+    },
+    "buy": {
+      "bb_period": 21,
+      "bb_std": 2.1,
+      "buy_bb_offset": 0.0,
+      "buy_rsi": 20
+    },
+    "sell": {
+      "sell_bb_mid_tolerance": 0.001,
+      "sell_rsi": 59
+    }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2026-07-10 11:20:04.531353+00:00"
+}

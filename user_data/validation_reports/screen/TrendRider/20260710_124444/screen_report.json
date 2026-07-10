@@ -1,0 +1,48 @@
+{
+  "strategy": "TrendRider",
+  "run_id": "20260710_124444",
+  "timerange": "20210101-",
+  "datadir": "/freqtrade/user_data/data/binance",
+  "variants": [
+    {
+      "name": "defaults",
+      "strategy_parameters": {},
+      "zip_path": "C:\\Users\\carom\\Desktop\\trading\\user_data\\backtest_results\\backtest-result-2026-07-10_10-13-51.zip",
+      "trades": 1053,
+      "profit_net_abs": -8206.55841978,
+      "profit_gross_abs": -8204.45241978,
+      "total_fees_abs": 2.105999999999879,
+      "sharpe": -1.6619706791591433,
+      "max_drawdown_account": 0.8222123887178477,
+      "friction_ratio": null,
+      "params_verified": true,
+      "verify_issues": []
+    },
+    {
+      "name": "stricter_trend_filter",
+      "strategy_parameters": {
+        "buy_adx": 30,
+        "buy_rsi_max": 68,
+        "buy_volume_factor": 18
+      },
+      "zip_path": "C:\\Users\\carom\\Desktop\\trading\\user_data\\backtest_results\\backtest-result-2026-07-10_12-45-29.zip",
+      "trades": 438,
+      "profit_net_abs": -4311.91781658,
+      "profit_gross_abs": -4311.04181658,
+      "total_fees_abs": 0.8760000000000007,
+      "sharpe": -0.46868496712661406,
+      "max_drawdown_account": 0.4557707917973526,
+      "friction_ratio": null,
+      "params_verified": true,
+      "verify_issues": []
+    }
+  ],
+  "verdict": "DESCARTADA",
+  "reasons": [
+    "ninguna variante con PnL bruto > 0"
+  ],
+  "invalid": null,
+  "params_verified_all": true,
+  "prior_defaults_from": "user_data\\validation_reports\\screen\\TrendRider\\20260710_101302\\screen_report.json",
+  "protocol": "docs/screen_protocol.md"
+}

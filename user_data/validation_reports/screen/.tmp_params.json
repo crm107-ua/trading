@@ -1,1 +1,1 @@
-{"strategy_parameters": {"trend_adx": 28, "trend_volume_factor": 20}}
+{"strategy_parameters": {"buy_rsi_max": 52, "dca_min_drop_pct": 0.015}}
