@@ -1,0 +1,23 @@
+{
+  "strategy": "GridDCA",
+  "rationale": "Grid inexistente si dca_min_drop_pct es alto; bajar umbral de caída y aflojar RSI para que existan capas DCA en pullbacks reales.",
+  "variants": [
+    {
+      "name": "defaults",
+      "strategy_parameters": {}
+    },
+    {
+      "name": "lower_dca_threshold",
+      "strategy_parameters": {
+        "dca_min_drop_pct": 0.015
+      }
+    },
+    {
+      "name": "pullback_plus_grid",
+      "strategy_parameters": {
+        "buy_rsi_max": 52,
+        "dca_min_drop_pct": 0.015
+      }
+    }
+  ]
+}

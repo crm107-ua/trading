@@ -1,0 +1,24 @@
+{
+  "strategy": "TrendRider",
+  "rationale": "391/474 cierres del switcher fueron stops — ATR 2× puede ser prieto; variantes ensanchan stop o endurecen filtro de entrada.",
+  "variants": [
+    {
+      "name": "defaults",
+      "strategy_parameters": {}
+    },
+    {
+      "name": "wider_atr_stop",
+      "strategy_parameters": {
+        "atr_stop_multiplier": 3.0
+      }
+    },
+    {
+      "name": "stricter_trend_filter",
+      "strategy_parameters": {
+        "buy_adx": 30,
+        "buy_rsi_max": 68,
+        "buy_volume_factor": 18
+      }
+    }
+  ]
+}

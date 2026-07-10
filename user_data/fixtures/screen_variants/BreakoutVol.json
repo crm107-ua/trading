@@ -1,0 +1,23 @@
+{
+  "strategy": "BreakoutVol",
+  "rationale": "Rupturas cortas en BULL generan muchas señales marginales; alargar Donchian y subir umbral de volumen busca menos trades más selectivos.",
+  "variants": [
+    {
+      "name": "defaults",
+      "strategy_parameters": {}
+    },
+    {
+      "name": "longer_breakout",
+      "strategy_parameters": {
+        "buy_breakout_period": 35
+      }
+    },
+    {
+      "name": "selective_volume",
+      "strategy_parameters": {
+        "buy_breakout_period": 30,
+        "buy_volume_factor": 22
+      }
+    }
+  ]
+}

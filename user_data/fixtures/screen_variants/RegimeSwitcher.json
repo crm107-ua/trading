@@ -1,0 +1,30 @@
+{
+  "strategy": "RegimeSwitcher",
+  "rationale": "Stop ATR prieto en rama trend; rama range puede necesitar RSI más estricto o trend más selectivo según régimen dominante.",
+  "variants": [
+    {
+      "name": "defaults",
+      "strategy_parameters": {}
+    },
+    {
+      "name": "wider_atr_stop",
+      "strategy_parameters": {
+        "atr_stop_multiplier": 3.0
+      }
+    },
+    {
+      "name": "tighter_range_faster_exit",
+      "strategy_parameters": {
+        "range_buy_rsi": 24,
+        "range_sell_rsi": 55
+      }
+    },
+    {
+      "name": "selective_trend_branch",
+      "strategy_parameters": {
+        "trend_adx": 28,
+        "trend_volume_factor": 20
+      }
+    }
+  ]
+}

@@ -89,9 +89,19 @@ El motor dice DUDOSA con un motivo marginal (p. ej. divergencia 0.26 vs umbral 0
 
 **Congelar esta decisión antes del primer `TrendRider` — no después de ver resultados del batch.**
 
+### Decisión congelada (2026-07-10)
+
+**Batch post-calibración: WF a 100 epochs/ventana (`--wf-epochs 100`).**
+
+MeanRevBB corrió a **300** epochs/ventana (control, no se modifica); su WFE **no es comparable en precisión** con el batch a 100, **sí en veredicto** emitido bajo umbrales congelados.
+
+Comando batch: `scripts/run_validation_batch.ps1 -WfEpochs 100 -AdoptPartialHyperopt`
+
+---
+
 MeanRevBB (control) **no se toca**: su WF corre a **300 epochs/ventana** como está definido en el perfil `full` en curso. Cambiarlo a mitad rompería la coherencia interna del control.
 
-Para las **otras cuatro** estrategias, elegir **una** opción y documentarla en el commit que lance el batch:
+Para las **otras cuatro** estrategias, la opción elegida es **B — WF reducido** (tabla de referencia):
 
 | Opción | Comando | Aritmética (~) | Trade-off |
 |--------|---------|----------------|-----------|
@@ -105,7 +115,7 @@ Para las **otras cuatro** estrategias, elegir **una** opción y documentarla en 
 Checklist escrito antes de `run_validation_batch.ps1`:
 
 - [ ] Umbrales congelados en git (post-calibración MeanRevBB).
-- [ ] Opción WF A o B decidida y anotada (esta sección + commit message).
+- [x] Opción WF **B** (`--wf-epochs 100`) — congelada 2026-07-10.
 - [ ] `--adopt-partial-hyperopt` activo en el script de batch o en cada comando manual.
 - [ ] MeanRevBB `report.json` cerrado; no mezclar calibración con batch en curso.
 

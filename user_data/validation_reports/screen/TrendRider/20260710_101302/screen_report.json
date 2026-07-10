@@ -1,0 +1,55 @@
+{
+  "strategy": "TrendRider",
+  "run_id": "20260710_101302",
+  "timerange": "20210101-",
+  "datadir": "/freqtrade/user_data/data/binance",
+  "variants": [
+    {
+      "name": "defaults",
+      "strategy_parameters": {},
+      "zip_path": "C:\\Users\\carom\\Desktop\\trading\\user_data\\backtest_results\\backtest-result-2026-07-10_10-13-51.zip",
+      "trades": 1053,
+      "profit_net_abs": -8206.55841978,
+      "profit_gross_abs": -8204.45241978,
+      "total_fees_abs": 2.105999999999879,
+      "sharpe": -1.6619706791591433,
+      "max_drawdown_account": 0.8222123887178477,
+      "friction_ratio": null
+    },
+    {
+      "name": "wider_atr_stop",
+      "strategy_parameters": {
+        "atr_stop_multiplier": 3.0
+      },
+      "zip_path": "C:\\Users\\carom\\Desktop\\trading\\user_data\\backtest_results\\backtest-result-2026-07-10_10-14-47.zip",
+      "trades": 1053,
+      "profit_net_abs": -8206.55841978,
+      "profit_gross_abs": -8204.45241978,
+      "total_fees_abs": 2.105999999999879,
+      "sharpe": -1.6619706791591433,
+      "max_drawdown_account": 0.8222123887178477,
+      "friction_ratio": null
+    },
+    {
+      "name": "stricter_trend_filter",
+      "strategy_parameters": {
+        "buy_adx": 30,
+        "buy_rsi_max": 68,
+        "buy_volume_factor": 18
+      },
+      "zip_path": "C:\\Users\\carom\\Desktop\\trading\\user_data\\backtest_results\\backtest-result-2026-07-10_10-15-35.zip",
+      "trades": 1053,
+      "profit_net_abs": -8206.55841978,
+      "profit_gross_abs": -8204.45241978,
+      "total_fees_abs": 2.105999999999879,
+      "sharpe": -1.6619706791591433,
+      "max_drawdown_account": 0.8222123887178477,
+      "friction_ratio": null
+    }
+  ],
+  "verdict": "DESCARTADA",
+  "reasons": [
+    "ninguna variante con PnL bruto > 0"
+  ],
+  "protocol": "docs/screen_protocol.md"
+}

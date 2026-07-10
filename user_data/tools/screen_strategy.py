@@ -17,6 +17,7 @@ import json
 import subprocess
 import sys
 import zipfile
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -25,6 +26,7 @@ ROOT = Path(__file__).resolve().parents[2]
 REPORTS = ROOT / "user_data" / "validation_reports" / "screen"
 BACKTEST_RESULTS = ROOT / "user_data" / "backtest_results"
 LAST_RESULT = BACKTEST_RESULTS / ".last_result.json"
+HYPEROPT_LAST_RESULT = ROOT / "user_data" / "hyperopt_results" / ".last_result.json"
 VARIANTS_DIR = ROOT / "user_data" / "fixtures" / "screen_variants"
 DEFAULT_CONFIGS = [
   ROOT / "user_data/config/base.json",
@@ -149,6 +151,31 @@ def latest_backtest_zip() -> Path | None:
   return zips[-1] if zips else None
 
 
+@contextmanager
+def _pipeline_mutable_state_guard():
+  """
+  Snapshot/restore de punteros compartidos con run_validation (near-miss .last_result.json).
+  """
+  guarded = (LAST_RESULT, HYPEROPT_LAST_RESULT)
+  snapshots: dict[Path, bytes | None] = {}
+  for path in guarded:
+    snapshots[path] = path.read_bytes() if path.is_file() else None
+  try:
+    yield
+  finally:
+    for path, content in snapshots.items():
+      path.parent.mkdir(parents=True, exist_ok=True)
+      if content is None:
+        path.unlink(missing_ok=True)
+      else:
+        path.write_bytes(content)
+
+
+def _docker_config_path(path: Path) -> str:
+  rel = path.relative_to(ROOT).as_posix()
+  return f"/freqtrade/{rel}"
+
+
 def _run_docker_backtest(
   strategy: str,
   timerange: str,
@@ -160,7 +187,7 @@ def _run_docker_backtest(
 ) -> Path:
   config_args: list[str] = []
   for cfg in DEFAULT_CONFIGS + extra_configs:
-    config_args.extend(["--config", str(cfg).replace("\\", "/")])
+    config_args.extend(["--config", _docker_config_path(cfg)])
 
   cmd = [
     "docker",
@@ -188,14 +215,15 @@ def _run_docker_backtest(
     params_path = ROOT / "user_data" / "validation_reports" / "screen" / ".tmp_params.json"
     params_path.parent.mkdir(parents=True, exist_ok=True)
     params_path.write_text(json.dumps({"strategy_parameters": strategy_parameters}), encoding="utf-8")
-    cmd.extend(["--config", str(params_path).replace("\\", "/")])
+    cmd.extend(["--config", "/freqtrade/user_data/validation_reports/screen/.tmp_params.json"])
 
-  proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
-  if proc.returncode != 0:
-    raise RuntimeError(
-      f"backtest falló ({strategy}): exit={proc.returncode}\n{proc.stdout}\n{proc.stderr}"
-    )
-  z = latest_backtest_zip()
+  with _pipeline_mutable_state_guard():
+    proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if proc.returncode != 0:
+      raise RuntimeError(
+        f"backtest falló ({strategy}): exit={proc.returncode}\n{proc.stdout}\n{proc.stderr}"
+      )
+    z = latest_backtest_zip()
   if z is None:
     raise FileNotFoundError("sin zip de backtest tras screen")
   return z
