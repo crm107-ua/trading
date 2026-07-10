@@ -15,7 +15,7 @@
 | 7 | E2 — Momentum cross-sectional universo ancho (~30 pares USDT, top-3/top-5) | 16 pares 1d con hist≥2022 (de 34 descargados) | Mismo motor, versión B vs EW y BTC B&H | top-N bate EW y BTC B&H en B; turnover no anula edge | **INTERESANTE** — top-3 w14 W: final_B=10.4 vs EW 2.5 vs BTC 2.2 (intent #7) | 2026-07-10 |
 | 8 | E3 — Reversión post-extremos ±2σ (retorno 1/3/7d) | 16 pares 1d | Event study pandas; split 2021-23 / 2024-26 | t-stat>2 vs incondicional en **ambas** mitades | **DESCARTADA** — 9 filas \|t\|>2 pero 0 estables en ambas mitades (intent #8) | 2026-07-10 |
 | 9 | E4 — Estacionalidad día-de-semana | 16 pares 1d | Medias por weekday; split fijo | t-stat>2 en **ambas** mitades o descartar | **DESCARTADA** — 2 filas \|t\|>2, 0 estables (intent #9) | 2026-07-10 |
-| 10 | XSecMomentum P1: rotación 1d top-3 w14 rebalanceo lunes, universo E2, filtro BEAR | 16 pares 1d | Screen Freqtrade + `--bias-controls` (LOO + max DD<60%) | screen_protocol rotación + controles sesgo research | **PENDIENTE** | 2026-07-10 |
+| 10 | XSecMomentum P1: rotación 1d top-3 w14 rebalanceo lunes, universo E2, filtro BEAR | 16 pares 1d | Screen Freqtrade + `--bias-controls` (LOO + max DD<60%) | screen_protocol rotación + controles sesgo research | **PASA (screen)** — research_baseline + wide pasan LOO y DD; conservative falla DD/LOO (intent #10) | 2026-07-10 |
 
 ---
 

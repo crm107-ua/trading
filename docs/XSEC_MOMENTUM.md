@@ -70,9 +70,21 @@ Variantes: `user_data/fixtures/screen_variants/XSecMomentum.json`
 | conservative | 30 | 2 | 4 |
 | wide | 7 | 4 | 5 |
 
-### Resultados
+### Resultados (`run_id=20260710_162559`)
 
-*(Pendiente — screen en curso; ver `user_data/validation_reports/screen/XSecMomentum/<run_id>/screen_report.json`)*
+| Variante | Trades | Bruto | Net | Max DD | Dominante | LOO bruto | LOO max DD | ¿Pasa? |
+|----------|--------|-------|-----|--------|-----------|-----------|------------|--------|
+| research_baseline (w14, top-3, K=4) | 350 | +40 642 | +40 641 | **52.9%** | DEXE/USDT | +17 414 | 51.6% | **Sí** |
+| conservative (w30, top-2, K=4) | 198 | +66 522 | +66 522 | **66.1%** | ZEC/USDT | −650 | 67.6% | No (DD + LOO) |
+| wide (w7, top-4, K=5) | 446 | +2 976 | +2 975 | **52.5%** | XLM/USDT | +3 600 | 46.4% | **Sí** |
+
+**Veredicto screen:** **PASA** (intento #10) — `research_baseline` y `wide` cumplen estándar + LOO bruto>0 + max DD < 60%.
+
+**Lectura fría:** el bruto Freqtrade es muy superior al research pandas (10.4x) en baseline — esperable por ejecución multi-par simultánea vs cartera única, fees casi nulas en backtest, y posible concentración en microcaps (DEXE dominante). LOO sigue positivo en baseline (+17k) — el efecto no es solo un par, pero DEXE aporta mucho. Conservative demuestra fragilidad con top-2 + ZEC.
+
+**Cola:** validación full **detrás** de calibración MeanRevBB. No lanzar `run_validation` ahora.
+
+Reporte: `user_data/validation_reports/screen/XSecMomentum/20260710_162559/screen_report.json`
 
 ---
 
@@ -81,18 +93,16 @@ Variantes: `user_data/fixtures/screen_variants/XSecMomentum.json`
 | Campo | Valor |
 |-------|-------|
 | Lock | LOCKED (validación full activa) |
-| Fase | WF ventana 0 (~48/300 epochs al iniciar screen) |
+| Fase | WF ventana 0, epoch **78/300** (`strategy_MeanRevBB_2026-07-10_16-06-38.fthypt`) |
 | `report.json` | No |
 
 ---
 
 ## Veredicto
 
-*(Pendiente screen)*
+**PASA (screen, intento #10)** — dos variantes (`research_baseline`, `wide`) superan criterios rotación. Candidato a cola de validación full post-calibración MeanRevBB.
 
-Si **PASA:** entra en cola de validación full **detrás** de calibración MeanRevBB — no lanzar `run_validation` ahora.
-
-Si **DESCARTADA:** autopsia Freqtrade vs `research/xsec_lab.py` mismo timerange antes de cerrar #10.
+Si **DESCARTADA** en validación full: autopsia Freqtrade vs `research/xsec_lab.py` mismo timerange.
 
 ---
 

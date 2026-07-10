@@ -1,0 +1,90 @@
+{
+  "strategy": "XSecMomentum",
+  "run_id": "20260710_162559",
+  "timerange": "20210101-",
+  "datadir": "/freqtrade/user_data/data/binance",
+  "variants": [
+    {
+      "name": "research_baseline",
+      "strategy_parameters": {
+        "momentum_window": 14,
+        "top_n": 3,
+        "exit_rank_k": 4
+      },
+      "zip_path": "C:\\Users\\carom\\Desktop\\trading\\user_data\\backtest_results\\backtest-result-2026-07-10_16-26-23.zip",
+      "trades": 350,
+      "profit_net_abs": 40640.88838742999,
+      "profit_gross_abs": 40641.58838742999,
+      "total_fees_abs": 0.7000000000000005,
+      "sharpe": 0.16636116104340018,
+      "max_drawdown_account": 0.5295189376333357,
+      "friction_ratio": 1.7223736270517e-05,
+      "params_verified": true,
+      "verify_issues": [],
+      "dominant_pair": "DEXE/USDT",
+      "leave_one_out_excluded": "DEXE/USDT",
+      "leave_one_out_profit_net_abs": 17413.55092134,
+      "leave_one_out_profit_gross_abs": 17414.21092134,
+      "leave_one_out_max_drawdown": 0.5161278118307766,
+      "leave_one_out_trades": 330
+    },
+    {
+      "name": "conservative",
+      "strategy_parameters": {
+        "momentum_window": 30,
+        "top_n": 2,
+        "exit_rank_k": 4
+      },
+      "zip_path": "C:\\Users\\carom\\Desktop\\trading\\user_data\\backtest_results\\backtest-result-2026-07-10_16-27-07.zip",
+      "trades": 198,
+      "profit_net_abs": 66522.07160033,
+      "profit_gross_abs": 66522.46760033,
+      "total_fees_abs": 0.3960000000000003,
+      "sharpe": 0.14993073727619255,
+      "max_drawdown_account": 0.6611392843971634,
+      "friction_ratio": 5.952875987391001e-06,
+      "params_verified": true,
+      "verify_issues": [],
+      "dominant_pair": "ZEC/USDT",
+      "leave_one_out_excluded": "ZEC/USDT",
+      "leave_one_out_profit_net_abs": -650.4213290600001,
+      "leave_one_out_profit_gross_abs": -650.05732906,
+      "leave_one_out_max_drawdown": 0.6755738164043568,
+      "leave_one_out_trades": 182
+    },
+    {
+      "name": "wide",
+      "strategy_parameters": {
+        "momentum_window": 7,
+        "top_n": 4,
+        "exit_rank_k": 5
+      },
+      "zip_path": "C:\\Users\\carom\\Desktop\\trading\\user_data\\backtest_results\\backtest-result-2026-07-10_16-27-52.zip",
+      "trades": 446,
+      "profit_net_abs": 2974.9774340199997,
+      "profit_gross_abs": 2975.8694340199995,
+      "total_fees_abs": 0.8920000000000007,
+      "sharpe": 0.06918910594872811,
+      "max_drawdown_account": 0.524659717182514,
+      "friction_ratio": 0.0002997443334719926,
+      "params_verified": true,
+      "verify_issues": [],
+      "dominant_pair": "XLM/USDT",
+      "leave_one_out_excluded": "XLM/USDT",
+      "leave_one_out_profit_net_abs": 3598.819698370001,
+      "leave_one_out_profit_gross_abs": 3599.705698370001,
+      "leave_one_out_max_drawdown": 0.46353958074836576,
+      "leave_one_out_trades": 443
+    }
+  ],
+  "verdict": "PASA",
+  "reasons": [
+    "intento #10 \u2014 variantes que pasan (rotaci\u00f3n): research_baseline, wide"
+  ],
+  "invalid": null,
+  "params_verified_all": true,
+  "prior_defaults_from": null,
+  "protocol": "docs/screen_protocol.md",
+  "bias_controls": true,
+  "hypothesis_attempt": 10
+}

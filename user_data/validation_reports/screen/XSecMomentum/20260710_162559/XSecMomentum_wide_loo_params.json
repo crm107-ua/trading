@@ -17,9 +17,9 @@
       "max_open_trades": 4
     },
     "buy": {
-      "momentum_window": 30,
-      "top_n": 2,
-      "exit_rank_k": 4
+      "momentum_window": 7,
+      "top_n": 4,
+      "exit_rank_k": 5
     }
   },
   "ft_stratparam_v": 1
