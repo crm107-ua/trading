@@ -372,6 +372,74 @@ Stops materializados en zip: −0.35 y −0.10 verificados. Screen #10 original 
 
 Reporte: `user_data/validation_reports/screen/XSecMomentum/20260711_100039/screen_report.json`
 
+**Lectura crítica (13-E):** el PASA es válido pero el +252k no es motivo de celebración automática — ver diagnóstico siguiente.
+
+---
+
+## Diagnóstico 13-E — m35 sospechosamente bueno (2026-07-11)
+
+**Pregunta:** ¿el 26× de Freqtrade es mecánica real o artefacto? ¿ZEC es el nuevo DEXE?
+
+### Instrumento vs Freqtrade m35
+
+| Motor | Múltiplo | Notas |
+|-------|----------|-------|
+| Research log W-FRI (B) | 10.37× | Referencia optimista pre-13-D |
+| **Fidelidad stop −35%** (`simulate_freqtrade_fidelity`) | **7.25×** | 9 stops, 241 rotaciones |
+| Fidelidad −35% sin compound | 6.86× | Compound en sim solo **+1.06×** |
+| **Freqtrade m35 (10-RS)** | **26.2×** | Zip `2026-07-11_10-01-04` |
+
+**Gap invertido:** FT/fidelidad ≈ **3.6×** (opuesto al ~2× research>FT del 13-D con stop −10%). El instrumento **no** predice el 26× — misma pregunta que a la 20M, dirección contraria.
+
+Aislar compound en el simulador **no cierra** el gap (~1.06×). Residual sin nombre completo: stake policy FT + rank merge + rally ZEC no replicado en panel.
+
+### PnL por par (zip m35)
+
+| Par | Trades | PnL USDT | % total | Duración med. |
+|-----|--------|----------|---------|---------------|
+| **ZEC/USDT** | 22 | **+152 298** | **60.4%** | 14.3 d |
+| DEXE/USDT | 21 | +87 785 | 34.8% | 16.0 d |
+| AAVE/USDT | 19 | +17 364 | 6.9% | — |
+| …resto… | — | neto negativo agregado | — | — |
+
+**ZEC + DEXE ≈ 95%** del PnL. ZEC es el nuevo ancla exótica (vigilancia PC2).
+
+### ZEC por año
+
+| Año | Trades ZEC | PnL ZEC | % del total ZEC |
+|-----|------------|---------|-----------------|
+| 2021–2024 | 11 | +8 047 | 5.3% |
+| **2025** | **7** | **+137 469** | **90.3%** |
+| 2026 | 4 | +6 782 | 4.5% |
+
+El 70% del titular es **concentración temporal**: casi todo el cohete ZEC es el rally 2025, no reparto uniforme.
+
+### Counterfactual ex-ZEC (aprox., sin reemplazo en slots)
+
+| Métrica | Con ZEC (FT) | Ex-ZEC (aprox.) |
+|---------|--------------|-----------------|
+| Múltiplo | 26.2× | **~11.0×** |
+| Net PnL | +252k | **+99.8k** |
+| Max DD (aprox.) | 45.6% (screen) | **~51%** (< 60%) |
+
+Perfil **sigue operable** ex-ZEC en esta aproximación; LOO screen (+77k bruto) coherente.
+
+### Expectativa pre-registrada — validación full (WF)
+
+**Concentración temporal esperada (no invalida sola):**
+- Ventanas WF **sin** ZEC en rally → resultados **mediocres** (positivos modestos vs ventanas 2025).
+- Ventanas **con** ZEC en top momentum → pueden llevar el agregado.
+
+**No invalidaría si:**
+- Mayoría de ventanas sin ZEC siguen bruto > 0 y DD < umbral full.
+- El agregado no depende de 1–2 ventanas OOS únicamente.
+
+**Sí invalidaría si:**
+- Mayoría de ventanas OOS bruto ≤ 0 sin ZEC en cartera.
+- Veredicto full = una sola ventana parabólica ZEC.
+
+Artefacto: `research/output/diagnose_m35_13e_20260711.json`
+
 ---
 
 ## MeanRevBB al cierre fix #10 (2026-07-11 ~12:00 UTC+2)
@@ -389,11 +457,7 @@ Reporte: `user_data/validation_reports/screen/XSecMomentum/20260711_100039/scree
 
 ## Veredicto
 
-**#10 control:** **PASA (10-RS, `run_id=20260711_100039`)** — ambos stops pasan criterios rotación. **Config validación full:** `stop_design_m35` (−0.35). `stop_accidental_m10` anotado como insensibilidad (reproduce +41k del screen anulado).
-
-**XSecMomentum20M (primaria):** **degradada** — no validar.
-
-**Instrumento research:** desde #14, criterios en modo fidelidad (~2× optimismo log W-FRI).
+**#10 control:** **PASA (10-RS)** — config validación **m35**. Entra a validación **entendido**: 26× FT vs 7.25× fidelidad (gap invertido 3.6×); ZEC 60% PnL (90% en 2025). PASA no implica que el titular sea robusto sin leer WF.
 
 **Siguiente hito:** `report.json` MeanRevBB — sin trabajo adicional hasta entonces.
 

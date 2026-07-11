@@ -1,0 +1,249 @@
+{
+  "date": "2026-07-11",
+  "zip": "backtest-result-2026-07-11_10-01-04.zip",
+  "freqtrade_m35": {
+    "initial": 10000.0,
+    "final": 262091.71901203998,
+    "mult": 26.209171901203998,
+    "max_dd_wallet_feather_unreliable": -0.9933965110799386,
+    "max_dd_account_screen": 0.45611892182049296,
+    "n_trades": 296
+  },
+  "instrument_comparison": {
+    "research_log_wfri_B_mult": 10.367432960738457,
+    "fidelity_m35_full": {
+      "final_mult": 7.2536911057388425,
+      "max_dd": -0.5921856840513544,
+      "n_stops": 9.0,
+      "n_rotations": 241.0
+    },
+    "fidelity_m35_no_compound": {
+      "final_mult": 6.855103878701579,
+      "max_dd": -0.5059758411264734,
+      "n_stops": 9.0,
+      "n_rotations": 241.0
+    },
+    "gap_ft_over_fidelity_full": 3.613218638503686,
+    "gap_ft_over_research_log": 2.52802906953518,
+    "gap_inverted_vs_13D": "FT > instrumento (opuesto a ~2\u00d7 research>FT del 13-D con stop -10%)"
+  },
+  "pnl_by_pair": [
+    {
+      "pair": "ZEC/USDT",
+      "n_trades": 22,
+      "profit_abs": 152298.03920367002,
+      "pct_of_total_pnl": 0.6041374139560537,
+      "profit_pct_mean": 31.84355765096136,
+      "duration_days_mean": 14.272727272727273
+    },
+    {
+      "pair": "DEXE/USDT",
+      "n_trades": 21,
+      "profit_abs": 87784.80994713999,
+      "pct_of_total_pnl": 0.34822567869810644,
+      "profit_pct_mean": 13.330859381583126,
+      "duration_days_mean": 16.0
+    },
+    {
+      "pair": "AAVE/USDT",
+      "n_trades": 19,
+      "profit_abs": 17364.329096999998,
+      "pct_of_total_pnl": 0.06888099761884946,
+      "profit_pct_mean": 6.15143083758872,
+      "duration_days_mean": 16.210526315789473
+    },
+    {
+      "pair": "ETH/USDT",
+      "n_trades": 18,
+      "profit_abs": 10839.4242485,
+      "pct_of_total_pnl": 0.04299793857164464,
+      "profit_pct_mean": 3.434076092974589,
+      "duration_days_mean": 12.444444444444445
+    },
+    {
+      "pair": "ADA/USDT",
+      "n_trades": 12,
+      "profit_abs": 10242.247987050001,
+      "pct_of_total_pnl": 0.04062905369200495,
+      "profit_pct_mean": 10.280413990072141,
+      "duration_days_mean": 13.416666666666666
+    },
+    {
+      "pair": "SOL/USDT",
+      "n_trades": 19,
+      "profit_abs": 9753.438658150002,
+      "pct_of_total_pnl": 0.03869003986475324,
+      "profit_pct_mean": 16.379745764038862,
+      "duration_days_mean": 17.842105263157894
+    },
+    {
+      "pair": "UNI/USDT",
+      "n_trades": 18,
+      "profit_abs": 9502.30795832,
+      "pct_of_total_pnl": 0.037693852045438125,
+      "profit_pct_mean": 4.22773445205212,
+      "duration_days_mean": 12.055555555555555
+    },
+    {
+      "pair": "XLM/USDT",
+      "n_trades": 13,
+      "profit_abs": 4414.558642800001,
+      "pct_of_total_pnl": 0.01751171621226145,
+      "profit_pct_mean": 7.907826196455131,
+      "duration_days_mean": 13.461538461538462
+    },
+    {
+      "pair": "TRX/USDT",
+      "n_trades": 25,
+      "profit_abs": 4320.50468978,
+      "pct_of_total_pnl": 0.017138622032934172,
+      "profit_pct_mean": 0.9985668165919716,
+      "duration_days_mean": 15.96
+    },
+    {
+      "pair": "BTC/USDT",
+      "n_trades": 18,
+      "profit_abs": 2761.44240202,
+      "pct_of_total_pnl": 0.0109541178617141,
+      "profit_pct_mean": 4.956267578937931,
+      "duration_days_mean": 12.055555555555555
+    },
+    {
+      "pair": "BNB/USDT",
+      "n_trades": 22,
+      "profit_abs": -1195.2966585200002,
+      "pct_of_total_pnl": -0.004741514966078326,
+      "profit_pct_mean": -1.537170437831146,
+      "duration_days_mean": 12.090909090909092
+    },
+    {
+      "pair": "DOGE/USDT",
+      "n_trades": 16,
+      "profit_abs": -3967.2474243299985,
+      "pct_of_total_pnl": -0.015737317512363506,
+      "profit_pct_mean": 2.0470964265088396,
+      "duration_days_mean": 11.125
+    },
+    {
+      "pair": "LTC/USDT",
+      "n_trades": 14,
+      "profit_abs": -4627.34638833,
+      "pct_of_total_pnl": -0.018355804809712908,
+      "profit_pct_mean": -4.389531934340326,
+      "duration_days_mean": 10.5
+    },
+    {
+      "pair": "NEAR/USDT",
+      "n_trades": 23,
+      "profit_abs": -13139.54403302,
+      "pct_of_total_pnl": -0.05212207717300086,
+      "profit_pct_mean": 1.5183318053653476,
+      "duration_days_mean": 13.391304347826088
+    },
+    {
+      "pair": "SKL/USDT",
+      "n_trades": 19,
+      "profit_abs": -15861.70263078,
+      "pct_of_total_pnl": -0.06292036363964194,
+      "profit_pct_mean": -2.930786483334492,
+      "duration_days_mean": 12.526315789473685
+    },
+    {
+      "pair": "XRP/USDT",
+      "n_trades": 17,
+      "profit_abs": -18398.24668741,
+      "pct_of_total_pnl": -0.07298235245296292,
+      "profit_pct_mean": -3.123031116132163,
+      "duration_days_mean": 11.882352941176471
+    }
+  ],
+  "zec_analysis": {
+    "n_trades": 22,
+    "profit_abs": 152298.03920367002,
+    "pct_of_total_pnl": 0.6041374139560537,
+    "duration_days_mean": 14.272727272727273,
+    "duration_days_median": 14.0,
+    "by_year": [
+      {
+        "year": 2021,
+        "n_trades": 2,
+        "profit_abs": 454.11859260000006,
+        "pct_of_zec_total": 0.0029817757009510918
+      },
+      {
+        "year": 2022,
+        "n_trades": 2,
+        "profit_abs": 3213.4986116,
+        "pct_of_zec_total": 0.021100065558313258
+      },
+      {
+        "year": 2023,
+        "n_trades": 3,
+        "profit_abs": -1889.18145305,
+        "pct_of_zec_total": -0.01240450279549282
+      },
+      {
+        "year": 2024,
+        "n_trades": 4,
+        "profit_abs": 6268.9405234900005,
+        "pct_of_zec_total": 0.041162319332992005
+      },
+      {
+        "year": 2025,
+        "n_trades": 7,
+        "profit_abs": 137469.12529299,
+        "pct_of_zec_total": 0.9026322729549451
+      },
+      {
+        "year": 2026,
+        "n_trades": 4,
+        "profit_abs": 6781.537636040004,
+        "pct_of_zec_total": 0.044528069248291315
+      }
+    ],
+    "loo_bruto_screen": 77617.05
+  },
+  "ex_zec_counterfactual": {
+    "method": "cumsum_close_pnl_sin_reemplazo_slots",
+    "final_equity": 109793.67980837003,
+    "final_mult": 10.979367980837003,
+    "max_drawdown": -0.5109691184343454,
+    "net_pnl_sum": 99793.67980837,
+    "n_trades": 274,
+    "operable_net_positive": true,
+    "dd_under_60pct": true
+  },
+  "ex_dexe_counterfactual_reference": {
+    "method": "cumsum_close_pnl_sin_reemplazo_slots",
+    "final_equity": 174306.90906490004,
+    "final_mult": 17.430690906490003,
+    "max_drawdown": -0.7204076803464096,
+    "net_pnl_sum": 164306.9090649,
+    "n_trades": 275,
+    "operable_net_positive": true,
+    "dd_under_60pct": false
+  },
+  "mechanism_if_gap_gt_2x": {
+    "name": "compounding_wallet_div3_sobre_cohetes",
+    "evidence": {
+      "fidelity_m35_no_compound": 6.855103878701579,
+      "fidelity_m35_full": 7.2536911057388425,
+      "compound_lift_mult": 1.0581445932972149,
+      "zec_pct_of_pnl": 0.6041374139560537,
+      "gap_ft_vs_fidelity_full": 3.613218638503686
+    },
+    "interpretation": "El simulador con stop -35% y sin compound predice mucho menos; el salto compound (~1.06\u00d7) no cierra el gap FT (~3.61\u00d7). Residual probable: stake policy Freqtrade, rank merge, y/o trayectoria ZEC no replicada en panel pandas."
+  },
+  "wf_validation_expectation": {
+    "concentration_temporal": "Con ~60% del PnL en ZEC, ventanas WF sin rally ZEC deber\u00edan ser mediocres (neto positivo pero modesto vs ventanas con ZEC en top momentum).",
+    "not_invalidation_if": [
+      "Ventanas sin ZEC siguen con bruto > 0 y DD < umbral full",
+      "LOO ex-ZEC ya pas\u00f3 screen (+77k bruto); perfil ex-ZEC aprox sigue operable"
+    ],
+    "would_invalidate_if": [
+      "Mayor\u00eda de ventanas OOS con bruto \u2264 0 sin ZEC en cartera",
+      "Max DD ex-ZEC en trayectoria real supera 60% (counterfactual aprox lo acota)",
+      "Veredicto full depende de 1-2 ventanas con ZEC parab\u00f3lico \u00fanicamente"
+    ]
+  }
+}
