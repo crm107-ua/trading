@@ -13,3 +13,7 @@ Baseline OOS — restaurado desde checkpoint
     ventana 1: train 20210504-20220503
     ventana 1: test 20220504-20220803
     ventana 2: train 20210804-20220803
+    ventana 2: test 20220804-20221103
+    ventana 3: train 20211104-20221103
+    ventana 3: test 20221104-20230203
+    ventana 4: train 20220204-20230203
