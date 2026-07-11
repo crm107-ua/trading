@@ -2,6 +2,31 @@
 
 Orquestador: `python -m pipeline.run_validation <Estrategia> [opciones]`
 
+## XSecMomentum-m35 — día del veredicto
+
+Tras `report.json` de MeanRevBB + calibración congelada, merge de rama `validation-xsec-prep` y:
+
+**Verificación previa (sin lock, sin Docker):**
+
+```bash
+python -m pipeline.run_validation XSecMomentum --profile full \
+  --extra-config user_data/config/screen_xsec.json \
+  --wf-epochs 100 \
+  --dry-plan
+```
+
+**Lanzamiento:**
+
+```bash
+python -m pipeline.run_validation XSecMomentum --profile full \
+  --extra-config user_data/config/screen_xsec.json \
+  --wf-epochs 100
+```
+
+- `--extra-config` repetible; entra en `config_files` y `config_merged_sha256` del reporte.
+- `--wf-epochs 100` solo afecta hyperopts de ventana WF; semillas siguen a 300 (perfil `full`).
+- Warmup WF: leído del `.py` de la estrategia (`startup_candle_count` + `timeframe`); XSecMomentum 1d → 220 velas ≈ 220 días.
+
 ## Perfiles
 
 | Perfil | Epochs (semillas) | WF epochs | Semillas | Walk-forward | min_trades |

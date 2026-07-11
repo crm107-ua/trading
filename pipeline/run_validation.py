@@ -24,7 +24,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from pipeline.config_hash import config_metadata
+from pipeline.config_hash import config_metadata, resolve_config_paths
 from pipeline.freqtrade_cli import (
   docker_runtime_info,
   hyperopt_job_workers,
@@ -56,7 +56,8 @@ from pipeline.run_lock import (
   touch_lock_heartbeat,
 )
 from pipeline.strategy_spaces import hyperopt_spaces_for
-from pipeline.strategy_warmup import earliest_train_start, warmup_days
+from pipeline.strategy_warmup import earliest_train_start, startup_candles_for_strategy, strategy_timeframe, warmup_days
+from pipeline.validation_plan import build_validation_plan, format_plan_text
 from pipeline.walk_forward import (
   OosSegmentResult,
   generate_walk_forward_windows,
@@ -80,6 +81,23 @@ PROFILE_DEFAULTS = {
   Profile.smoke: {"epochs": 30, "seeds": 1, "walk_forward": False, "min_trades": 30},
   Profile.full: {"epochs": 300, "seeds": 3, "walk_forward": True, "min_trades": 100},
 }
+
+
+def _resolve_extra_configs(extra_config: list[str]) -> list[Path]:
+  paths: list[Path] = []
+  for raw in extra_config:
+    p = Path(raw)
+    if not p.is_absolute():
+      p = ROOT / p
+    if not p.is_file():
+      raise typer.BadParameter(f"extra-config no encontrado: {raw}")
+    paths.append(p.resolve())
+  return paths
+
+
+def _data_probe_path(strategy: str) -> Path:
+  tf = strategy_timeframe(strategy)
+  return DATA_DIR / f"BTC_USDT-{tf}.feather"
 
 
 def _seed_values(count: int) -> list[int]:
@@ -139,6 +157,7 @@ def _hyperopt_and_archive(
   spaces: list[str],
   adopt_partial: bool = False,
   context: str | None = None,
+  extra_config_paths: list[Path] | None = None,
 ) -> tuple[Path | None, str]:
   """Hyperopt IS con params limpios; archiva el json generado."""
   ctx = context or f"seed={seed}"
@@ -167,6 +186,7 @@ def _hyperopt_and_archive(
     enable_protections=enable_protections,
     min_trades=min_trades,
     spaces=spaces,
+    extra_config_paths=extra_config_paths,
   )
   if result.returncode != 0:
     from pipeline.freqtrade_cli import _extract_error_tail
@@ -192,11 +212,17 @@ def _backtest_with_params(
   *,
   enable_protections: bool,
   allow_defaults: bool,
+  extra_config_paths: list[Path] | None = None,
 ) -> tuple[dict, str, Path]:
   clear_strategy_params(strategy)
   install_strategy_params(strategy, params_file)
 
-  result, zip_path = run_backtest(strategy, timerange, enable_protections=enable_protections)
+  result, zip_path = run_backtest(
+    strategy,
+    timerange,
+    enable_protections=enable_protections,
+    extra_config_paths=extra_config_paths,
+  )
   ok, issues = verify_params_loaded(params_file, result.output, allow_defaults=allow_defaults)
   if not ok:
     raise RuntimeError(
@@ -215,6 +241,7 @@ def _baseline_oos_backtest(
   oos_timerange: str,
   *,
   enable_protections: bool,
+  extra_config_paths: list[Path] | None = None,
 ) -> tuple[dict, Path]:
   """OOS con defaults — sin json de params."""
   removed = clear_strategy_params(strategy)
@@ -222,7 +249,12 @@ def _baseline_oos_backtest(
     raise RuntimeError("FAIL: no se pudo limpiar params antes de baseline OOS")
   _ = removed
 
-  result, zip_path = run_backtest(strategy, oos_timerange, enable_protections=enable_protections)
+  result, zip_path = run_backtest(
+    strategy,
+    oos_timerange,
+    enable_protections=enable_protections,
+    extra_config_paths=extra_config_paths,
+  )
   if params_file_exists(strategy):
     raise RuntimeError("baseline OOS contaminado: apareció json de params inesperado")
 
@@ -254,6 +286,16 @@ def main(
     "--wf-epochs",
     help="Epochs hyperopt por ventana walk-forward (default: igual que --epochs del perfil)",
   ),
+  extra_config: list[str] = typer.Option(
+    [],
+    "--extra-config",
+    help="Config JSON adicional (repetible; p. ej. screen_xsec.json)",
+  ),
+  dry_plan: bool = typer.Option(
+    False,
+    "--dry-plan",
+    help="Imprime plan completo sin ejecutar ni adquirir lock",
+  ),
 ) -> None:
   """Validación Fase 4 — IS/OOS, semillas, walk-forward, veredicto."""
   try:
@@ -269,6 +311,8 @@ def main(
       resume_run_id=resume_run_id,
       adopt_partial_hyperopt=adopt_partial_hyperopt,
       wf_epochs=wf_epochs,
+      extra_config=extra_config,
+      dry_plan=dry_plan,
     )
   except ValidationRunActiveError as exc:
     console.print(f"[red]{exc}[/red]")
@@ -294,6 +338,8 @@ def _run_validation(
   resume_run_id: str | None,
   adopt_partial_hyperopt: bool,
   wf_epochs: int | None,
+  extra_config: list[str],
+  dry_plan: bool,
 ) -> None:
   defaults = PROFILE_DEFAULTS[profile]
   epochs_n = epochs if epochs is not None else defaults["epochs"]
@@ -302,6 +348,25 @@ def _run_validation(
   min_trades_n = int(defaults["min_trades"])
   opt_spaces = hyperopt_spaces_for(strategy)
   do_wf = defaults["walk_forward"] and not skip_walk_forward
+  extra_paths = _resolve_extra_configs(extra_config) if extra_config else []
+  config_paths = resolve_config_paths(extra_paths or None)
+
+  if dry_plan:
+    plan = build_validation_plan(
+      strategy=strategy,
+      timerange=timerange,
+      profile=profile.value,
+      epochs=epochs_n,
+      seeds=seeds_n,
+      wf_epochs=wf_epochs_n,
+      enable_protections=enable_protections,
+      skip_walk_forward=skip_walk_forward,
+      extra_config_paths=extra_paths or None,
+    )
+    text = format_plan_text(plan)
+    console.print(text)
+    console.print(f"[green]DRY-PLAN: {len(plan['commands'])} comandos, sin ejecución[/green]")
+    return
 
   checkpoint: dict | None = None
   if resume_run_id:
@@ -318,8 +383,10 @@ def _run_validation(
   params_archive = run_path / "params"
   params_archive.mkdir(exist_ok=True)
 
-  if not (DATA_DIR / "BTC_USDT-1h.feather").exists():
-    console.print("[red]Falta user_data/data — ejecutar scripts/download_data.ps1[/red]")
+  if not _data_probe_path(strategy).exists():
+    console.print(
+      f"[red]Falta user_data/data — probe {_data_probe_path(strategy).name} no encontrado[/red]"
+    )
     raise typer.Exit(code=1)
 
   data_end = resolve_data_end(DATA_DIR)
@@ -337,7 +404,7 @@ def _run_validation(
       ),
       "run_id": run_id,
       "git_hash": current_git_hash(),
-      **config_metadata(),
+      **config_metadata(config_paths),
       "timerange_requested": timerange,
       "split": split.to_dict(),
       "oos_regime_distribution": regime_distribution_for_timerange(split.oos_timerange),
@@ -390,6 +457,7 @@ def _run_validation(
           strategy,
           split.oos_timerange,
           enable_protections=enable_protections,
+          extra_config_paths=extra_paths or None,
         )
         report["steps"]["baseline_oos_defaults"] = baseline_oos
         shutil.copy2(baseline_zip, run_path / "baseline_oos.zip")
@@ -434,6 +502,7 @@ def _run_validation(
         min_trades=min_trades_n,
         spaces=opt_spaces,
         adopt_partial=adopt_partial_hyperopt,
+        extra_config_paths=extra_paths or None,
       )
       hyperopt_files = _archive_seed_hyperopt(run_path, seed)
 
@@ -444,6 +513,7 @@ def _run_validation(
         archived,
         enable_protections=enable_protections,
         allow_defaults=False,
+        extra_config_paths=extra_paths or None,
       )
       shutil.copy2(is_zip, run_path / f"is_seed{seed}.zip")
 
@@ -454,6 +524,7 @@ def _run_validation(
         archived,
         enable_protections=enable_protections,
         allow_defaults=False,
+        extra_config_paths=extra_paths or None,
       )
       shutil.copy2(oos_zip, run_path / f"oos_seed{seed}.zip")
 
@@ -513,7 +584,10 @@ def _run_validation(
         split.full_end,
         earliest_train_start=wf_train_min,
       )
+      wf_candles, wf_tf = startup_candles_for_strategy(strategy)
       report["steps"]["walk_forward_warmup"] = {
+        "startup_candles": wf_candles,
+        "timeframe": wf_tf,
         "warmup_days": wf_warmup_days,
         "earliest_train_start": wf_train_min.isoformat(),
         "data_start": split.full_start.isoformat(),
@@ -537,6 +611,7 @@ def _run_validation(
           spaces=opt_spaces,
           adopt_partial=False,
           context=wf_ctx,
+          extra_config_paths=extra_paths or None,
         )
         is_m, _, _ = _backtest_with_params(
           strategy,
@@ -544,6 +619,7 @@ def _run_validation(
           archived,
           enable_protections=enable_protections,
           allow_defaults=False,
+          extra_config_paths=extra_paths or None,
         )
         is_profits_wf.append(float(is_m.get("profit_total_abs") or 0))
 
@@ -554,6 +630,7 @@ def _run_validation(
           archived,
           enable_protections=enable_protections,
           allow_defaults=False,
+          extra_config_paths=extra_paths or None,
         )
         clear_strategy_params(strategy)
 
