@@ -20,6 +20,9 @@
 | 11 | Funding extremo = sobrecalentamiento: funding perp > p90 rolling 90d del par → retornos spot forward 1/3/7d peores que incondicionales | Universo E2 con perp USDT en Binance, funding 8h→diario | Event study pandas condicionado a funding alto; split 2021-23 / 2024-26 | t-stat > 2 (retorno condicionado < incondicional) en **ambas** mitades, por agregado; percentil 90 fijo, sin optimizar | **DESCARTADA** — signo CONTRARIO: t agregados +0.97…+5.97 (funding alto → retornos MEJORES); veto hunde la cartera 12.3×→2.7× (intent #11) | 2026-07-11 |
 | 12 | Funding negativo + momentum positivo = señal contraria favorable: top-3 momentum restringido a pares con funding ≤ 0 al rebalanceo mejora al top-3 libre | Universo E2 con perp, spot 1d | Cartera top-3 w14 W restringida vs libre, versión B, ambas mitades | Mejora Sharpe B en **ambas** mitades **Y** ≥60% de semanas con cartera completa (3 posiciones) | **DESCARTADA** — Sharpe mejora 21-23 (0.15→0.35) pero colapsa 24-26 (0.85→0.15); semanas completas 51% < 60% (intent #12) | 2026-07-11 |
 | 13 | El edge E2 no depende de la cola ilíquida: momentum top-3 sobrevive filtrando por volumen medio 30d | E2 filtrado por volumen (3 umbrales fijos: 5M / 20M / 50M USDT/día — los tres se reportan, no se elige a posteriori) | Top-3 w14 W sobre universo filtrado, versión B vs EW filtrado y BTC B&H, ambas mitades | En el umbral 20M: B bate EW-filtrado **y** BTC en **ambas** mitades | **PASA** — 20M: 21-23 B 3.57 vs EW 1.75/BTC 1.44; 24-26 B 4.69 vs EW 0.91/BTC 1.45; full 15.6× (intent #13) | 2026-07-11 |
+| 13-A | **Autopsia (no intento nuevo):** LOO ex-SOL en pandas 20M — ¿H-frágil? | E2−SOL, filtro 20M w14 W B | `xsec_lab` cartera 20M sin SOL vs EW filtrado sin SOL | Wealth 20M ex-SOL < EW ex-SOL → H-frágil confirmada | **H-frágil rechazada** — 20M ex-SOL 12.35× > EW 1.25×; +51% vs sin filtro ex-SOL | 2026-07-11 |
+| 13-B | **Autopsia (no intento nuevo):** ablación mecánica Freqtrade en pandas | E2, 20M vs sin filtro | Slots→BEAR→stop−35%→liq.exit acumulativo | Paso que invierte beneficio 20M vs sin filtro | **Ningún paso invierte** — filtro sigue mejorando; slots comprimen múltiplo 15.6→7.0 | 2026-07-11 |
+| 13-C | **Autopsia (no intento nuevo):** forense zips Freqtrade 20M vs control | Trades screen existentes | PnL por par, exit_reason, composición | Inversión explicada por DEXE/ZEC filtrados | **Composición** — control +26k DEXE; 20M dominado SOL; 1× liq.exit | 2026-07-11 |
 
 ---
 
@@ -29,8 +32,8 @@
 
 | Rol | Configuración | Detalle |
 |-----|---------------|---------|
-| **Primaria** | **XSecMomentum-20M** | Mismo motor #10 (top-3 w14, rebalanceo lunes, filtro BEAR BTC@1d). **Filtro de liquidez dinámico:** en cada rebalanceo, solo entran pares con **volumen quote medio 30d causal** (media móvil 30d desplazada 1 día, solo historia ≤ t−1) **> 20M USDT/día**. Replica `research/r2_liquidity_filter.py`, no una lista estática de pares por media histórica completa. |
-| **Control** | XSecMomentum E2 sin filtro | Screen PASA (#10, `run_id=20260710_162559`). Sirve de comparación; no es la hipótesis operativa post-#13. |
+| **Primaria** | **XSecMomentum-20M** | Mismo motor #10 + filtro liquidez dinámico 20M. **Autopsia 2026-07-11: degradada** — implementación fiel (paridad 0) pero efecto invertido en Freqtrade por composición (DEXE filtrado). No validar. |
+| **Control** | XSecMomentum E2 sin filtro | Screen PASA (#10). **Única config para validación full** post-MeanRevBB. |
 
 **Por qué primaria y no variante secundaria:** #13 pasa en 20M con patrón monótono 5M→20M→50M (edge se fortalece al quitar iliquidez). R0 (#10-R0) pasa el criterio global pero 2024-26 sin DEXE/ZEC queda en 1.13×; con filtro 20M la misma mitad da **4.69×** — la variante 20M resuelve el asterisco de R0 mejor que el universo original.
 

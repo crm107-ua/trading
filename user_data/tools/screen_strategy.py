@@ -94,6 +94,7 @@ class VariantMetrics:
   leave_one_out_profit_gross_abs: float | None = None
   leave_one_out_max_drawdown: float | None = None
   leave_one_out_trades: int | None = None
+  imported_from_prior: bool = False
 
 
 @dataclass
@@ -104,6 +105,23 @@ class ScreenVerdict:
 
 class ScreenAbortError(RuntimeError):
   """Screen abortado: verificación de params o variantes gemelas."""
+
+
+def _parent_strategy_name(strategy: str) -> str | None:
+  """Nombre de la clase padre si el .py existe en strategies/."""
+  path = STRATEGIES_DIR / f"{strategy}.py"
+  if not path.is_file():
+    return None
+  text = path.read_text(encoding="utf-8")
+  match = re.search(rf"class\s+{re.escape(strategy)}\s*\(\s*(\w+)", text)
+  if not match:
+    return None
+  parent = match.group(1)
+  if parent in {"IStrategy", "QuantBaseStrategy", "object"}:
+    return None
+  if (STRATEGIES_DIR / f"{parent}.py").is_file():
+    return parent
+  return None
 
 
 def _parse_hyperopt_registry(strategy: str) -> dict[str, tuple[str, object]]:
@@ -120,6 +138,10 @@ def _parse_hyperopt_registry(strategy: str) -> dict[str, tuple[str, object]]:
     except json.JSONDecodeError:
       default_val = default_raw.strip("\"'")
     registry[name] = (space, default_val)
+  if not registry:
+    parent = _parent_strategy_name(strategy)
+    if parent:
+      return _parse_hyperopt_registry(parent)
   return registry
 
 
@@ -319,25 +341,60 @@ def _load_variants(strategy: str, variants_path: Path | None) -> list[dict]:
   return list(payload.get("variants") or [{"name": "defaults", "strategy_parameters": {}}])
 
 
-def load_prior_defaults(prior_report: Path) -> VariantMetrics:
+def load_prior_defaults(prior_report: Path, *, strategy: str | None = None) -> VariantMetrics:
+  """Carga fila control del reporte previo (defaults o research_baseline en XSec)."""
   data = json.loads(prior_report.read_text(encoding="utf-8"))
-  row = next((v for v in data.get("variants", []) if v.get("name") == "defaults"), None)
+  variants = list(data.get("variants") or [])
+  row = next((v for v in variants if v.get("name") == "defaults"), None)
   if row is None:
-    raise ScreenAbortError(f"sin fila defaults en reporte previo: {prior_report}")
-  return VariantMetrics(
-    name="defaults",
-    strategy_parameters=dict(row.get("strategy_parameters") or {}),
-    zip_path=str(row.get("zip_path") or ""),
-    trades=int(row["trades"]),
-    profit_net_abs=float(row["profit_net_abs"]),
-    profit_gross_abs=float(row["profit_gross_abs"]),
-    total_fees_abs=float(row["total_fees_abs"]),
-    sharpe=float(row.get("sharpe") or 0),
-    max_drawdown_account=float(row.get("max_drawdown_account") or 0),
-    friction_ratio=row.get("friction_ratio"),
-    params_verified=bool(row.get("params_verified", True)),
-    verify_issues=list(row.get("verify_issues") or []),
-  )
+    row = next((v for v in variants if v.get("name") == "research_baseline"), None)
+  if row is None:
+    raise ScreenAbortError(f"sin fila control (defaults/research_baseline) en: {prior_report}")
+
+  name = str(row.get("name") or "defaults")
+  zip_raw = str(row.get("zip_path") or "")
+  zip_path = Path(zip_raw) if zip_raw else None
+  parse_strategy = strategy or str(data.get("strategy") or "")
+  if zip_path is not None and zip_path.is_file() and parse_strategy:
+    metrics = parse_backtest_zip(zip_path, parse_strategy)
+    metrics.name = name
+    metrics.strategy_parameters = dict(row.get("strategy_parameters") or {})
+    metrics.params_verified = bool(row.get("params_verified", True))
+    metrics.verify_issues = list(row.get("verify_issues") or [])
+  else:
+    metrics = VariantMetrics(
+      name=name,
+      strategy_parameters=dict(row.get("strategy_parameters") or {}),
+      zip_path=zip_raw,
+      trades=int(row["trades"]),
+      profit_net_abs=float(row["profit_net_abs"]),
+      profit_gross_abs=float(row["profit_gross_abs"]),
+      total_fees_abs=float(row["total_fees_abs"]),
+      sharpe=float(row.get("sharpe") or 0),
+      max_drawdown_account=float(row.get("max_drawdown_account") or 0),
+      friction_ratio=row.get("friction_ratio"),
+      params_verified=bool(row.get("params_verified", True)),
+      verify_issues=list(row.get("verify_issues") or []),
+    )
+
+  metrics.dominant_pair = row.get("dominant_pair")
+  metrics.leave_one_out_excluded = row.get("leave_one_out_excluded")
+  if row.get("leave_one_out_profit_net_abs") is not None:
+    metrics.leave_one_out_profit_net_abs = float(row["leave_one_out_profit_net_abs"])
+  if row.get("leave_one_out_profit_gross_abs") is not None:
+    metrics.leave_one_out_profit_gross_abs = float(row["leave_one_out_profit_gross_abs"])
+  elif metrics.leave_one_out_profit_net_abs is not None:
+    loo_fees = max(
+      0.0,
+      float(row.get("leave_one_out_profit_gross_abs") or 0) - metrics.leave_one_out_profit_net_abs,
+    )
+    metrics.leave_one_out_profit_gross_abs = metrics.leave_one_out_profit_net_abs + loo_fees
+  if row.get("leave_one_out_max_drawdown") is not None:
+    metrics.leave_one_out_max_drawdown = float(row["leave_one_out_max_drawdown"])
+  if row.get("leave_one_out_trades") is not None:
+    metrics.leave_one_out_trades = int(row["leave_one_out_trades"])
+  metrics.imported_from_prior = True
+  return metrics
 
 
 def _strategy_block(zip_path: Path, strategy: str) -> dict:
@@ -407,6 +464,8 @@ def collect_fee_sanity_warnings(metrics: list[VariantMetrics]) -> list[str]:
   warnings: list[str] = []
   for m in metrics:
     warnings.extend(fee_sanity_warnings(m))
+    if m.imported_from_prior:
+      continue
     if m.leave_one_out_trades is not None and m.leave_one_out_profit_net_abs is not None:
       loo_stub = VariantMetrics(
         name=m.name,
@@ -898,7 +957,7 @@ def main() -> int:
   if args.screen_config:
     pairlist_cfg = args.screen_config.resolve()
     extra.append(pairlist_cfg)
-  elif args.strategy == "XSecMomentum" and not args.fixtures:
+  elif args.strategy in ("XSecMomentum", "XSecMomentum20M") and not args.fixtures:
     pairlist_cfg = (ROOT / "user_data/config/screen_xsec.json").resolve()
     extra.append(pairlist_cfg)
 

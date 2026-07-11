@@ -1,0 +1,9 @@
+{
+  "threshold_usdt": 20000000.0,
+  "window": 30,
+  "min_periods": 20,
+  "pairs_compared": 16,
+  "n_mismatches": 0,
+  "mismatches": [],
+  "passes": true
+}

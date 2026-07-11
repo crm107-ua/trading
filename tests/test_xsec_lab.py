@@ -63,6 +63,36 @@ def test_friction_reduces_wealth_when_rebalance_has_turnover() -> None:
   assert wb < wa
 
 
+def test_discrete_slots_invest_less_than_continuous_when_one_eligible() -> None:
+  from xsec_lab import AblationConfig, portfolio_return_ablation
+
+  idx = pd.date_range("2024-01-01", periods=80, freq="D", tz="UTC")
+  prices = pd.DataFrame(
+    {
+      "A/USDT": np.linspace(100, 150, len(idx)),
+      "B/USDT": np.linspace(200, 180, len(idx)),
+      "C/USDT": np.linspace(50, 55, len(idx)),
+    },
+    index=idx,
+  )
+
+  def only_a(p: pd.DataFrame, t: pd.Timestamp) -> pd.Series:
+    w = pd.Series(0.0, index=p.columns)
+    w["A/USDT"] = 1.0
+    return w
+
+  cont, _ = portfolio_return(prices, only_a, "W", fee_per_rotation=0.0)
+  disc, _, stats = portfolio_return_ablation(
+    prices,
+    only_a,
+    "W",
+    fee_per_rotation=0.0,
+    config=AblationConfig(discrete_slots=True, max_slots=3),
+  )
+  assert compute_metrics(disc).final_wealth < compute_metrics(cont).final_wealth
+  assert stats["cash_drag_mean"] > 0.2
+
+
 def test_compute_metrics_sharpe_finite() -> None:
   idx = pd.date_range("2024-01-01", periods=100, freq="D", tz="UTC")
   r = pd.Series(np.random.default_rng(0).normal(0.0005, 0.01, len(idx)), index=idx)

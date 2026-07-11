@@ -1,0 +1,374 @@
+{
+  "date": "2026-07-11",
+  "hypotheses": {
+    "H_fragil": "El efecto 20M depende de SOL; pandas colapsar\u00eda en LOO ex-SOL.",
+    "H_mecanica": "Desviaci\u00f3n de ejecuci\u00f3n Freqtrade invierte el beneficio del filtro."
+  },
+  "params": {
+    "window": 14,
+    "top_n": 3,
+    "fee_B": 0.001,
+    "threshold": 20000000.0
+  },
+  "A_loo_ex_sol": {
+    "exclude": "SOL/USDT",
+    "filter_20m_B": {
+      "cagr": 0.576814231648743,
+      "sharpe": 0.4502116623638082,
+      "max_drawdown": -0.805346270023887,
+      "turnover": 0.47430391494794794,
+      "final_wealth": 12.349548001241983
+    },
+    "no_filter_B": {
+      "cagr": 0.46256643129296315,
+      "sharpe": 0.3594834448085154,
+      "max_drawdown": -0.904753458887256,
+      "turnover": 0.5184849029064336,
+      "final_wealth": 8.153737919723598
+    },
+    "ew_filtered_20m_B": {
+      "cagr": 0.04165574469956579,
+      "sharpe": 0.04659649935317929,
+      "max_drawdown": -0.8322004664005683,
+      "turnover": 0.04880161419564602,
+      "final_wealth": 1.2526476350327982
+    },
+    "ew_no_filter_B": {
+      "cagr": 0.12187728108815188,
+      "sharpe": 0.12807474657546356,
+      "max_drawdown": -0.8500760692750354,
+      "turnover": 0.031052759973261686,
+      "final_wealth": 1.8865735291976824
+    },
+    "filter_beats_ew_excluded": true,
+    "filter_delta_vs_no_filter": 0.5145873123256601,
+    "H_fragil_signal": false
+  },
+  "B_ablation": {
+    "steps": [
+      {
+        "step": "0_baseline_continuo",
+        "config": {
+          "discrete_slots": false,
+          "max_slots": 3,
+          "bear_flat": false,
+          "stop_loss": null,
+          "liquidity_exit_rebalance": false
+        },
+        "filter_20m_B": {
+          "cagr": 0.645012742044897,
+          "sharpe": 0.48618179237957015,
+          "max_drawdown": -0.788274918664412,
+          "turnover": 0.4922015059599093,
+          "final_wealth": 15.600834109667492
+        },
+        "no_filter_B": {
+          "cagr": 0.5745391978839567,
+          "sharpe": 0.4257410059779421,
+          "max_drawdown": -0.8872832401154831,
+          "turnover": 0.5264800080558287,
+          "final_wealth": 12.25152165741737
+        },
+        "filter_improves": true,
+        "relative_delta": 0.27337930306986524
+      },
+      {
+        "step": "1_slots_discretos",
+        "config": {
+          "discrete_slots": true,
+          "max_slots": 3,
+          "bear_flat": false,
+          "stop_loss": null,
+          "liquidity_exit_rebalance": false
+        },
+        "filter_20m_B": {
+          "cagr": 0.4228473426016932,
+          "sharpe": 0.35373105648534336,
+          "max_drawdown": -0.7639792720666094,
+          "turnover": 0.48321759259259256,
+          "final_wealth": 7.004197390245023,
+          "cash_drag_mean": 0.010907288051561725,
+          "weeks_incomplete_pct": 0.006944444444444444
+        },
+        "no_filter_B": {
+          "cagr": 0.41131123536539715,
+          "sharpe": 0.3319725459217072,
+          "max_drawdown": -0.8670088710536376,
+          "turnover": 0.5167824074074073,
+          "final_wealth": 6.696442037612539,
+          "cash_drag_mean": 0.010907288051561725,
+          "weeks_incomplete_pct": 0.006944444444444444
+        },
+        "filter_improves": true,
+        "relative_delta": 0.04595804024045691
+      },
+      {
+        "step": "2_slots_bear_flat",
+        "config": {
+          "discrete_slots": true,
+          "max_slots": 3,
+          "bear_flat": true,
+          "stop_loss": null,
+          "liquidity_exit_rebalance": false
+        },
+        "filter_20m_B": {
+          "cagr": 0.5941814633285312,
+          "sharpe": 0.5282545735034351,
+          "max_drawdown": -0.7704428358797661,
+          "turnover": 0.41030092592592593,
+          "final_wealth": 13.11923749838165,
+          "cash_drag_mean": 0.22954883490332176,
+          "weeks_incomplete_pct": 0.22569444444444445
+        },
+        "no_filter_B": {
+          "cagr": 0.5047615588648631,
+          "sharpe": 0.441784086389684,
+          "max_drawdown": -0.8391240098069461,
+          "turnover": 0.4357638888888889,
+          "final_wealth": 9.539688187118827,
+          "cash_drag_mean": 0.22954883490332176,
+          "weeks_incomplete_pct": 0.22569444444444445
+        },
+        "filter_improves": true,
+        "relative_delta": 0.3752270767189423
+      },
+      {
+        "step": "3_slots_bear_stop35",
+        "config": {
+          "discrete_slots": true,
+          "max_slots": 3,
+          "bear_flat": true,
+          "stop_loss": -0.35,
+          "liquidity_exit_rebalance": false
+        },
+        "filter_20m_B": {
+          "cagr": 0.6405271934723473,
+          "sharpe": 0.5858435982436113,
+          "max_drawdown": -0.770029820417632,
+          "turnover": 0.40914351851851855,
+          "final_wealth": 15.367478252914896,
+          "cash_drag_mean": 0.2330193356470005,
+          "weeks_incomplete_pct": 0.22569444444444445
+        },
+        "no_filter_B": {
+          "cagr": 0.6235188997407948,
+          "sharpe": 0.5549257376037579,
+          "max_drawdown": -0.8303796157076093,
+          "turnover": 0.43287037037037035,
+          "final_wealth": 14.508444366085588,
+          "cash_drag_mean": 0.2343414311684019,
+          "weeks_incomplete_pct": 0.22569444444444445
+        },
+        "filter_improves": true,
+        "relative_delta": 0.05920923464664174
+      },
+      {
+        "step": "4_slots_bear_stop_liqexit",
+        "config": {
+          "discrete_slots": true,
+          "max_slots": 3,
+          "bear_flat": true,
+          "stop_loss": -0.35,
+          "liquidity_exit_rebalance": true
+        },
+        "filter_20m_B": {
+          "cagr": 0.6405271934723473,
+          "sharpe": 0.5858435982436113,
+          "max_drawdown": -0.770029820417632,
+          "turnover": 0.40914351851851855,
+          "final_wealth": 15.367478252914896,
+          "cash_drag_mean": 0.2330193356470005,
+          "weeks_incomplete_pct": 0.22569444444444445
+        },
+        "no_filter_B": {
+          "cagr": 0.6235188997407948,
+          "sharpe": 0.5549257376037579,
+          "max_drawdown": -0.8303796157076093,
+          "turnover": 0.43287037037037035,
+          "final_wealth": 14.508444366085588,
+          "cash_drag_mean": 0.2343414311684019,
+          "weeks_incomplete_pct": 0.22569444444444445
+        },
+        "filter_improves": true,
+        "relative_delta": 0.05920923464664174
+      }
+    ],
+    "filter_vs_nofilter": {},
+    "inversion_step": null,
+    "curves": {
+      "0_baseline_continuo": null,
+      "1_slots_discretos": null,
+      "2_slots_bear_flat": null,
+      "3_slots_bear_stop35": null,
+      "4_slots_bear_stop_liqexit": null
+    }
+  },
+  "C_forensics": {
+    "freqtrade_20m": {
+      "label": "freqtrade_20m",
+      "n_trades": 325,
+      "exit_reasons": {
+        "xsec_rotation_exit": 167,
+        "stop_loss": 137,
+        "xsec_bear_flat": 20,
+        "xsec_liquidity_exit": 1
+      },
+      "pnl_by_pair": {
+        "SOL/USDT": 19024.540301090008,
+        "AAVE/USDT": 12799.60858134,
+        "BTC/USDT": 4602.803620500002,
+        "XLM/USDT": 4284.110047,
+        "ETH/USDT": 4256.68994553,
+        "UNI/USDT": 2132.20412383,
+        "TRX/USDT": 1125.401888280001,
+        "SKL/USDT": 293.8536851,
+        "ADA/USDT": -588.1589856399997,
+        "ZEC/USDT": -1867.9629424,
+        "DOGE/USDT": -2548.17162668,
+        "LTC/USDT": -3334.6165088600005,
+        "BNB/USDT": -6410.004821549999,
+        "XRP/USDT": -6791.5069647400005,
+        "NEAR/USDT": -9777.4539348
+      },
+      "weeks_with_3_slots_pct": 0.23976608187134502,
+      "weeks_incomplete_pct": 0.7602339181286549
+    },
+    "freqtrade_control": {
+      "label": "freqtrade_control",
+      "n_trades": 350,
+      "exit_reasons": {
+        "xsec_rotation_exit": 173,
+        "stop_loss": 155,
+        "xsec_bear_flat": 22
+      },
+      "pnl_by_pair": {
+        "DEXE/USDT": 26054.741727510005,
+        "AAVE/USDT": 20647.040053099998,
+        "SOL/USDT": 15278.59766263,
+        "ETH/USDT": 9432.387574679999,
+        "XLM/USDT": 7728.6229401,
+        "UNI/USDT": 5019.123722979997,
+        "DOGE/USDT": 2773.2185792500004,
+        "TRX/USDT": 2586.871188439999,
+        "BTC/USDT": 1797.9521858300018,
+        "ADA/USDT": 1158.2916387500004,
+        "ZEC/USDT": 790.4434717699994,
+        "LTC/USDT": -2741.7209636499997,
+        "BNB/USDT": -8485.93454631,
+        "SKL/USDT": -10448.32927087,
+        "NEAR/USDT": -15338.0690918,
+        "XRP/USDT": -15612.348484979999
+      },
+      "weeks_with_3_slots_pct": 0.23204419889502761,
+      "weeks_incomplete_pct": 0.7679558011049724
+    },
+    "cash_drag_proxy": {
+      "20m": 0.760233918128655,
+      "control": 0.7679558011049724
+    },
+    "filtered_pair_pnl_control": {
+      "DEXE/USDT": 26054.741727510005,
+      "ZEC/USDT": 790.4434717699994,
+      "total_removed_iliquid": 26845.185199280004
+    },
+    "pandas_portfolio_divergence_sample": [
+      {
+        "date": "2024-11-08",
+        "pandas_20m": [
+          "AAVE/USDT",
+          "ADA/USDT",
+          "DOGE/USDT"
+        ],
+        "pandas_no_filter": [
+          "AAVE/USDT",
+          "DOGE/USDT",
+          "ZEC/USDT"
+        ],
+        "only_without_filter": [
+          "ZEC/USDT"
+        ]
+      },
+      {
+        "date": "2024-11-29",
+        "pandas_20m": [
+          "ADA/USDT",
+          "XLM/USDT",
+          "XRP/USDT"
+        ],
+        "pandas_no_filter": [
+          "SKL/USDT",
+          "XLM/USDT",
+          "XRP/USDT"
+        ],
+        "only_without_filter": [
+          "SKL/USDT"
+        ]
+      },
+      {
+        "date": "2024-12-27",
+        "pandas_20m": [
+          "BNB/USDT",
+          "BTC/USDT",
+          "XRP/USDT"
+        ],
+        "pandas_no_filter": [
+          "BNB/USDT",
+          "DEXE/USDT",
+          "ZEC/USDT"
+        ],
+        "only_without_filter": [
+          "DEXE/USDT",
+          "ZEC/USDT"
+        ]
+      },
+      {
+        "date": "2025-01-03",
+        "pandas_20m": [
+          "ADA/USDT",
+          "UNI/USDT",
+          "XLM/USDT"
+        ],
+        "pandas_no_filter": [
+          "DEXE/USDT",
+          "XLM/USDT",
+          "ZEC/USDT"
+        ],
+        "only_without_filter": [
+          "DEXE/USDT",
+          "ZEC/USDT"
+        ]
+      }
+    ],
+    "liquidity_exits_20m": 1,
+    "stop_loss_share_20m": 0.42153846153846153,
+    "stop_loss_share_control": 0.44285714285714284
+  },
+  "recommendation": {
+    "choice": "ii",
+    "rationale": "H-fr\u00e1gil rechazada: pandas 20M ex-SOL sigue en 12.35\u00d7 (>EW 1.25\u00d7) y mejora +51% vs sin filtro ex-SOL. Ablaci\u00f3n B: ning\u00fan paso invierte el filtro en pandas (sigue 15.37\u00d7 vs 14.51\u00d7 con todas las mec\u00e1nicas); slots discretos comprimen el m\u00faltiplo absoluto (15.6\u21927.0) y reducen el margen relativo del filtro (27%\u21924.6%). Forense C: la inversi\u00f3n Freqtrade (5.1\u00d7\u21922.7\u00d7) se explica por composici\u00f3n \u2014 el control captur\u00f3 +26,845 USDT en DEXE+ZEC que el filtro 20M elimina; SOL pasa a dominar (+19k) y falla LOO. La m\u00e1scara es correcta (paridad 0); no es un defecto de una l\u00ednea reparable sin cambiar la hip\u00f3tesis. Mantener control #10 sin filtro; degradar primaria 20M con autopsia.",
+    "H_fragil_verdict": "rechazada",
+    "H_mecanica_verdict": "parcial_slots_comprimen_margen",
+    "composition_driver": true,
+    "margin_shrink_step1_vs_step0": 0.16811089839054788,
+    "ablation_step1": {
+      "filter_wealth": 7.004197390245023,
+      "nofilter_wealth": 6.696442037612539,
+      "filter_improves": true
+    },
+    "ablation_final": {
+      "filter_wealth": 15.367478252914896,
+      "nofilter_wealth": 14.508444366085588
+    },
+    "dexezec_pnl_removed_from_control": 26845.185199280004,
+    "cash_drag_20m": 0.760233918128655,
+    "cash_drag_control": 0.7679558011049724
+  },
+  "freqtrade_reference": {
+    "control_net_mult": 5.06,
+    "filter_20m_net_mult": 2.72,
+    "pandas_reference": {
+      "no_filter_B": 12.25,
+      "filter_20m_B": 15.6
+    }
+  }
+}

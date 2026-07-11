@@ -52,14 +52,138 @@ Config: `user_data/config/screen_xsec.json` (`max_open_trades: 3`).
 
 ## Guards (datos reales, 2024)
 
-| Guard | Resultado |
-|-------|-----------|
-| `signal_truncation_check` (16 pares cross-merge) | **OK** — 20+ cortes, warmup=220 |
-| `recursive-analysis` | **OK** — sin lookahead en indicadores |
+| Guard | XSecMomentum (#10) | XSecMomentum20M (2026-07-11) |
+|-------|-------------------|------------------------------|
+| `signal_truncation_check` (16 pares cross-merge) | **OK** — 20+ cortes, warmup=220 | **OK** — 20+ cortes, warmup=220 |
+| `recursive-analysis` | **OK** — sin lookahead en indicadores | **OK** — sin variación por startup candle |
+
+Configs guards: `base.json` + `backtest.json` + `screen_xsec.json`, timerange `20240101-20240320`.
 
 ---
 
-## Screen (#10, `--bias-controls`)
+## XSecMomentum20M — implementación filtro liquidez (2026-07-11)
+
+Materialización del pre-registro candidato #10 / research #13. **No es intento nuevo.**
+
+### Código
+
+| Pieza | Ubicación |
+|-------|-----------|
+| Función pura máscara | `liquidity_eligibility_mask()` en `xsec_momentum_core.py` — MM30 vol. quote, `shift(1)`, umbral 20M |
+| Vol. quote | `quote_volume_usdt(volume, close)` ≈ `volume × close` (misma aprox. que `r2_liquidity_filter.py`) |
+| Ranking | `build_pair_ranks(..., asset_eligibility=...)` — no elegible → NaN (fuera del top) |
+| Salida liquidez | `custom_exit` → `xsec_liquidity_exit` en rebalanceo si pierde elegibilidad (≡ desaparece del top en pandas) |
+| Estrategia | `XSecMomentum20M(XSecMomentum)` — solo activa filtro; madre intacta como control |
+| Constantes congeladas | `LIQUIDITY_WINDOW=30`, `LIQUIDITY_THRESHOLD=20e6`, `LIQUIDITY_MIN_PERIODS=20` — no hyperopt |
+
+### Paridad research ↔ Freqtrade
+
+`research/verify_20m_parity.py` sobre datos 1d E2 (`user_data/data/binance`): **0 discrepancias** en 16 pares (máscara elegible fecha a fecha vs `r2_liquidity_filter.py`).
+
+### Tests
+
+| Suite | Resultado |
+|-------|-----------|
+| `tests/test_xsec_liquidity_core.py` | 6/6 — causalidad, borde umbral, cruce entrada/salida |
+| `tests/test_xsec_momentum_core.py` | 6/6 |
+| `tests/test_xsec_momentum20m_fixture.py` | 2/2 — BNB sintético cruza 20M, opera y sale por rotación/liquidez |
+
+---
+
+## Screen confirmación 20M (`run_id=20260711_092654`)
+
+**Timerange:** `20210101-` · **Control importado:** screen #10 `research_baseline` (sin filtro, zip re-parseado con fees corregidas).
+
+| Variante | Trades | Net | Bruto | Fees | Fricción | Max DD | LOO bruto | ¿Pasa rotación? |
+|----------|--------|-----|-------|------|----------|--------|-----------|-----------------|
+| research_baseline (control #10) | 350 | +40 641 | +48 495 | 7 854 | 16.2% | 52.9% | +23 006* | **Sí** (importado) |
+| **liquidity_20m_primary** | 325 | +17 201 | +21 904 | 4 702 | 21.5% | 46.3% | **−1 631** | **No** (LOO ≤ 0) |
+
+\*LOO bruto del control: cifra corregida post-auditoría fees (JSON original subestimaba fees LOO).
+
+**Veredicto screen global:** `PASA` solo porque el control importado cumple — la variante **primaria 20M no pasa** (LOO bruto negativo al excluir SOL/USDT).
+
+**No se ajustó umbral ni parámetros** — conforme al pre-registro.
+
+### Curva Freqtrade vs pandas (mismo timerange conceptual)
+
+| Motor | Múltiplo wealth | Notas |
+|-------|-----------------|-------|
+| pandas E2 + filtro 20M (B) | **15.6×** | `research/output/r2_liquidity_filter.json` |
+| pandas E2 sin filtro (B) | 12.25× | research #13 |
+| Freqtrade **liquidity_20m_primary** | **~2.7×** net (10k→27k) | 325 trades, BEAR 1d, stop −35% |
+| Freqtrade control sin filtro | **~5.1×** net (10k→51k) | screen #10 |
+
+**Divergencia > 2×** en ambas direcciones: Freqtrade 20M **no replica** el uplift pandas (15.6× vs 2.7×); además el filtro **reduce** retorno Freqtrade vs control (opuesto al patrón monótono pandas 12.25→15.6×). Hipótesis operativa: implementación fiel en elegibilidad, pero mecánicas Freqtrade (3 slots, trades discretos, BEAR 1d, stop, dominancia SOL vs DEXE) impiden extrapolar el múltiplo research.
+
+**Autopsia LOO 20M:** par dominante SOL/USDT; al excluirlo el bruto colapsa — concentración distinta al control (DEXE). Coherente con filtro que redirige rotación hacia large-caps líquidos.
+
+Reporte: `user_data/validation_reports/screen/XSecMomentum20M/20260711_092654/screen_report.json`
+
+### Estado validación full (congelado)
+
+| Rol | Config | Screen confirmación |
+|-----|--------|---------------------|
+| **Primaria** | XSecMomentum20M, filtro dinámico 20M | **Implementada; screen NO PASA; autopsia 2026-07-11 → degradada (ii)** |
+| **Control** | XSecMomentum sin filtro (#10) | PASA (screen #10) — **única config validación full** |
+
+WF protocolo: 100 epochs según cola post-MeanRevBB.
+
+---
+
+## Autopsia 20M (2026-07-11)
+
+**Anomalía:** máscara idéntica (paridad 0) pero el filtro **mejora** en pandas (12.25×→15.6×) y **destruye** en Freqtrade (5.1×→2.7×).
+
+### H0 — hipótesis en competencia
+
+| ID | Hipótesis | Resultado |
+|----|-----------|-----------|
+| **H-frágil** | El efecto 20M depende de SOL; pandas colapsaría en LOO ex-SOL | **Rechazada** — pandas 20M ex-SOL: **12.35×** (>EW filtrado 1.25×); mejora +51% vs sin filtro ex-SOL (8.15×) |
+| **H-mecánica** | Desviación de ejecución Freqtrade invierte el beneficio | **Parcial** — ablación no invierte el filtro en pandas; slots discretos comprimen múltiplo absoluto (15.6→7.0) y margen relativo (27%→4.6%) |
+
+### A — LOO ex-SOL (pandas)
+
+| Config | Wealth B ex-SOL | vs EW ex-SOL |
+|--------|-----------------|--------------|
+| 20M filtro | **12.35×** | > 1.25× ✓ |
+| Sin filtro | 8.15× | — |
+| EW filtrado 20M | 1.25× | criterio H-frágil |
+
+La fragilidad-SOL es **específica de Freqtrade** (LOO bruto −1.6k), no del motor pandas.
+
+### B — Ablación mecánica (pandas, acumulativa)
+
+| Paso | 20M B | Sin filtro B | ¿Filtro mejora? | Margen relativo |
+|------|-------|--------------|-----------------|-----------------|
+| 0 continuo | 15.60× | 12.25× | Sí | +27% |
+| 1 slots discretos | 7.00× | 6.70× | Sí | +4.6% |
+| 2 + BEAR flat | 13.12× | 9.54× | Sí | +37% |
+| 3 + stop −35% | 15.37× | 14.51× | Sí | +5.9% |
+| 4 + liq. exit | 15.37× | 14.51× | Sí | +5.9% |
+
+**Ningún paso invierte** el beneficio del filtro en pandas. No reproduce 2.7× vs 5.1× de Freqtrade.
+
+### C — Forense trades (zips existentes)
+
+| Métrica | Control #10 | 20M |
+|---------|-------------|-----|
+| PnL DEXE+ZEC | **+26 055 + ZEC** ≈ +26k+ | **0** (filtrados) |
+| PnL SOL | +15 279 | **+19 025** (dominante) |
+| Exit `xsec_liquidity_exit` | — | **1** (casi nulo) |
+| Exit `stop_loss` | 155 (44%) | 137 (42%) |
+
+**Causa raíz Freqtrade:** el filtro elimina correctamente pares iliquidos que el **control** explotaba en PnL discreto (DEXE ≈ +26k). El 20M redirige hacia SOL; LOO ex-SOL falla. No es defecto de máscara ni de `xsec_liquidity_exit`.
+
+### Recomendación: **(ii)**
+
+Mantener **control #10 sin filtro** como única config de validación full. Degradar **primaria 20M** a descartada-por-materialización (implementación fiel, efecto invertido en Freqtrade por composición de cartera, no reparable sin cambiar hipótesis).
+
+No proceder con fix de slots/relleno — la ablación muestra cash drag bajo en pandas (~1% semanas incompletas); la inversión viene de **qué pares** se operan, no de huecos vacíos.
+
+Artefactos: `research/output/autopsy_20m_20260711.json`, `research/output/autopsy_20m_ablation.png`
+
+---
 
 **Timerange screen:** `20210101-` → datos hasta **2026-07-09** (ventana completa protocolo). Primer trade **2021-08-10** (warmup ~220 velas 1d). Último cierre **2026-06-02**.
 
@@ -147,19 +271,24 @@ Reporte screen original: `user_data/validation_reports/screen/XSecMomentum/20260
 
 ---
 
-## MeanRevBB al cierre de implementación
+## MeanRevBB al cierre de implementación (2026-07-11 ~11:35 UTC+2)
 
 | Campo | Valor |
 |-------|-------|
-| Lock | LOCKED (validación full activa) |
-| Fase | WF ventana 0, epoch **78/300** (`strategy_MeanRevBB_2026-07-10_16-06-38.fthypt`) |
+| Lock | **LOCKED** — `run_id=20260709_162954`, pid **16944** |
+| Fase | WF ventana 0 — `.fthypt` ~70 MB (`strategy_MeanRevBB_2026-07-11_08-58-25.fthypt`), **~65–110/300** epochs (estimado) |
+| Heartbeat | Último audit `2026-07-11T08:58:17Z` |
 | `report.json` | No |
+
+**Aislamiento:** `MeanRevBB.py` no importa estrategias XSec ni `screen_strategy.py`. Nada del run vivo modificado en `pipeline/`, `_base.py`, `quant_core.py`, `MeanRevBB.py`, configs base ni `hyperopt_results/`.
 
 ---
 
 ## Veredicto
 
-**PASA confirmado (screen, intento #10)** — auditoría fees 2026-07-10: fricción real 16–45%, no cero; veredicto inalterado. Candidato en cola post-calibración MeanRevBB.
+**PASA confirmado (screen, intento #10, sin filtro)** — auditoría fees 2026-07-10. Candidato control en cola post-calibración MeanRevBB.
+
+**XSecMomentum20M (primaria):** implementación + paridad máscara **OK**; screen **NO PASA** (LOO); autopsia 2026-07-11 confirma inversión por composición (DEXE filtrado), no por bug de máscara — **degradada**; validar solo control #10.
 
 Si **DESCARTADA** en validación full: autopsia Freqtrade vs `research/xsec_lab.py` mismo timerange.
 

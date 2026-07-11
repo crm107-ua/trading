@@ -80,6 +80,11 @@ def main() -> None:
     if pair in leaders:
       s, e, m = leaders[pair]
       frame = _apply_leader_drift(frame, mult=m, start=s, end=e)
+    if pair == "BNB_USDT":
+      # Cruza umbral 20M USDT/día a mitad del periodo (liquidez fixture XSecMomentum20M)
+      frame.loc[:120, "volume"] = 100.0  # quote ~32k
+      frame.loc[121:, "volume"] = 80_000.0  # quote ~25M @ ~320
+      frame = _apply_leader_drift(frame, mult=0.018, start="2024-02-12", end="2024-04-08")
     path = OUT_DIR / f"{pair}-1d.feather"
     frame.to_feather(path)
     print(f"wrote {path}")

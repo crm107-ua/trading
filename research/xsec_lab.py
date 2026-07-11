@@ -503,6 +503,215 @@ class BiasControlResult:
   n_pairs_at_end: int
 
 
+@dataclass(frozen=True)
+class AblationConfig:
+  """Aproximaciones mecánicas Freqtrade (ablación acumulativa)."""
+
+  discrete_slots: bool = False
+  max_slots: int = 3
+  bear_flat: bool = False
+  stop_loss: float | None = None
+  liquidity_exit_rebalance: bool = False
+
+
+def _target_pairs_from_weights(weights: pd.Series) -> list[str]:
+  w = weights.reindex(weights.index, fill_value=0.0).fillna(0.0)
+  ranked = w[w > 0].sort_values(ascending=False)
+  return [str(p) for p in ranked.index]
+
+
+def portfolio_return_ablation(
+  prices: pd.DataFrame,
+  weights_fn: Callable[[pd.DataFrame, pd.Timestamp], pd.Series],
+  rebalance_freq: RebalanceFreq,
+  *,
+  fee_per_rotation: float = 0.0,
+  btc_regime: pd.Series | None = None,
+  eligibility: pd.DataFrame | None = None,
+  config: AblationConfig | None = None,
+) -> tuple[pd.Series, float, dict[str, float]]:
+  """
+  Simulación de cartera con ablaciones Freqtrade.
+
+  Si ``config`` es None o todas las flags son False, delega en ``portfolio_return``.
+  Retorna (log_returns, turnover_medio, stats_extra).
+  """
+  cfg = config or AblationConfig()
+  if not any(
+    (
+      cfg.discrete_slots,
+      cfg.bear_flat,
+      cfg.stop_loss is not None,
+      cfg.liquidity_exit_rebalance,
+    )
+  ):
+    rets, turnover = portfolio_return(prices, weights_fn, rebalance_freq, fee_per_rotation=fee_per_rotation)
+    return rets, turnover, {"cash_drag_mean": 0.0, "weeks_incomplete_pct": 0.0}
+
+  prices = prices.sort_index().ffill()
+  rets = log_returns(prices).fillna(0.0)
+  rb_dates = set(_rebalance_dates(prices.index, rebalance_freq))
+  regime = btc_regime.reindex(prices.index).ffill() if btc_regime is not None else None
+  elig = eligibility.reindex(prices.index) if eligibility is not None else None
+
+  slots: list[tuple[str | None, float | None]] = [(None, None) for _ in range(cfg.max_slots)]
+  port_log: list[float] = []
+  dates_out: list[pd.Timestamp] = []
+  turnovers: list[float] = []
+  cash_drag_samples: list[float] = []
+  incomplete_weeks = 0
+  week_samples = 0
+
+  slot_frac = 1.0 / cfg.max_slots
+
+  def _filled_count() -> int:
+    return sum(1 for p, _ in slots if p)
+
+  def _invested_fraction() -> float:
+    return _filled_count() * slot_frac
+
+  def _close_slot(i: int) -> None:
+    slots[i] = (None, None)
+
+  def _close_all() -> None:
+    for i in range(cfg.max_slots):
+      _close_slot(i)
+
+  def _pairs_held() -> set[str]:
+    return {p for p, _ in slots if p}
+
+  for i, dt in enumerate(prices.index):
+    if i == 0:
+      port_log.append(0.0)
+      dates_out.append(dt)
+      cash_drag_samples.append(1.0 - _invested_fraction())
+      continue
+
+    if cfg.stop_loss is not None:
+      for si, (pair, entry) in enumerate(slots):
+        if pair is None or entry is None:
+          continue
+        px = prices.loc[dt, pair]
+        if pd.notna(px) and float(px) <= float(entry) * (1.0 + cfg.stop_loss):
+          _close_slot(si)
+
+    day_ret = 0.0
+    for pair, _ in slots:
+      if pair is None:
+        continue
+      day_ret += slot_frac * float(rets.loc[dt, pair])
+    port_log.append(day_ret)
+    dates_out.append(dt)
+    cash_drag_samples.append(1.0 - _invested_fraction())
+
+    if dt in rb_dates:
+      week_samples += 1
+
+      if cfg.bear_flat and regime is not None and str(regime.loc[dt]) == "BEAR":
+        prev = _pairs_held()
+        _close_all()
+        turnover = 0.5 * len(prev) * slot_frac
+        turnovers.append(turnover)
+        port_log[-1] -= turnover * fee_per_rotation
+        incomplete_weeks += 1
+        continue
+
+      target_w = weights_fn(prices, dt)
+      targets = _target_pairs_from_weights(target_w)
+      if cfg.liquidity_exit_rebalance and elig is not None and dt in elig.index:
+        row = elig.loc[dt]
+        targets = [p for p in targets if p in row.index and bool(row[p])]
+
+      prev = _pairs_held()
+      _close_all()
+      for si, pair in enumerate(targets[: cfg.max_slots]):
+        px = prices.loc[dt, pair]
+        if pd.notna(px):
+          slots[si] = (pair, float(px))
+
+      if _filled_count() < cfg.max_slots:
+        incomplete_weeks += 1
+
+      new = _pairs_held()
+      turnover = 0.5 * len(prev.symmetric_difference(new)) * slot_frac
+      turnovers.append(turnover)
+      port_log[-1] -= turnover * fee_per_rotation
+
+  series = pd.Series(port_log, index=pd.DatetimeIndex(dates_out, tz="UTC"))
+  avg_turnover = float(np.mean(turnovers)) if turnovers else 0.0
+  stats = {
+    "cash_drag_mean": float(np.mean(cash_drag_samples)) if cash_drag_samples else 0.0,
+    "weeks_incomplete_pct": float(incomplete_weeks / week_samples) if week_samples else 0.0,
+  }
+  return series, avg_turnover, stats
+
+
+def load_quote_volume_30d(
+  pairs: list[str],
+  index: pd.DatetimeIndex,
+  *,
+  datadir: Path | str = DEFAULT_DATADIR,
+) -> pd.DataFrame:
+  """Media móvil 30d del volumen quote (USDT), desplazada 1 día (causal)."""
+  datadir = Path(datadir)
+  frames: dict[str, pd.Series] = {}
+  for pair in pairs:
+    path = datadir / f"{pair.replace('/', '_')}-1d.feather"
+    if not path.is_file():
+      continue
+    df = pd.read_feather(path)
+    idx = pd.to_datetime(df["date"], utc=True)
+    qv = df["volume"].astype(float) * df["close"].astype(float)
+    qv.index = idx
+    frames[pair] = qv.sort_index()
+  qvol = pd.DataFrame(frames).sort_index()
+  return qvol.rolling(30, min_periods=20).mean().shift(1).reindex(index)
+
+
+def make_liquidity_masked_momentum(
+  eligible: pd.DataFrame,
+  *,
+  window: int,
+  top_n: int,
+  stats: list[int] | None = None,
+) -> Callable[[pd.DataFrame, pd.Timestamp], pd.Series]:
+  """Top-N momentum restringido a pares elegibles en t (filtro 20M)."""
+
+  def fn(p: pd.DataFrame, t: pd.Timestamp) -> pd.Series:
+    hist = eligible.loc[:t]
+    if hist.empty:
+      return pd.Series(0.0, index=p.columns)
+    last = hist.iloc[-1]
+    cols = [c for c in p.columns if c in last.index and bool(last[c])]
+    if stats is not None:
+      stats.append(len(cols))
+    if not cols:
+      return pd.Series(0.0, index=p.columns)
+    w_sub = weights_top_n_momentum(p[cols], t, window=window, top_n=top_n)
+    w = pd.Series(0.0, index=p.columns)
+    w.loc[w_sub.index] = w_sub
+    return w
+
+  return fn
+
+
+def make_liquidity_masked_equal(
+  eligible: pd.DataFrame,
+) -> Callable[[pd.DataFrame, pd.Timestamp], pd.Series]:
+  def fn(p: pd.DataFrame, t: pd.Timestamp) -> pd.Series:
+    hist = eligible.loc[:t]
+    if hist.empty:
+      return pd.Series(0.0, index=p.columns)
+    last = hist.iloc[-1]
+    cols = [c for c in p.columns if c in last.index and bool(last[c]) and p.loc[:t, c].notna().any()]
+    w = pd.Series(0.0, index=p.columns)
+    if cols:
+      w.loc[cols] = 1.0 / len(cols)
+    return w
+
+  return fn
+
+
 def run_bias_control(
   prices: pd.DataFrame,
   *,

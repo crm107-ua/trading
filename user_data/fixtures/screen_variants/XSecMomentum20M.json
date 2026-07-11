@@ -1,0 +1,16 @@
+{
+  "strategy": "XSecMomentum20M",
+  "hypothesis_attempt": 10,
+  "note": "Configuración PRIMARIA pre-registrada — filtro liquidez dinámico 20M (materialización #13, no intento nuevo).",
+  "variants": [
+    {
+      "name": "liquidity_20m_primary",
+      "rationale": "w=14, top-3, exit K=4 — valores del research r2; umbral 20M fijo en clase",
+      "strategy_parameters": {
+        "momentum_window": 14,
+        "top_n": 3,
+        "exit_rank_k": 4
+      }
+    }
+  ]
+}
