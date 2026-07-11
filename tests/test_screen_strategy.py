@@ -188,6 +188,25 @@ def test_build_variant_params_export_full_buy_block() -> None:
   assert buy["buy_rsi_max"] == 68
   assert buy["buy_ema_fast"] == 12
   assert payload["ft_stratparam_v"] == 1
+  assert payload["params"]["stoploss"]["stoploss"] == pytest.approx(-0.10)
+
+
+def test_build_variant_params_respects_xsec_class_stoploss() -> None:
+  """Fallo-en-vacío #10: el template no debe forzar -0.1 sobre XSecMomentum (-0.35)."""
+  payload = build_variant_params_export(
+    "XSecMomentum",
+    {"momentum_window": 14, "top_n": 3, "exit_rank_k": 4},
+  )
+  assert payload is not None
+  assert payload["params"]["stoploss"]["stoploss"] == pytest.approx(-0.35)
+
+
+def test_build_variant_params_explicit_stop_override() -> None:
+  payload = build_variant_params_export(
+    "XSecMomentum",
+    {"momentum_window": 14, "top_n": 3, "exit_rank_k": 4, "stoploss": -0.1},
+  )
+  assert payload["params"]["stoploss"]["stoploss"] == pytest.approx(-0.1)
 
 
 def test_build_variant_params_rejects_atr_stop() -> None:

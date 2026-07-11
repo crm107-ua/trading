@@ -1,0 +1,27 @@
+{
+  "strategy": "XSecMomentum",
+  "hypothesis_attempt": 10,
+  "note": "Re-screen stop honesto (pre-registrado ANTES de correr, 2026-07-11). Mismos hyperopt params; solo difiere stoploss.",
+  "variants": [
+    {
+      "name": "stop_design_m35",
+      "rationale": "Diseño original documentado — stoploss -0.35 de clase",
+      "strategy_parameters": {
+        "momentum_window": 14,
+        "top_n": 3,
+        "exit_rank_k": 4,
+        "stoploss": -0.35
+      }
+    },
+    {
+      "name": "stop_accidental_m10",
+      "rationale": "Configuración accidental testeada en screen #10 (PARAMS_TEMPLATE) — post-hoc si es la única que pasa",
+      "strategy_parameters": {
+        "momentum_window": 14,
+        "top_n": 3,
+        "exit_rank_k": 4,
+        "stoploss": -0.1
+      }
+    }
+  ]
+}

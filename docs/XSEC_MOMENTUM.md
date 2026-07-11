@@ -335,31 +335,50 @@ Patrón monótono en umbrales pre-fijados (5M→20M→50M: 6.4×→15.6×→21.9
 Funding caliente → retornos mejores (signo invertido vs #11). **No explotar.** Ver `docs/hypothesis_registry.md` sección observaciones bloqueadas.
 
 Reporte screen original: `user_data/validation_reports/screen/XSecMomentum/20260710_162559/screen_report.json`  
-**Fallo-en-vacío #9:** parser de fees sumaba ratios; sanity-check en `screen_strategy.py`.
+**Fallo-en-vacío #9:** parser de fees sumaba ratios; sanity-check en `screen_strategy.py`.  
+**Fallo-en-vacío #10:** `PARAMS_TEMPLATE` forzaba `stoploss: -0.1` — ver sección siguiente.
 
 ---
 
-## MeanRevBB al cierre de reconciliación 13-D (2026-07-11 ~12:00 UTC+2)
+## Fallo-en-vacío #10 — stop no pre-registrado (2026-07-11)
+
+El screen PASA (#10) materializó **stop −10%** vía JSON de variante, no el **−35%** documentado en `XSecMomentum.py`.
+
+| Item | Detalle |
+|------|---------|
+| Causa | `screen_strategy.py` → `PARAMS_TEMPLATE` hardcodeaba `stoploss: -0.1` |
+| Fix | `build_params_template()` lee stop de clase; override explícito `stoploss` en variante |
+| Tests | `test_build_variant_params_respects_xsec_class_stoploss` |
+| Auditoría | `research/audit_screen_stops.py` → `screen_stop_audit_20260711.json` |
+| Re-screen | `XSecMomentum_rescreen_stop.json` — `stop_design_m35` vs `stop_accidental_m10` (**10-RS**, pre-registrado) |
+| Cola | Docker **después** de cierre ventana WF 0 MeanRevBB (~50 epochs restantes) |
+
+**Veredicto #10:** **SUSPENDIDO** hasta 10-RS. No usar +40k del zip accidental como criterio de elección de stop.
+
+**Radiografía edge (zip control):** −199k stops / +203k rotaciones / +36k BEAR — edge fino, sensible al nivel de stop.
+
+---
+
+## MeanRevBB al cierre fix #10 (2026-07-11 ~12:00 UTC+2)
 
 | Campo | Valor |
 |-------|-------|
 | Lock | **LOCKED** — `run_id=20260709_162954`, pid **16944** (vivo) |
-| Fase | WF ventana 0 — `strategy_MeanRevBB_2026-07-11_08-58-25.fthypt` **~91 MB**, **~248/300** epochs (líneas JSON) |
-| Última escritura `.fthypt` | 2026-07-11 11:47 local |
-| Heartbeat lock | `2026-07-11T08:58:17Z` (sin actualizar; proceso activo) |
+| Fase | WF ventana 0 — `strategy_MeanRevBB_2026-07-11_08-58-25.fthypt` **~91 MB**, **~248/300** epochs |
+| Re-screen XSec | **En cola** — ejecutar tras transición ventana 0→1 (~2 h estimadas) |
 | `report.json` | No |
 
-**Aislamiento:** sin cambios en `pipeline/`, `_base.py`, `quant_core.py`, `MeanRevBB.py`, configs base ni `hyperopt_results/`.
+**Aislamiento:** fix en `screen_strategy.py` + fixtures; sin tocar `MeanRevBB.py` ni hyperopt en curso.
 
 ---
 
 ## Veredicto
 
-**PASA confirmado (screen, intento #10, sin filtro)** — auditoría fees 2026-07-10. Candidato control en cola post-calibración MeanRevBB.
+**#10 control:** **PASA SUSPENDIDO** — fallo-en-vacío #10; re-screen **10-RS** pendiente (`stop_design_m35` vs `stop_accidental_m10`).
 
-**XSecMomentum20M (primaria):** implementación + paridad máscara **OK**; screen **NO PASA** (LOO); autopsia 2026-07-11 confirma inversión por composición (DEXE filtrado), no por bug de máscara — **degradada**; validar solo control #10.
+**XSecMomentum20M (primaria):** **degradada** (recomendación ii fundada: 8.24×→1.66× en modo fidelidad).
 
-Si **DESCARTADA** en validación full: autopsia Freqtrade vs `research/xsec_lab.py` mismo timerange.
+**Instrumento research:** desde #14, criterios deben superarse también en `simulate_freqtrade_fidelity` (~2× optimismo log W-FRI).
 
 ---
 

@@ -24,6 +24,7 @@
 | 13-B | **Autopsia (no intento nuevo):** ablación mecánica Freqtrade en pandas | E2, 20M vs sin filtro | Slots→BEAR→stop−35%→liq.exit acumulativo | Paso que invierte beneficio 20M vs sin filtro | **Ningún paso invierte** — filtro sigue mejorando; slots comprimen múltiplo 15.6→7.0 | 2026-07-11 |
 | 13-C | **Autopsia (no intento nuevo):** forense zips Freqtrade 20M vs control | Trades screen existentes | PnL por par, exit_reason, composición | Inversión explicada por DEXE/ZEC filtrados | **Composición** — control +26k DEXE; 20M dominado SOL; 1× liq.exit | 2026-07-11 |
 | 13-D | **Reconciliación (no intento nuevo):** gap pandas↔Freqtrade + anomalía stops | Control #10 zip + `xsec_lab` fidelidad | Ablación 6 mecánicas; PnL por exit_reason; modo fidelidad 20M | Sim final ±30% FT control **o** gap nombrado | **Parcial** — stops reales −10% (PARAMS_TEMPLATE); research ~2.05× optimista; residual 1.63× (stake policy/rank merge); 20M sigue degradando en fidelidad (8.24→1.66×) | 2026-07-11 |
+| 10-RS | **Re-screen #10 (stop honesto):** misma hipótesis, dos stops pre-fijados | E2, w14 top-3 K4 | Screen Freqtrade `XSecMomentum_rescreen_stop.json`: `stop_design_m35` (−0.35) vs `stop_accidental_m10` (−0.1); criterios rotación + LOO + DD intactos | Cada variante juzgada por separado; si solo pasa −0.1 → PASA con descuento post-hoc explícito; si ninguna → candidato cae | **PENDIENTE** — pre-registrado 2026-07-11; screen tras cierre ventana WF 0 MeanRevBB | 2026-07-11 |
 
 ---
 
@@ -34,7 +35,25 @@
 | Rol | Configuración | Detalle |
 |-----|---------------|---------|
 | **Primaria** | **XSecMomentum-20M** | Mismo motor #10 + filtro liquidez dinámico 20M. **Autopsia 2026-07-11: degradada** — implementación fiel (paridad 0) pero efecto invertido en Freqtrade por composición (DEXE filtrado). No validar. |
-| **Control** | XSecMomentum E2 sin filtro | Screen PASA (#10). **Única config para validación full** post-MeanRevBB. |
+| **Control** | XSecMomentum E2 sin filtro | Screen #10 **PASA suspendido** (fallo-en-vacío #10: stop −0.1 materializado, no −0.35). Re-screen **10-RS** pendiente. |
+
+---
+
+## Corrección procesal #10 (2026-07-11, fallo-en-vacío #10)
+
+**`PARAMS_TEMPLATE` en `screen_strategy.py` forzaba `stoploss: -0.1` en todo JSON de variante**, anulando `stoploss = -0.35` de `XSecMomentum.py`. El screen PASA (#10) validó una estrategia distinta de la documentada.
+
+| Acción | Estado |
+|--------|--------|
+| Fix template (respeta stop de clase; override explícito vía `stoploss` en variante) | Hecho + tests |
+| Auditoría retroactiva zips | `research/output/screen_stop_audit_20260711.json` |
+| Pre-registro re-screen dos stops | `XSecMomentum_rescreen_stop.json` — **antes** de correr |
+| Re-screen Docker | **PENDIENTE** — tras cierre ventana WF 0 MeanRevBB (~248/300) |
+| Veredicto #10 | **SUSPENDIDO** hasta resultado 10-RS |
+
+**Descartes #1–#5:** stop materializado −0.1 = `QuantBaseStrategy`; brutos muy negativos — no afecta veredictos DESCARTADA (auditoría confirma, no suposición).
+
+**Regla post-hoc:** si solo pasa `stop_accidental_m10`, el candidato pasa con descuento de configuración descubierta accidentalmente; **prohibido** quedarse con −0.1 porque ya sabemos +40k.
 
 **Por qué primaria y no variante secundaria:** #13 pasa en 20M con patrón monótono 5M→20M→50M (edge se fortalece al quitar iliquidez). R0 (#10-R0) pasa el criterio global pero 2024-26 sin DEXE/ZEC queda en 1.13×; con filtro 20M la misma mitad da **4.69×** — la variante 20M resuelve el asterisco de R0 mejor que el universo original.
 

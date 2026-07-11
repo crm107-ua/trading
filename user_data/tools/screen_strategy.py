@@ -55,9 +55,11 @@ HYPEROPT_PARAM_RE = re.compile(
 # Atributos de clase que las variantes del screen pueden pedir pero Freqtrade no carga vía .json.
 NON_JSON_LOADABLE_PARAMS = frozenset({"atr_stop_multiplier"})
 
-PARAMS_TEMPLATE = {
+# Overrides explícitos en strategy_parameters (no son IntParameter/DecimalParameter).
+SCREEN_PARAM_OVERRIDES = frozenset({"stoploss"})
+
+PARAMS_TEMPLATE_BASE = {
   "roi": {"0": 100},
-  "stoploss": {"stoploss": -0.1},
   "trailing": {
     "trailing_stop": False,
     "trailing_stop_positive": None,
@@ -66,6 +68,49 @@ PARAMS_TEMPLATE = {
   },
   "max_open_trades": {"max_open_trades": 4},
 }
+
+
+def _strategy_source_path(class_name: str) -> Path | None:
+  direct = STRATEGIES_DIR / f"{class_name}.py"
+  if direct.is_file():
+    return direct
+  if class_name == "QuantBaseStrategy":
+    base = STRATEGIES_DIR / "_base.py"
+    if base.is_file():
+      return base
+  return None
+
+
+def _parse_strategy_class_block(strategy: str) -> str:
+  path = _strategy_source_path(strategy)
+  if path is None:
+    return ""
+  text = path.read_text(encoding="utf-8")
+  match = re.search(
+    rf"class\s+{re.escape(strategy)}\s*\([^)]*\)\s*:(.*?)(?=\nclass\s|\Z)",
+    text,
+    re.DOTALL,
+  )
+  return match.group(1) if match else text
+
+
+def _effective_class_stoploss(strategy: str) -> float:
+  """Stop de la clase (o padre inmediato en strategies/) — no PARAMS_TEMPLATE fijo."""
+  block = _parse_strategy_class_block(strategy)
+  match = re.search(r"^\s*stoploss\s*=\s*(-?[\d.]+)\s*$", block, re.MULTILINE)
+  if match:
+    return float(match.group(1))
+  parent = _parent_strategy_name(strategy)
+  if parent:
+    return _effective_class_stoploss(parent)
+  return -0.99
+
+
+def build_params_template(strategy: str) -> dict:
+  """Plantilla de params JSON respetando stoploss de clase salvo override explícito."""
+  params = json.loads(json.dumps(PARAMS_TEMPLATE_BASE))
+  params["stoploss"] = {"stoploss": _effective_class_stoploss(strategy)}
+  return params
 
 HYPEROPT_RISK_EPOCH_THRESHOLD = 280
 HYPEROPT_TARGET_EPOCHS = 300
@@ -117,9 +162,9 @@ def _parent_strategy_name(strategy: str) -> str | None:
   if not match:
     return None
   parent = match.group(1)
-  if parent in {"IStrategy", "QuantBaseStrategy", "object"}:
+  if parent in {"IStrategy", "object"}:
     return None
-  if (STRATEGIES_DIR / f"{parent}.py").is_file():
+  if _strategy_source_path(parent) is not None:
     return parent
   return None
 
@@ -161,21 +206,26 @@ def build_variant_params_export(strategy: str, overrides: dict) -> dict | None:
       f"variante incluye parámetros no cargables vía <Estrategia>.json: {sorted(non_loadable)}"
     )
 
+  screen_overrides = {k: overrides[k] for k in overrides if k in SCREEN_PARAM_OVERRIDES}
+  hyper_overrides = {k: v for k, v in overrides.items() if k not in SCREEN_PARAM_OVERRIDES}
+
   registry = _parse_hyperopt_registry(strategy)
-  unknown = set(overrides) - set(registry)
+  unknown = set(hyper_overrides) - set(registry)
   if unknown:
     raise ScreenAbortError(f"parámetros desconocidos para {strategy}: {sorted(unknown)}")
 
   buy_block: dict[str, object] = {}
   sell_block: dict[str, object] = {}
   for name, (space, default_val) in registry.items():
-    value = overrides.get(name, default_val)
+    value = hyper_overrides.get(name, default_val)
     if space == "buy":
       buy_block[name] = value
     else:
       sell_block[name] = value
 
-  params = dict(PARAMS_TEMPLATE)
+  params = build_params_template(strategy)
+  if "stoploss" in screen_overrides:
+    params["stoploss"] = {"stoploss": float(screen_overrides["stoploss"])}
   if buy_block:
     params["buy"] = buy_block
   if sell_block:
@@ -282,6 +332,20 @@ def verify_variant_params_applied(
 
   for key, exp_val in requested.items():
     if key in NON_JSON_LOADABLE_PARAMS:
+      continue
+    if key in SCREEN_PARAM_OVERRIDES:
+      if params_file is None or not params_file.is_file():
+        issues.append(f"override {key} sin archivo de params para verificar")
+        continue
+      try:
+        archived = json.loads(params_file.read_text(encoding="utf-8"))
+        actual = archived.get("params", {}).get("stoploss", {}).get("stoploss")
+      except (json.JSONDecodeError, OSError):
+        actual = None
+      if actual is None:
+        issues.append(f"override {key} no encontrado en JSON de params")
+      elif float(actual) != float(exp_val):
+        issues.append(f"override {key}: solicitado {exp_val}, json={actual}")
       continue
     candidates = {key, key.replace("buy_", ""), key.replace("sell_", "")}
     found = None

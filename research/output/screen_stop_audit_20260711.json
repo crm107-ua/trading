@@ -1,0 +1,340 @@
+{
+  "date": "2026-07-11",
+  "failo_vacio": "#10 \u2014 PARAMS_TEMPLATE stoploss=-0.1 anulaba clase XSecMomentum -0.35",
+  "strategies_audited": [
+    {
+      "strategy": "BreakoutVol",
+      "class_stoploss_declared": -0.1,
+      "stops_in_zips": [
+        -0.1
+      ],
+      "zip_count_with_params": 2,
+      "mismatch_vs_class": false,
+      "note": "coherente con QuantBaseStrategy -0.10"
+    },
+    {
+      "strategy": "GridDCA",
+      "class_stoploss_declared": -0.1,
+      "stops_in_zips": [
+        -0.1
+      ],
+      "zip_count_with_params": 7,
+      "mismatch_vs_class": false,
+      "note": "coherente con QuantBaseStrategy -0.10"
+    },
+    {
+      "strategy": "MeanRevBB",
+      "class_stoploss_declared": null,
+      "stops_in_zips": [
+        -0.1
+      ],
+      "zip_count_with_params": 6,
+      "mismatch_vs_class": false,
+      "note": null
+    },
+    {
+      "strategy": "RegimeSwitcher",
+      "class_stoploss_declared": -0.1,
+      "stops_in_zips": [
+        -0.1
+      ],
+      "zip_count_with_params": 3,
+      "mismatch_vs_class": false,
+      "note": "coherente con QuantBaseStrategy -0.10"
+    },
+    {
+      "strategy": "RelativeMomentum",
+      "class_stoploss_declared": -0.1,
+      "stops_in_zips": [
+        -0.1
+      ],
+      "zip_count_with_params": 6,
+      "mismatch_vs_class": false,
+      "note": "coherente con QuantBaseStrategy -0.10"
+    },
+    {
+      "strategy": "TrendRider",
+      "class_stoploss_declared": -0.1,
+      "stops_in_zips": [
+        -0.1
+      ],
+      "zip_count_with_params": 5,
+      "mismatch_vs_class": false,
+      "note": "coherente con QuantBaseStrategy -0.10"
+    },
+    {
+      "strategy": "XSecMomentum",
+      "class_stoploss_declared": -0.35,
+      "stops_in_zips": [
+        -0.1
+      ],
+      "zip_count_with_params": 6,
+      "mismatch_vs_class": true,
+      "note": "PARAMS_TEMPLATE forz\u00f3 -0.1 en variantes con JSON"
+    },
+    {
+      "strategy": "XSecMomentum20M",
+      "class_stoploss_declared": -0.35,
+      "stops_in_zips": [
+        -0.1
+      ],
+      "zip_count_with_params": 4,
+      "mismatch_vs_class": true,
+      "note": "PARAMS_TEMPLATE forz\u00f3 -0.1 en variantes con JSON"
+    }
+  ],
+  "screen_discards_1_5": "TrendRider/BreakoutVol/RegimeSwitcher/GridDCA/RelativeMomentum: stop materializado -0.1 coincide con QuantBaseStrategy; brutos << 0 \u2014 irrelevante para veredicto.",
+  "xsec_control_zip_reference": "backtest-result-2026-07-10_16-26-23.zip",
+  "detail_rows": {
+    "MeanRevBB": [
+      {
+        "strategy": "MeanRevBB",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-09_20-22-15_MeanRevBB.json",
+        "zip": "backtest-result-2026-07-09_20-22-15.zip"
+      },
+      {
+        "strategy": "MeanRevBB",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-09_20-22-32_MeanRevBB.json",
+        "zip": "backtest-result-2026-07-09_20-22-32.zip"
+      },
+      {
+        "strategy": "MeanRevBB",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_11-21-00_MeanRevBB.json",
+        "zip": "backtest-result-2026-07-10_11-21-00.zip"
+      },
+      {
+        "strategy": "MeanRevBB",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_11-21-29_MeanRevBB.json",
+        "zip": "backtest-result-2026-07-10_11-21-29.zip"
+      },
+      {
+        "strategy": "MeanRevBB",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_15-42-08_MeanRevBB.json",
+        "zip": "backtest-result-2026-07-10_15-42-08.zip"
+      },
+      {
+        "strategy": "MeanRevBB",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_15-42-29_MeanRevBB.json",
+        "zip": "backtest-result-2026-07-10_15-42-29.zip"
+      }
+    ],
+    "TrendRider": [
+      {
+        "strategy": "TrendRider",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_12-37-09_TrendRider.json",
+        "zip": "backtest-result-2026-07-10_12-37-09.zip"
+      },
+      {
+        "strategy": "TrendRider",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_12-37-39_TrendRider.json",
+        "zip": "backtest-result-2026-07-10_12-37-39.zip"
+      },
+      {
+        "strategy": "TrendRider",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_12-38-06_TrendRider.json",
+        "zip": "backtest-result-2026-07-10_12-38-06.zip"
+      },
+      {
+        "strategy": "TrendRider",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_12-43-51_TrendRider.json",
+        "zip": "backtest-result-2026-07-10_12-43-51.zip"
+      },
+      {
+        "strategy": "TrendRider",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_12-45-29_TrendRider.json",
+        "zip": "backtest-result-2026-07-10_12-45-29.zip"
+      }
+    ],
+    "BreakoutVol": [
+      {
+        "strategy": "BreakoutVol",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_12-46-32_BreakoutVol.json",
+        "zip": "backtest-result-2026-07-10_12-46-32.zip"
+      },
+      {
+        "strategy": "BreakoutVol",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_12-47-11_BreakoutVol.json",
+        "zip": "backtest-result-2026-07-10_12-47-11.zip"
+      }
+    ],
+    "RegimeSwitcher": [
+      {
+        "strategy": "RegimeSwitcher",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_12-50-58_RegimeSwitcher.json",
+        "zip": "backtest-result-2026-07-10_12-50-58.zip"
+      },
+      {
+        "strategy": "RegimeSwitcher",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_12-55-58_RegimeSwitcher.json",
+        "zip": "backtest-result-2026-07-10_12-55-58.zip"
+      },
+      {
+        "strategy": "RegimeSwitcher",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_12-58-55_RegimeSwitcher.json",
+        "zip": "backtest-result-2026-07-10_12-58-55.zip"
+      }
+    ],
+    "GridDCA": [
+      {
+        "strategy": "GridDCA",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_13-31-31_GridDCA.json",
+        "zip": "backtest-result-2026-07-10_13-31-31.zip"
+      },
+      {
+        "strategy": "GridDCA",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_13-35-09_GridDCA.json",
+        "zip": "backtest-result-2026-07-10_13-35-09.zip"
+      },
+      {
+        "strategy": "GridDCA",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_13-46-39_GridDCA.json",
+        "zip": "backtest-result-2026-07-10_13-46-39.zip"
+      },
+      {
+        "strategy": "GridDCA",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_13-59-21_GridDCA.json",
+        "zip": "backtest-result-2026-07-10_13-59-21.zip"
+      },
+      {
+        "strategy": "GridDCA",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_14-13-30_GridDCA.json",
+        "zip": "backtest-result-2026-07-10_14-13-30.zip"
+      },
+      {
+        "strategy": "GridDCA",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_14-18-22_GridDCA.json",
+        "zip": "backtest-result-2026-07-10_14-18-22.zip"
+      },
+      {
+        "strategy": "GridDCA",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_14-43-45_GridDCA.json",
+        "zip": "backtest-result-2026-07-10_14-43-45.zip"
+      }
+    ],
+    "RelativeMomentum": [
+      {
+        "strategy": "RelativeMomentum",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_15-04-33_RelativeMomentum.json",
+        "zip": "backtest-result-2026-07-10_15-04-33.zip"
+      },
+      {
+        "strategy": "RelativeMomentum",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_15-05-38_RelativeMomentum.json",
+        "zip": "backtest-result-2026-07-10_15-05-38.zip"
+      },
+      {
+        "strategy": "RelativeMomentum",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_15-13-23_RelativeMomentum.json",
+        "zip": "backtest-result-2026-07-10_15-13-23.zip"
+      },
+      {
+        "strategy": "RelativeMomentum",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_15-15-43_RelativeMomentum.json",
+        "zip": "backtest-result-2026-07-10_15-15-43.zip"
+      },
+      {
+        "strategy": "RelativeMomentum",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_15-16-40_RelativeMomentum.json",
+        "zip": "backtest-result-2026-07-10_15-16-40.zip"
+      },
+      {
+        "strategy": "RelativeMomentum",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_15-26-17_RelativeMomentum.json",
+        "zip": "backtest-result-2026-07-10_15-26-17.zip"
+      }
+    ],
+    "XSecMomentum": [
+      {
+        "strategy": "XSecMomentum",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_16-26-23_XSecMomentum.json",
+        "zip": "backtest-result-2026-07-10_16-26-23.zip"
+      },
+      {
+        "strategy": "XSecMomentum",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_16-26-46_XSecMomentum.json",
+        "zip": "backtest-result-2026-07-10_16-26-46.zip"
+      },
+      {
+        "strategy": "XSecMomentum",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_16-27-07_XSecMomentum.json",
+        "zip": "backtest-result-2026-07-10_16-27-07.zip"
+      },
+      {
+        "strategy": "XSecMomentum",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_16-27-27_XSecMomentum.json",
+        "zip": "backtest-result-2026-07-10_16-27-27.zip"
+      },
+      {
+        "strategy": "XSecMomentum",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_16-27-52_XSecMomentum.json",
+        "zip": "backtest-result-2026-07-10_16-27-52.zip"
+      },
+      {
+        "strategy": "XSecMomentum",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-10_16-28-16_XSecMomentum.json",
+        "zip": "backtest-result-2026-07-10_16-28-16.zip"
+      }
+    ],
+    "XSecMomentum20M": [
+      {
+        "strategy": "XSecMomentum20M",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-11_09-27-06_XSecMomentum20M.json",
+        "zip": "backtest-result-2026-07-11_09-27-06.zip"
+      },
+      {
+        "strategy": "XSecMomentum20M",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-11_09-27-24_XSecMomentum20M.json",
+        "zip": "backtest-result-2026-07-11_09-27-24.zip"
+      },
+      {
+        "strategy": "XSecMomentum20M",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-11_09-27-45_XSecMomentum20M.json",
+        "zip": "backtest-result-2026-07-11_09-27-45.zip"
+      },
+      {
+        "strategy": "XSecMomentum20M",
+        "stoploss_json": -0.1,
+        "params_file": "backtest-result-2026-07-11_09-27-56_XSecMomentum20M.json",
+        "zip": "backtest-result-2026-07-11_09-27-56.zip"
+      }
+    ]
+  }
+}
