@@ -109,12 +109,29 @@ Aislamiento completo del pipeline MeanRevBB. Ver `docs/dryrun_protocol.md`.
 
 ### Monitor (cada 5 min)
 
+**Produccion:** tarea programada Windows (sobrevive reinicios; reinicia si el proceso muere):
+
 ```powershell
-python -m risk.monitor          # bucle
+.\scripts\install_monitor_task.ps1   # una vez: registra + arranca Trading-XSec-Dryrun-Monitor
+Get-ScheduledTask -TaskName Trading-XSec-Dryrun-Monitor | Get-ScheduledTaskInfo
+```
+
+Log de la tarea: `user_data/logs/dryrun_monitor_task.log`
+
+**Manual / depuracion:**
+
+```powershell
+python -m risk.monitor          # bucle (muere con la sesion)
 python -m risk.monitor --once   # un ciclo
 ```
 
 Estado: `user_data/dryrun_monitor_state.json` · bandera alerta: `user_data/dryrun_monitor_alert.flag`
+
+El reporte semanal incluye **edad del ultimo heartbeat**; si lleva >= 3 dias sin actualizar, el monitor esta mudo.
+
+### Primer rebalanceo en vivo
+
+Senal al **cierre del lunes** (vela 1d); ejecucion esperada **martes al open**. Primer evento: **lun 13 / mar 14 jul 2026**. FreqUI dry-run: http://127.0.0.1:8082 — el monitor alerta si la entrada cae fuera de lun/mar.
 
 ### Parar
 

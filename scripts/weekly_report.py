@@ -18,6 +18,39 @@ ROOT = Path(__file__).resolve().parents[1]
 MONITOR_STATE = ROOT / "user_data" / "dryrun_monitor_state.json"
 DRYRUN_DB = ROOT / "user_data" / "dryrun_xsec.sqlite"
 REPORTS_DIR = ROOT / "user_data" / "reports" / "weekly"
+MONITOR_STALE_DAYS = 3
+
+
+def _parse_ts(ts: str) -> datetime:
+  dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+  if dt.tzinfo is None:
+    dt = dt.replace(tzinfo=timezone.utc)
+  return dt
+
+
+def monitor_heartbeat_age(mon: dict, now: datetime | None = None) -> dict:
+  """Edad del ultimo heartbeat del monitor (vigilante del vigilante)."""
+  now = now or datetime.now(timezone.utc)
+  ts = mon.get("ts")
+  if not ts:
+    return {"present": False, "age_label": "sin heartbeat", "stale": True}
+  last = _parse_ts(str(ts))
+  delta = now - last
+  total_min = int(delta.total_seconds() // 60)
+  if delta.days:
+    age_label = f"{delta.days}d {delta.seconds // 3600}h"
+  elif total_min >= 60:
+    age_label = f"{total_min // 60}h {total_min % 60}m"
+  else:
+    age_label = f"{total_min}m"
+  age_days = delta.total_seconds() / 86400
+  return {
+    "present": True,
+    "last_ts": ts,
+    "age_label": age_label,
+    "age_days": round(age_days, 2),
+    "stale": age_days >= MONITOR_STALE_DAYS,
+  }
 
 
 def _load_monitor() -> dict:
@@ -72,8 +105,12 @@ def _dryrun_stats() -> dict:
 def build_report_markdown() -> str:
   now = datetime.now(timezone.utc)
   mon = _load_monitor()
+  hb = monitor_heartbeat_age(mon, now)
   pipe = _pipeline_status()
   dry = _dryrun_stats()
+  hb_row = hb["age_label"]
+  if hb.get("stale"):
+    hb_row = f"**{hb_row} (MUDO >= {MONITOR_STALE_DAYS}d)**"
   lines = [
     f"# Reporte semanal dry-run XSecMomentum-m35",
     f"",
@@ -84,6 +121,7 @@ def build_report_markdown() -> str:
     f"| Campo | Valor |",
     f"|-------|-------|",
     f"| API OK | {mon.get('bot_ok', 'n/d')} |",
+    f"| Ultimo heartbeat monitor | {hb_row} |",
     f"| Trades abiertos (API) | {mon.get('open_trades', 'n/d')} |",
     f"| PnL cerrado (API) | {mon.get('profit_total', 'n/d')} |",
     f"| Max DD % (API) | {mon.get('max_drawdown_pct', 'n/d')} |",
@@ -111,6 +149,8 @@ def build_report_markdown() -> str:
       f"## Notas",
       f"",
       f"- Datos del dry-run **no** se usan para ajustar validación (ver `docs/dryrun_protocol.md`).",
+      f"- Monitor: tarea programada `Trading-XSec-Dryrun-Monitor` (ver `docs/OPERATIONS.md`).",
+      f"- Si el heartbeat del monitor lleva >= {MONITOR_STALE_DAYS} dias, revisar tarea o `user_data/logs/dryrun_monitor_task.log`.",
       f"- Programar en Windows: Tarea Programada -> `python scripts/weekly_report.py` semanal.",
       f"",
     ]

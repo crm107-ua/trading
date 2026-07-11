@@ -129,6 +129,19 @@ def test_gap_report_sqlite_fixture(tmp_path: Path) -> None:
   assert report.backtest_pnl == 95
 
 
+def test_monitor_heartbeat_age_stale() -> None:
+  import sys
+
+  sys.path.insert(0, str(ROOT / "scripts"))
+  import weekly_report as wr
+
+  now = datetime(2026, 7, 11, 12, 0, tzinfo=timezone.utc)
+  mon = {"ts": "2026-07-05T12:00:00+00:00", "bot_ok": True}
+  hb = wr.monitor_heartbeat_age(mon, now)
+  assert hb["stale"] is True
+  assert "6d" in hb["age_label"]
+
+
 def test_weekly_report_writes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
   import sys
 
@@ -137,11 +150,20 @@ def test_weekly_report_writes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
 
   monkeypatch.setattr(wr, "MONITOR_STATE", tmp_path / "mon.json")
   (tmp_path / "mon.json").write_text(
-    json.dumps({"bot_ok": True, "open_trades": 0, "alerts": []}),
+    json.dumps(
+      {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "bot_ok": True,
+        "open_trades": 0,
+        "alerts": [],
+      }
+    ),
     encoding="utf-8",
   )
   out = tmp_path / "w.md"
-  out.write_text(wr.build_report_markdown(), encoding="utf-8")
+  md = wr.build_report_markdown()
+  assert "Ultimo heartbeat monitor" in md
+  out.write_text(md, encoding="utf-8")
   assert "Dry-run" in out.read_text(encoding="utf-8")
 
 
