@@ -9,3 +9,5 @@ Baseline OOS — restaurado desde checkpoint
 ==> Walk-forward 12m/3m (300 epochs/ventana, warmup>=34d, train desde 
 2021-02-04)
     ventana 0: train 20210204-20220203
+    ventana 0: test 20220204-20220503
+    ventana 1: train 20210504-20220503
