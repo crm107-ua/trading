@@ -1,0 +1,425 @@
+{
+  "date": "2026-07-11",
+  "part1_stops": {
+    "n_trades": 350,
+    "by_exit_reason": {
+      "stop_loss": {
+        "n": 155,
+        "profit_pct_mean": -10.170701082326273,
+        "profit_pct_median": -10.17591308600052,
+        "profit_pct_min": -10.17982017982018,
+        "profit_pct_max": -10.095004145995649,
+        "duration_days_mean": 3.6451612903225805,
+        "duration_days_median": 2.0,
+        "profit_abs_sum": -198614.90758419
+      },
+      "xsec_bear_flat": {
+        "n": 22,
+        "profit_pct_mean": 21.105052818070174,
+        "profit_pct_median": 3.0062528666462347,
+        "profit_pct_min": -7.478583005325307,
+        "profit_pct_max": 252.08713038242618,
+        "duration_days_mean": 13.045454545454545,
+        "duration_days_median": 7.0,
+        "profit_abs_sum": 36065.75996522999
+      },
+      "xsec_rotation_exit": {
+        "n": 173,
+        "profit_pct_mean": 11.617346001240428,
+        "profit_pct_median": 4.528343376739879,
+        "profit_pct_min": -8.1731113445519,
+        "profit_pct_max": 199.25063666611373,
+        "duration_days_mean": 14.242774566473988,
+        "duration_days_median": 14.0,
+        "profit_abs_sum": 203190.03600639003
+      }
+    },
+    "stop_loss_analysis": {
+      "all_near_minus_10pct": true,
+      "none_near_minus_35pct": true,
+      "stops_with_monday_rank_gt4_before_exit": 11,
+      "rotation_exits_with_rank_lte4_on_close": 24,
+      "stop_pnl_sum": -198614.90758419,
+      "non_stop_pnl_sum": 239255.79597162,
+      "profile": "muchos_stops_pequenos_vs_cohetes"
+    },
+    "params_override_defect": {
+      "strategy_class_stoploss": -0.35,
+      "params_file_stoploss": {
+        "stoploss": -0.1
+      },
+      "actual_stop_ratio_in_trades": -0.1,
+      "verdict": "DEFECTO_MATERIALIZACION: screen_strategy PARAMS_TEMPLATE fuerza stoploss=-0.1 en XSecMomentum.json, anulando stoploss=-0.35 de la clase. Screen PASA us\u00f3 -10%, no -35%."
+    },
+    "rotation_bug": false
+  },
+  "part2_reconciliation": {
+    "steps": [
+      {
+        "step": "0_research_wfri_log",
+        "final_wealth": 10.367432960738457,
+        "max_dd": -0.8872832401154831,
+        "weekly_corr_vs_ft": 0.013694942250227599
+      },
+      {
+        "step": "1_monday_slots",
+        "config": {
+          "monday_rebalance": true,
+          "entry_next_open": false,
+          "fee_per_side": false,
+          "stop_on_low": null,
+          "discrete_compound": false,
+          "pit_dexe": false,
+          "bear_filter": true,
+          "top_n": 3,
+          "exit_rank_k": 4
+        },
+        "final_wealth_mult": 7.2227924893272295,
+        "final_wealth": 7.2227924893272295,
+        "max_dd": -0.4873576869396905,
+        "weekly_corr_vs_ft": 0.057759760966898235,
+        "sim_stats": {
+          "final_wealth_mult": 7.2227924893272295,
+          "n_stops": 0.0,
+          "n_rotations": 244.0,
+          "n_bear": 54.0
+        }
+      },
+      {
+        "step": "2_entry_open_t1",
+        "config": {
+          "monday_rebalance": true,
+          "entry_next_open": true,
+          "fee_per_side": false,
+          "stop_on_low": null,
+          "discrete_compound": false,
+          "pit_dexe": false,
+          "bear_filter": true,
+          "top_n": 3,
+          "exit_rank_k": 4
+        },
+        "final_wealth_mult": 7.2227924893272295,
+        "final_wealth": 7.2227924893272295,
+        "max_dd": -0.4873576869396905,
+        "weekly_corr_vs_ft": 0.057759760966898235,
+        "sim_stats": {
+          "final_wealth_mult": 7.2227924893272295,
+          "n_stops": 0.0,
+          "n_rotations": 244.0,
+          "n_bear": 54.0
+        }
+      },
+      {
+        "step": "3_fee_per_side",
+        "config": {
+          "monday_rebalance": true,
+          "entry_next_open": true,
+          "fee_per_side": true,
+          "stop_on_low": null,
+          "discrete_compound": false,
+          "pit_dexe": false,
+          "bear_filter": true,
+          "top_n": 3,
+          "exit_rank_k": 4
+        },
+        "final_wealth_mult": 7.111119127141059,
+        "final_wealth": 7.111119127141059,
+        "max_dd": -0.49904792470908055,
+        "weekly_corr_vs_ft": 0.05686450717132615,
+        "sim_stats": {
+          "final_wealth_mult": 7.111119127141059,
+          "n_stops": 0.0,
+          "n_rotations": 244.0,
+          "n_bear": 54.0
+        }
+      },
+      {
+        "step": "4_stop_low_10pct",
+        "config": {
+          "monday_rebalance": true,
+          "entry_next_open": true,
+          "fee_per_side": true,
+          "stop_on_low": -0.1,
+          "discrete_compound": false,
+          "pit_dexe": false,
+          "bear_filter": true,
+          "top_n": 3,
+          "exit_rank_k": 4
+        },
+        "final_wealth_mult": 6.405475657525148,
+        "final_wealth": 6.405475657525148,
+        "max_dd": -0.4527544995009992,
+        "weekly_corr_vs_ft": 0.0914221287137744,
+        "sim_stats": {
+          "final_wealth_mult": 6.405475657525148,
+          "n_stops": 168.0,
+          "n_rotations": 161.0,
+          "n_bear": 24.0
+        }
+      },
+      {
+        "step": "5_discrete_compound",
+        "config": {
+          "monday_rebalance": true,
+          "entry_next_open": true,
+          "fee_per_side": true,
+          "stop_on_low": -0.1,
+          "discrete_compound": true,
+          "pit_dexe": false,
+          "bear_filter": true,
+          "top_n": 3,
+          "exit_rank_k": 4
+        },
+        "final_wealth_mult": 8.244184881382415,
+        "final_wealth": 8.244184881382415,
+        "max_dd": -0.4707934225996683,
+        "weekly_corr_vs_ft": 0.09560586471806415,
+        "sim_stats": {
+          "final_wealth_mult": 8.244184881382415,
+          "n_stops": 168.0,
+          "n_rotations": 161.0,
+          "n_bear": 24.0
+        }
+      },
+      {
+        "step": "6_pit_dexe",
+        "config": {
+          "monday_rebalance": true,
+          "entry_next_open": true,
+          "fee_per_side": true,
+          "stop_on_low": -0.1,
+          "discrete_compound": true,
+          "pit_dexe": true,
+          "bear_filter": true,
+          "top_n": 3,
+          "exit_rank_k": 4
+        },
+        "final_wealth_mult": 8.244184881382415,
+        "final_wealth": 8.244184881382415,
+        "max_dd": -0.4707934225996683,
+        "weekly_corr_vs_ft": 0.09560586471806415,
+        "sim_stats": {
+          "final_wealth_mult": 8.244184881382415,
+          "n_stops": 168.0,
+          "n_rotations": 161.0,
+          "n_bear": 24.0
+        }
+      }
+    ],
+    "step_contribution": [
+      {
+        "step": "1_monday_slots",
+        "wealth_mult": 7.2227924893272295,
+        "delta_mult": -3.1446404714112273,
+        "delta_pct": -0.3033191035157886
+      },
+      {
+        "step": "2_entry_open_t1",
+        "wealth_mult": 7.2227924893272295,
+        "delta_mult": 0.0,
+        "delta_pct": 0.0
+      },
+      {
+        "step": "3_fee_per_side",
+        "wealth_mult": 7.111119127141059,
+        "delta_mult": -0.11167336218617052,
+        "delta_pct": -0.01546124471264887
+      },
+      {
+        "step": "4_stop_low_10pct",
+        "wealth_mult": 6.405475657525148,
+        "delta_mult": -0.7056434696159108,
+        "delta_pct": -0.09923100105617366
+      },
+      {
+        "step": "5_discrete_compound",
+        "wealth_mult": 8.244184881382415,
+        "delta_mult": 1.8387092238572667,
+        "delta_pct": 0.28705272210302635
+      },
+      {
+        "step": "6_pit_dexe",
+        "wealth_mult": 8.244184881382415,
+        "delta_mult": 0.0,
+        "delta_pct": 0.0
+      }
+    ],
+    "freqtrade_control_mult": 5.064088838743001,
+    "gap_final_mult_ratio": 1.6279700344729282,
+    "reconciliation_success": false,
+    "portfolio_comparison": {
+      "mondays_compared": 180,
+      "mismatch_weeks": 166,
+      "match_rate": 0.07777777777777772,
+      "first_sustained_divergence": {
+        "monday": "2021-08-16T00:00:00+00:00",
+        "freqtrade": [
+          "ETH/USDT",
+          "SOL/USDT",
+          "UNI/USDT"
+        ],
+        "sim": [
+          "DOGE/USDT",
+          "SOL/USDT",
+          "XRP/USDT"
+        ]
+      },
+      "sample_mismatches": [
+        {
+          "monday": "2021-08-16T00:00:00+00:00",
+          "freqtrade": [
+            "ETH/USDT",
+            "SOL/USDT",
+            "UNI/USDT"
+          ],
+          "sim": [
+            "DOGE/USDT",
+            "SOL/USDT",
+            "XRP/USDT"
+          ]
+        },
+        {
+          "monday": "2021-08-23T00:00:00+00:00",
+          "freqtrade": [
+            "ADA/USDT",
+            "SOL/USDT"
+          ],
+          "sim": [
+            "NEAR/USDT",
+            "SOL/USDT",
+            "XRP/USDT"
+          ]
+        },
+        {
+          "monday": "2021-08-30T00:00:00+00:00",
+          "freqtrade": [
+            "ADA/USDT",
+            "SOL/USDT"
+          ],
+          "sim": [
+            "ADA/USDT",
+            "NEAR/USDT",
+            "SOL/USDT"
+          ]
+        },
+        {
+          "monday": "2021-09-06T00:00:00+00:00",
+          "freqtrade": [
+            "ADA/USDT",
+            "NEAR/USDT",
+            "SOL/USDT"
+          ],
+          "sim": [
+            "DEXE/USDT",
+            "LTC/USDT",
+            "SOL/USDT"
+          ]
+        },
+        {
+          "monday": "2021-09-13T00:00:00+00:00",
+          "freqtrade": [
+            "SOL/USDT"
+          ],
+          "sim": [
+            "NEAR/USDT",
+            "SOL/USDT",
+            "TRX/USDT"
+          ]
+        },
+        {
+          "monday": "2021-09-27T00:00:00+00:00",
+          "freqtrade": [
+            "SOL/USDT",
+            "TRX/USDT"
+          ],
+          "sim": [
+            "BTC/USDT",
+            "ETH/USDT",
+            "UNI/USDT"
+          ]
+        },
+        {
+          "monday": "2021-10-11T00:00:00+00:00",
+          "freqtrade": [
+            "BNB/USDT",
+            "UNI/USDT"
+          ],
+          "sim": [
+            "BTC/USDT",
+            "XLM/USDT",
+            "XRP/USDT"
+          ]
+        },
+        {
+          "monday": "2021-10-18T00:00:00+00:00",
+          "freqtrade": [
+            "BNB/USDT",
+            "BTC/USDT",
+            "XLM/USDT"
+          ],
+          "sim": [
+            "BTC/USDT",
+            "XLM/USDT",
+            "ZEC/USDT"
+          ]
+        }
+      ]
+    },
+    "curves_keys": [
+      "freqtrade_actual",
+      "0_research_wfri_log",
+      "1_monday_slots",
+      "2_entry_open_t1",
+      "3_fee_per_side",
+      "4_stop_low_10pct",
+      "5_discrete_compound",
+      "6_pit_dexe"
+    ]
+  },
+  "filter_20m_reconciled_mode": {
+    "no_filter": {
+      "final_wealth_mult": 8.244184881382415
+    },
+    "filter_20m": {
+      "final_wealth_mult": 1.6646747186069872
+    },
+    "filter_improves": false
+  },
+  "instrument_correction": {
+    "research_log_overestimate_factor": 1.2575449374201817,
+    "research_vs_freqtrade_factor": 2.0472454751231894,
+    "fidelity_vs_freqtrade_factor": 1.6279700344729282,
+    "research_log_mult": 10.367432960738457,
+    "fidelity_mult": 8.244184881382415,
+    "freqtrade_mult": 5.064088838743001,
+    "rule": "El motor log-continuo W-FRI (B) sobreestima ~2.05\u00d7 vs Freqtrade; modo fidelidad residual ~1.63\u00d7. Criterios research (#14+) deben validarse en simulate_freqtrade_fidelity."
+  },
+  "remaining_gap": {
+    "named_causes": [
+      "PARAMS_TEMPLATE stoploss=-0.1 (defecto materializaci\u00f3n screen)",
+      "Latencia se\u00f1al lunes \u2192 ejecuci\u00f3n martes open (100% trades FT)",
+      "Stake policy / min_stake / confirm_trade_entry no modelados",
+      "ADX r\u00e9gimen: ta-lib en FT vs aproximaci\u00f3n pandas",
+      "Rank cross-section: merge per-pair FT vs panel global pandas"
+    ],
+    "first_portfolio_divergence": {
+      "monday": "2021-08-16T00:00:00+00:00",
+      "freqtrade": [
+        "ETH/USDT",
+        "SOL/USDT",
+        "UNI/USDT"
+      ],
+      "sim": [
+        "DOGE/USDT",
+        "SOL/USDT",
+        "XRP/USDT"
+      ]
+    }
+  },
+  "recommendation": {
+    "stop_defect": "DEFECTO_MATERIALIZACION: screen_strategy PARAMS_TEMPLATE fuerza stoploss=-0.1 en XSecMomentum.json, anulando stoploss=-0.35 de la clase. Screen PASA us\u00f3 -10%, no -35%.",
+    "screen_pasa_validity": "comprometido \u2014 stop real -10% no -35% documentado",
+    "degradation_20m_recheck": "confirmada",
+    "reconciliation": "parcial"
+  }
+}

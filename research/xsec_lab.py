@@ -751,3 +751,256 @@ def run_bias_control(
     cagr=m.cagr,
     n_pairs_at_end=int((last_w > 0).sum()),
   )
+
+
+# --- Reconciliación Freqtrade (13-D) ---
+
+
+@dataclass(frozen=True)
+class FidelityConfig:
+  """Mecánicas Freqtrade acumulativas (motor_reconciliation)."""
+
+  monday_rebalance: bool = False
+  entry_next_open: bool = False
+  fee_per_side: bool = False
+  stop_on_low: float | None = None
+  discrete_compound: bool = False
+  pit_dexe: bool = False
+  bear_filter: bool = True
+  top_n: int = 3
+  exit_rank_k: int = 4
+
+
+def load_ohlcv_1d(
+  datadir: Path | str = DEFAULT_DATADIR,
+  pairs: list[str] | None = None,
+  *,
+  start: str | None = "2021-01-01",
+  end: str | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+  """Carga OHLC 1d. Retorna (close, open, high, low) panels."""
+  datadir = Path(datadir)
+  closes: dict[str, pd.Series] = {}
+  opens: dict[str, pd.Series] = {}
+  highs: dict[str, pd.Series] = {}
+  lows: dict[str, pd.Series] = {}
+  for path in sorted(datadir.glob("*-1d.feather")):
+    pair = column_to_pair(path.stem.replace("-1d", ""))
+    if pairs is not None and pair not in pairs:
+      continue
+    df = pd.read_feather(path)
+    if "date" not in df.columns:
+      continue
+    idx = pd.to_datetime(df["date"], utc=True)
+    for col, store in (("close", closes), ("open", opens), ("high", highs), ("low", lows)):
+      if col not in df.columns:
+        continue
+      s = pd.Series(df[col].astype(float).values, index=idx).sort_index()
+      s.name = pair
+      store[pair] = s
+  if not closes:
+    raise FileNotFoundError(f"sin OHLC 1d en {datadir}")
+  out = tuple(
+    pd.DataFrame(d).sort_index().loc[pd.Timestamp(start, tz="UTC") :]
+    if start
+    else pd.DataFrame(d).sort_index()
+    for d in (closes, opens, highs, lows)
+  )
+  if end:
+    out = tuple(df.loc[: pd.Timestamp(end, tz="UTC")] for df in out)
+  return out  # type: ignore[return-value]
+
+
+def momentum_rank_panel(
+  close: pd.DataFrame,
+  window: int,
+  *,
+  pit_dates: dict[str, pd.Timestamp] | None = None,
+) -> pd.DataFrame:
+  scores = momentum_score(close, window)
+  if pit_dates:
+    for pair, listing in pit_dates.items():
+      if pair in scores.columns:
+        scores.loc[scores.index < listing, pair] = np.nan
+  return scores.rank(axis=1, method="min", ascending=False, na_option="keep")
+
+
+def _rebalance_index(index: pd.DatetimeIndex, *, monday: bool) -> set[pd.Timestamp]:
+  if monday:
+    return set(index[index.weekday == 0])
+  return set(_rebalance_dates(index, "W"))
+
+
+def simulate_freqtrade_fidelity(
+  close: pd.DataFrame,
+  open_: pd.DataFrame,
+  low: pd.DataFrame,
+  ranks: pd.DataFrame,
+  regime: pd.Series,
+  config: FidelityConfig,
+  *,
+  initial_wallet: float = 10_000.0,
+  fee_rate: float = 0.001,
+) -> tuple[pd.Series, dict[str, float]]:
+  """
+  Simulador event-driven 3 slots alineado a XSecMomentum en Freqtrade.
+
+  Retorna serie diaria de equity (USDT) y estadísticas auxiliares.
+  """
+  close = close.sort_index().ffill()
+  open_ = open_.reindex(close.index).ffill()
+  low = low.reindex(close.index).ffill()
+  ranks = ranks.reindex(close.index)
+  regime = regime.reindex(close.index).ffill()
+
+  rb_signal_days = _rebalance_index(close.index, monday=config.monday_rebalance)
+  pending_entries: list[str] = []
+  slots: list[dict | None] = [None, None, None]
+  wallet = float(initial_wallet)
+  base_stake = initial_wallet / config.top_n
+  equity_hist: list[float] = []
+  dates_out: list[pd.Timestamp] = []
+  n_stops = 0
+  n_rotations = 0
+  n_bear = 0
+  startup_skip = 220
+
+  def _slot_value(slot: dict, dt: pd.Timestamp) -> float:
+    px = close.loc[dt, slot["pair"]]
+    if pd.isna(px):
+      return slot["stake"]
+    return slot["stake"] * float(px) / slot["entry_price"]
+
+  def _close_slot(i: int, dt: pd.Timestamp, price: float, reason: str) -> None:
+    nonlocal wallet, n_stops, n_rotations, n_bear
+    slot = slots[i]
+    if not slot:
+      return
+    proceeds = slot["stake"] * price / slot["entry_price"]
+    if config.fee_per_side:
+      proceeds *= 1.0 - fee_rate
+    wallet += proceeds
+    if reason == "stop":
+      n_stops += 1
+    elif reason == "rotation":
+      n_rotations += 1
+    elif reason == "bear":
+      n_bear += 1
+    slots[i] = None
+
+  def _open_slot(dt: pd.Timestamp, pair: str, *, check_bear: bool) -> None:
+    nonlocal wallet
+    if check_bear and config.bear_filter and str(regime.loc[dt]) == "BEAR":
+      return
+    if pair not in close.columns:
+      return
+    px = float(open_.loc[dt, pair])
+    if pd.isna(px) or px <= 0:
+      return
+    free = next((j for j, s in enumerate(slots) if s is None), None)
+    if free is None:
+      return
+    if config.discrete_compound:
+      stake = wallet / config.top_n
+    else:
+      stake = base_stake
+    if config.fee_per_side:
+      stake *= 1.0 - fee_rate
+    if stake <= 0:
+      return
+    wallet -= stake
+    slots[free] = {"pair": pair, "entry_price": px, "stake": stake}
+
+  def _exec_price(dt: pd.Timestamp, pair: str) -> float:
+    if config.entry_next_open or config.monday_rebalance:
+      return float(open_.loc[dt, pair])
+    return float(close.loc[dt, pair])
+
+  for i, dt in enumerate(close.index):
+    if i < startup_skip:
+      equity_hist.append(float(initial_wallet))
+      dates_out.append(dt)
+      continue
+
+    # Entradas pendientes (open t+1 respecto a señal)
+    if pending_entries and config.entry_next_open:
+      for pair in pending_entries:
+        _open_slot(dt, pair, check_bear=True)
+      pending_entries = []
+
+    # Stop intradía
+    if config.stop_on_low is not None:
+      for si, slot in enumerate(slots):
+        if not slot:
+          continue
+        lo = low.loc[dt, slot["pair"]]
+        if pd.notna(lo) and float(lo) <= slot["entry_price"] * (1.0 + config.stop_on_low):
+          stop_px = slot["entry_price"] * (1.0 + config.stop_on_low)
+          _close_slot(si, dt, stop_px, "stop")
+
+    # Freqtrade 1d: señal lunes (cierre), ejecución martes open (100% trades en zip control).
+    exec_rebalance = False
+    signal_dt = dt
+    if config.monday_rebalance and dt.weekday() == 1 and i > 0:
+      prev = close.index[i - 1]
+      if prev.weekday() == 0:
+        exec_rebalance = True
+        signal_dt = prev
+    elif not config.monday_rebalance and dt in rb_signal_days:
+      exec_rebalance = True
+
+    if exec_rebalance:
+      if config.bear_filter and str(regime.loc[signal_dt]) == "BEAR":
+        for si in range(len(slots)):
+          if slots[si]:
+            px = _exec_price(dt, slots[si]["pair"])
+            _close_slot(si, dt, px, "bear")
+      else:
+        row = ranks.loc[signal_dt] if signal_dt in ranks.index else None
+        if row is not None:
+          for si, slot in enumerate(slots):
+            if not slot:
+              continue
+            rk = row.get(slot["pair"], np.nan)
+            if pd.notna(rk) and float(rk) > config.exit_rank_k:
+              px = _exec_price(dt, slot["pair"])
+              _close_slot(si, dt, px, "rotation")
+          held = {s["pair"] for s in slots if s}
+          candidates = []
+          for pair in close.columns:
+            rk = row.get(pair, np.nan)
+            if pd.notna(rk) and float(rk) <= config.top_n and pair not in held:
+              candidates.append((float(rk), pair))
+          candidates.sort()
+          for _, pair in candidates[: config.top_n - len(held)]:
+            if config.entry_next_open and not config.monday_rebalance:
+              pending_entries.append(pair)
+            else:
+              _open_slot(dt, pair, check_bear=True)
+
+    eq = wallet + sum(_slot_value(s, dt) for s in slots if s)
+    equity_hist.append(eq)
+    dates_out.append(dt)
+
+  equity = pd.Series(equity_hist, index=pd.DatetimeIndex(dates_out, tz="UTC"))
+  stats = {
+    "final_wealth_mult": float(equity.iloc[-1] / initial_wallet),
+    "n_stops": float(n_stops),
+    "n_rotations": float(n_rotations),
+    "n_bear": float(n_bear),
+  }
+  return equity, stats
+
+
+def equity_to_log_returns(equity: pd.Series) -> pd.Series:
+  eq = equity.replace(0, np.nan).ffill()
+  return np.log(eq / eq.shift(1)).fillna(0.0)
+
+
+def weekly_return_correlation(a: pd.Series, b: pd.Series) -> float:
+  wa = a.resample("W-FRI").last().pct_change().dropna()
+  wb = b.resample("W-FRI").last().pct_change().dropna()
+  joined = pd.concat([wa, wb], axis=1, join="inner").dropna()
+  if len(joined) < 5:
+    return float("nan")
+  return float(joined.iloc[:, 0].corr(joined.iloc[:, 1]))

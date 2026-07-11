@@ -41,7 +41,7 @@ Config: `user_data/config/screen_xsec.json` (`max_open_trades: 3`).
 | Motor pandas | Freqtrade XSecMomentum | Por qué |
 |--------------|------------------------|---------|
 | Cartera log-return continua | Trades discretos por par | Freqtrade es event-driven por par |
-| Sin stop | `stoploss = -0.35` fijo, `use_custom_stoploss=False` | Emergencia; pandas no tenía stop |
+| Sin stop | `stoploss = -0.35` en clase; **screen materializa −0.1** vía `PARAMS_TEMPLATE` | Emergencia; ver reconciliación 13-D |
 | Régimen implícito en research | BEAR vía `add_regime_indicators` en **BTC 1d** | Freqtrade exige informative TF ≥ strategy TF; `_base` fija BTC@4h → incompatible con 1d nativo sin tocar `_base.py` |
 | Clasificador BEAR “validado” (`_base` BTC@4h) | **Clasificador variante BTC@1d** — misma fórmula EMA200+ADX, otro timeframe | **No es el clasificador validado del lab.** Truncation/recursive cubren causalidad, no equivalencia de comportamiento. Validación full debe tratarlo como pieza nueva. |
 | Hereda QuantBaseStrategy | Hereda **IStrategy** | Evita `@informative("4h")` del padre en estrategia 1d |
@@ -185,6 +185,74 @@ Artefactos: `research/output/autopsy_20m_20260711.json`, `research/output/autops
 
 ---
 
+## Reconciliación motores 13-D (2026-07-11)
+
+**Pregunta:** la ablación 13-B no reprodujo Freqtrade (pandas 15.37×/14.51× vs FT 2.7×/5.1×). Objetivo: nombrar el gap y explicar la anomalía de stops.
+
+### Parte 1 — Anomalía stops (zip control #10, 350 trades)
+
+| Exit reason | N | PnL% medio | Duración mediana | PnL abs sum |
+|-------------|---|------------|------------------|-------------|
+| `stop_loss` | 155 | **−10.17%** (todos ~−10%) | **2 días** | −198 615 |
+| `xsec_rotation_exit` | 173 | +11.6% | **14 días** | +203 190 |
+| `xsec_bear_flat` | 22 | +21.1% | 7 días | +36 066 |
+
+- **Los 155 stops NO pierden −35%** — salen a **−10.18%** (`stop_loss_ratio = −0.1`).
+- **Causa:** `user_data/tools/screen_strategy.py` → `PARAMS_TEMPLATE` escribe `"stoploss": -0.1` en `XSecMomentum.json`, anulando `stoploss = -0.35` de la clase. El screen PASA (#10) operó con **−10%**, no −35% documentado.
+- **Rotación no rota:** 173 salidas por rotación (mediana 14 días); solo 11/155 stops tuvieron rank>4 en algún lunes previo. El perfil extremo de stops era **lectura errónea del nivel** (−10% en ~2 días, no −35% en semanas).
+- **PnL neto +40.6k:** patrón «muchos stops pequeños (−199k) vs cohetes (+239k)» — no dominancia de stops.
+- **Screen PASA:** validez **comprometida** en dimension stop (defecto de materialización, no bug de rotación).
+
+### Parte 2 — Ablación fidelidad incremental (control sin filtro)
+
+Motor: `simulate_freqtrade_fidelity()` en `research/xsec_lab.py` + `research/motor_reconciliation.py`.  
+Referencia FT: zip `backtest-result-2026-07-10_16-26-23` → **5.06×** (10k→50.6k).
+
+| Paso | Mecánica | Múltiplo | Δ mult | Corr. sem. vs FT |
+|------|----------|----------|--------|------------------|
+| 0 | Research W-FRI log continuo (B) | 10.37× | — | 0.01 |
+| 1 | Lunes señal + 3 slots; **ejecución martes open** | 7.22× | −3.15 | 0.06 |
+| 2 | Entrada open t+1 (redundante con martes) | 7.22× | 0 | 0.06 |
+| 3 | Fees 0.1% por lado | 7.11× | −0.11 | 0.06 |
+| 4 | Stop −10% intradía (low) | 6.41× | −0.71 | 0.09 |
+| 5 | Compounding stake = wallet/3 | 8.24× | +1.84 | 0.10 |
+| 6 | PIT DEXE (2021-07-23) | 8.24× | 0 | 0.10 |
+| **FT control** | — | **5.06×** | — | 1.00 |
+
+**Criterio éxito** (corr. semanal >0.9, múltiplo ±30%): **no alcanzado** — gap residual **1.63×** (8.24 vs 5.06).
+
+**Gap con nombre (dos capas):**
+
+1. **Motor research optimista (~2.0×):** log-continuo W-FRI sin slots → 10.37× vs FT 5.06×. Factor de corrección instrumento: **~2.05×** (research/FT).
+2. **Infidelidad residual (~1.63×):** tras las 6 mecánicas, el simulador aún sobreestima. Sospechosos no modelados: `evaluate_min_stake_policy` (rechazos de entrada), `confirm_trade_entry` (re-check BEAR en martes), ADX/EMA200 vía `ta-lib` vs aproximación pandas en `compute_btc_regime_daily`, merge informative por par (rank puede diferir del panel global — primera divergencia sostenida **2021-08-16**: FT ETH/SOL/UNI vs sim DOGE/SOL/XRP).
+
+**Clasificación por mecánica:**
+
+| Mecánica | Tipo | Efecto |
+|----------|------|--------|
+| W-FRI → lunes/martes + slots | Coste real de ejecutar | −30% mult |
+| Fees por lado | Coste real | −1.5% |
+| Stop −10% intradía | Coste real + **defecto materialización** (nivel screen ≠ clase) | −10% |
+| Compounding wallet/3 | Coste real (parcialmente modelado) | +29% (sobrecompensa vs FT — stake policy no capturada) |
+| PIT DEXE | Neutro en este timerange | 0 |
+
+### Re-evaluación degradación 20M (modo fidelidad final)
+
+| Config | Múltiplo modo fidelidad |
+|--------|-------------------------|
+| Sin filtro | **8.24×** |
+| Filtro 20M | **1.66×** |
+
+El filtro **sigue empeorando** en motor reconciliado (como Freqtrade 5.1→2.7) → degradación primaria 20M **confirmada con mecanismo**, no prematura.
+
+### Regla instrumento (#14+)
+
+> Criterios de `xsec_lab` en modo log-continuo W-FRI (B) sobreestiman ~**2×** vs Freqtrade. Todo screen research debe validarse también en `simulate_freqtrade_fidelity` (modo 6_pit_dexe). Umbral mínimo: múltiplo fidelidad dentro de ±30% del zip Freqtrade de referencia.
+
+Artefactos: `research/output/motor_reconciliation_20260711.json`, `research/output/motor_reconciliation_20260711.png`
+
+---
+
 **Timerange screen:** `20210101-` → datos hasta **2026-07-09** (ventana completa protocolo). Primer trade **2021-08-10** (warmup ~220 velas 1d). Último cierre **2026-06-02**.
 
 **Configs mergeados:** `base.json` + `backtest.json` + `screen_xsec.json` — `fee: 0.001` confirmado en zip archivado (`*_config.json`).
@@ -271,16 +339,17 @@ Reporte screen original: `user_data/validation_reports/screen/XSecMomentum/20260
 
 ---
 
-## MeanRevBB al cierre de implementación (2026-07-11 ~11:35 UTC+2)
+## MeanRevBB al cierre de reconciliación 13-D (2026-07-11 ~12:00 UTC+2)
 
 | Campo | Valor |
 |-------|-------|
-| Lock | **LOCKED** — `run_id=20260709_162954`, pid **16944** |
-| Fase | WF ventana 0 — `.fthypt` ~70 MB (`strategy_MeanRevBB_2026-07-11_08-58-25.fthypt`), **~65–110/300** epochs (estimado) |
-| Heartbeat | Último audit `2026-07-11T08:58:17Z` |
+| Lock | **LOCKED** — `run_id=20260709_162954`, pid **16944** (vivo) |
+| Fase | WF ventana 0 — `strategy_MeanRevBB_2026-07-11_08-58-25.fthypt` **~91 MB**, **~248/300** epochs (líneas JSON) |
+| Última escritura `.fthypt` | 2026-07-11 11:47 local |
+| Heartbeat lock | `2026-07-11T08:58:17Z` (sin actualizar; proceso activo) |
 | `report.json` | No |
 
-**Aislamiento:** `MeanRevBB.py` no importa estrategias XSec ni `screen_strategy.py`. Nada del run vivo modificado en `pipeline/`, `_base.py`, `quant_core.py`, `MeanRevBB.py`, configs base ni `hyperopt_results/`.
+**Aislamiento:** sin cambios en `pipeline/`, `_base.py`, `quant_core.py`, `MeanRevBB.py`, configs base ni `hyperopt_results/`.
 
 ---
 

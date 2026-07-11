@@ -23,6 +23,7 @@
 | 13-A | **Autopsia (no intento nuevo):** LOO ex-SOL en pandas 20M — ¿H-frágil? | E2−SOL, filtro 20M w14 W B | `xsec_lab` cartera 20M sin SOL vs EW filtrado sin SOL | Wealth 20M ex-SOL < EW ex-SOL → H-frágil confirmada | **H-frágil rechazada** — 20M ex-SOL 12.35× > EW 1.25×; +51% vs sin filtro ex-SOL | 2026-07-11 |
 | 13-B | **Autopsia (no intento nuevo):** ablación mecánica Freqtrade en pandas | E2, 20M vs sin filtro | Slots→BEAR→stop−35%→liq.exit acumulativo | Paso que invierte beneficio 20M vs sin filtro | **Ningún paso invierte** — filtro sigue mejorando; slots comprimen múltiplo 15.6→7.0 | 2026-07-11 |
 | 13-C | **Autopsia (no intento nuevo):** forense zips Freqtrade 20M vs control | Trades screen existentes | PnL por par, exit_reason, composición | Inversión explicada por DEXE/ZEC filtrados | **Composición** — control +26k DEXE; 20M dominado SOL; 1× liq.exit | 2026-07-11 |
+| 13-D | **Reconciliación (no intento nuevo):** gap pandas↔Freqtrade + anomalía stops | Control #10 zip + `xsec_lab` fidelidad | Ablación 6 mecánicas; PnL por exit_reason; modo fidelidad 20M | Sim final ±30% FT control **o** gap nombrado | **Parcial** — stops reales −10% (PARAMS_TEMPLATE); research ~2.05× optimista; residual 1.63× (stake policy/rank merge); 20M sigue degradando en fidelidad (8.24→1.66×) | 2026-07-11 |
 
 ---
 
