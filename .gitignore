@@ -1,6 +1,7 @@
 # Secretos — live.json con claves reales (usar live.example.json como plantilla)
 user_data/config/live.json
 .env
+carlos_key
 
 # Datos y artefactos de ejecución (NO sincronizar entre PCs — solo git)
 user_data/data/
