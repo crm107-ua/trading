@@ -12,10 +12,16 @@ $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 
 $FixtureStrategies = @("SmokeTestStrategy", "TrendRider", "MeanRevBB", "BreakoutVol", "RegimeSwitcher", "GridDCA")
-# XSecMomentum / XSecMomentum20M: requieren universo E2 + datos reales:
-#   .\scripts\backtest_all.ps1 -Strategy XSecMomentum -RealData -Timerange 20210101-
-#   (añadir user_data/config/screen_xsec.json a $ConfigArgs manualmente)
+$XSecStrategies = @("XSecMomentum", "XSecMomentum20M")
 $ConfigArgs = @("user_data/config/base.json", "user_data/config/backtest.json")
+
+if ($XSecStrategies -contains $Strategy) {
+  if (-not $RealData) {
+    Write-Error "XSecMomentum requiere -RealData y user_data/config/screen_xsec.json"
+    exit 1
+  }
+  $ConfigArgs += "user_data/config/screen_xsec.json"
+}
 
 if ($RealData) {
   if (-not $Timerange) { $Timerange = "20230101-20240320" }

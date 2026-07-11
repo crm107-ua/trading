@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+XSEC_REAL_PROBE = ROOT / "user_data" / "data" / "binance" / "BTC_USDT-1d.feather"
 FIXTURE_CONFIGS = [
   "user_data/config/base.json",
   "user_data/config/backtest.json",
@@ -463,6 +464,24 @@ def test_grid_dca_cycle_and_budget(fixtures_datadir: Path) -> None:
   output = (result.stdout or "") + (result.stderr or "")
   assert result.returncode == 0, f"grid_dca_check falló\n{output[-4000:]}"
   assert "OK: auditoría GridDCA completada" in output
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("strategy", ["XSecMomentum", "XSecMomentum20M"])
+@pytest.mark.skipif(not _docker_available(), reason="Docker no disponible")
+@pytest.mark.skipif(not _env_file_exists(), reason="Falta archivo .env")
+@pytest.mark.skipif(not XSEC_REAL_PROBE.is_file(), reason="sin datos 1d reales (BTC_USDT-1d.feather)")
+def test_xsec_smoke_backtest_real_data(strategy: str) -> None:
+  """XSec en universo E2 — requiere datos reales 1d, no fixtures."""
+  result = _run_backtest(
+    strategy,
+    "20230101-20240320",
+    extra_configs=["user_data/config/screen_xsec.json"],
+    fixtures=False,
+  )
+  output = (result.stdout or "") + (result.stderr or "")
+  assert result.returncode == 0, f"Backtest XSec falló para {strategy}\n{output[-3000:]}"
+  assert "STRATEGY SUMMARY" in output or "Backtested" in output
 
 
 def test_no_hardcoded_secrets_in_repo() -> None:
