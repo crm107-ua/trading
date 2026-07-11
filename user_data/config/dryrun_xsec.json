@@ -1,0 +1,59 @@
+{
+  "max_open_trades": 3,
+  "dry_run": true,
+  "dry_run_wallet": 10000,
+  "db_url": "sqlite:////freqtrade/user_data/dryrun_xsec.sqlite",
+  "bot_name": "xsec-m35-dryrun",
+  "telegram": {
+    "enabled": false
+  },
+  "exchange": {
+    "name": "binance",
+    "key": "",
+    "secret": "",
+    "ccxt_config": { "enableRateLimit": true },
+    "ccxt_async_config": { "enableRateLimit": true },
+    "pair_whitelist": [
+      "AAVE/USDT",
+      "ADA/USDT",
+      "BNB/USDT",
+      "BTC/USDT",
+      "DEXE/USDT",
+      "DOGE/USDT",
+      "ETH/USDT",
+      "LTC/USDT",
+      "NEAR/USDT",
+      "SKL/USDT",
+      "SOL/USDT",
+      "TRX/USDT",
+      "UNI/USDT",
+      "XLM/USDT",
+      "XRP/USDT",
+      "ZEC/USDT"
+    ],
+    "pair_blacklist": [
+      ".*UP/USDT",
+      ".*DOWN/USDT",
+      ".*BULL/USDT",
+      ".*BEAR/USDT",
+      "USDC/USDT",
+      "BUSD/USDT",
+      "TUSD/USDT",
+      "USDP/USDT",
+      "DAI/USDT",
+      "FDUSD/USDT"
+    ]
+  },
+  "pairlists": [{ "method": "StaticPairList" }],
+  "api_server": {
+    "enabled": true,
+    "listen_ip_address": "0.0.0.0",
+    "listen_port": 8082,
+    "verbosity": "error",
+    "enable_openapi": true,
+    "jwt_secret_key": "${FREQTRADE__API_SERVER__JWT_SECRET_KEY}",
+    "CORS_origins": ["http://localhost:3001", "http://localhost:8082"],
+    "username": "${FREQTRADE__API_SERVER__USERNAME}",
+    "password": "${FREQTRADE__API_SERVER__PASSWORD}"
+  }
+}

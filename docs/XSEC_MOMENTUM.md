@@ -304,12 +304,16 @@ Variantes: `user_data/fixtures/screen_variants/XSecMomentum.json`
 
 ## Pre-registro validación full (2026-07-11, congelado antes de `report.json` MeanRevBB)
 
+**Riesgo abierto (13-E):** el múltiplo absoluto Freqtrade contiene un factor **~3.6×** no reconciliado con el instrumento (`diagnose_m35_13e_20260711.json`). El veredicto full debe apoyarse en **métricas relativas y de estabilidad** (WFE, % ventanas positivas, DD, LOO), **no en el múltiplo** — para que un 26× no deslumbre la lectura.
+
+**Dry-run:** arrancado bajo `docs/dryrun_protocol.md` — reloj de brecha activo; datos solo para comparador post-veredicto.
+
 Basado en research día 2 (`research/results_20260711.md`, intento #13 PASA).
 
 | Rol | Qué se valida |
 |-----|----------------|
-| **Configuración primaria** | **XSecMomentum-20M** — mismo motor screen (#10) + **filtro liquidez dinámico** |
-| **Control** | XSecMomentum E2 **sin filtro** (screen #10) — comparación, no hipótesis operativa post-#13 |
+| **Configuración primaria** | **XSecMomentum-20M** — **degradada** (13-E); no validar |
+| **Control** | **XSecMomentum-m35** (`stop_design_m35`, 10-RS) — única config validación full |
 
 ### Regla de liquidez (obligatoria en implementación)
 

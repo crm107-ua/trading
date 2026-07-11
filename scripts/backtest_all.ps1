@@ -12,6 +12,9 @@ $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 
 $FixtureStrategies = @("SmokeTestStrategy", "TrendRider", "MeanRevBB", "BreakoutVol", "RegimeSwitcher", "GridDCA")
+# XSecMomentum / XSecMomentum20M: requieren universo E2 + datos reales:
+#   .\scripts\backtest_all.ps1 -Strategy XSecMomentum -RealData -Timerange 20210101-
+#   (añadir user_data/config/screen_xsec.json a $ConfigArgs manualmente)
 $ConfigArgs = @("user_data/config/base.json", "user_data/config/backtest.json")
 
 if ($RealData) {

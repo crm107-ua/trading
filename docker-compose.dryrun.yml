@@ -1,0 +1,26 @@
+# Dry-run aislado XSecMomentum-m35 — NO tocar docker-compose.yml del lab.
+services:
+  xsec-dryrun:
+    image: freqtradeorg/freqtrade@sha256:87aa5c6d65359b34e9d99a0bb260a38c0efe0315253811e6f48c2afe8f278a6a
+    container_name: xsec-dryrun
+    restart: unless-stopped
+    volumes:
+      - ./user_data:/freqtrade/user_data
+      - ./scripts/xsec_dryrun_entrypoint.sh:/freqtrade/scripts/xsec_dryrun_entrypoint.sh:ro
+    env_file:
+      - .env
+    ports:
+      - "8082:8082"
+    entrypoint: ["/bin/sh", "/freqtrade/scripts/xsec_dryrun_entrypoint.sh"]
+    command: >
+      trade
+      --config /freqtrade/user_data/config/base.json
+      --config /freqtrade/user_data/config/dryrun_xsec.json
+      --strategy XSecMomentum
+      --strategy-path /freqtrade/user_data/strategies
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/api/v1/ping"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+      start_period: 90s

@@ -85,3 +85,71 @@ Errores dentro de la vela (no detectados por signal-truncation) que la estrategi
 Los contenedos efímeros de `docker compose run … hyperopt` pueden aparecer como **unhealthy** en `docker ps` si heredan o exponen healthcheck sin api_server — es **benigno** durante batches de hyperopt de horas/días. No interpretar `unhealthy` como fallo del run salvo que el proceso haya salido o los logs muestren error.
 
 Los números de backtest sobre **fixtures** (p. ej. TrendRider +64 % en `20240101-20240320`) están diseñados para *disparar* señales en ventanas sintéticas; **no citar como estimación de rentabilidad**.
+
+---
+
+## Dry-run XSecMomentum-m35 (Fase 5)
+
+Aislamiento completo del pipeline MeanRevBB. Ver `docs/dryrun_protocol.md`.
+
+| Recurso | Valor |
+|---------|-------|
+| Compose | `docker-compose.dryrun.yml` (no tocar `docker-compose.yml`) |
+| Contenedor | `xsec-dryrun` |
+| API | http://127.0.0.1:8082 |
+| DB | `user_data/dryrun_xsec.sqlite` |
+| Params | `user_data/strategies/XSecMomentum_m35_frozen.json` |
+| Reloj inicio | `user_data/dryrun_xsec_started.json` |
+
+### Arrancar
+
+```powershell
+.\scripts\start_xsec_dryrun.ps1
+```
+
+### Monitor (cada 5 min)
+
+```powershell
+python -m risk.monitor          # bucle
+python -m risk.monitor --once   # un ciclo
+```
+
+Estado: `user_data/dryrun_monitor_state.json` · bandera alerta: `user_data/dryrun_monitor_alert.flag`
+
+### Parar
+
+```powershell
+docker compose -f docker-compose.dryrun.yml down
+```
+
+### Reporte semanal (manual)
+
+```powershell
+python scripts/weekly_report.py
+```
+
+Salida: `user_data/reports/weekly/<ISO-week>.md`
+
+### Alertas
+
+| Código | Condición |
+|--------|-----------|
+| `bot_down` | API no responde |
+| `drawdown_high` | DD dry-run > 15% |
+| `stale_position` | Posición abierta > 21 días |
+| `rebalance_timing_violation` | Entrada fuera de lun/mar |
+
+### Go-live (bloquea hasta verde)
+
+```powershell
+python scripts/go_live_check.py --strategy XSecMomentum
+```
+
+Hoy debe fallar todo (sin veredicto ROBUSTA, brecha sin datos).
+
+### Brecha (futuro, post-veredicto)
+
+```powershell
+python user_data/tools/dryrun_gap_report.py --db user_data/dryrun_xsec.sqlite `
+  --backtest-zip <zip> --timerange <igual-al-dryrun> --output user_data/dryrun_gap_report.json
+```

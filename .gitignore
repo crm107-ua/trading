@@ -14,6 +14,14 @@ user_data/notebooks/.ipynb_checkpoints/
 # Parámetros optimizados por estrategia (generados en hyperopt/validación)
 user_data/strategies/*.json
 !user_data/strategies/*.example.json
+!user_data/strategies/XSecMomentum_m35_frozen.json
+
+# Dry-run XSec — estado local (no sincronizar)
+user_data/dryrun_xsec.sqlite
+user_data/dryrun_monitor_state.json
+user_data/dryrun_xsec_started.json
+user_data/dryrun_gap_report.json
+user_data/reports/weekly/
 
 # Reportes generados
 reports/
