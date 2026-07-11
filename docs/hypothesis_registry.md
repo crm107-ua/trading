@@ -24,7 +24,7 @@
 | 13-B | **Autopsia (no intento nuevo):** ablación mecánica Freqtrade en pandas | E2, 20M vs sin filtro | Slots→BEAR→stop−35%→liq.exit acumulativo | Paso que invierte beneficio 20M vs sin filtro | **Ningún paso invierte** — filtro sigue mejorando; slots comprimen múltiplo 15.6→7.0 | 2026-07-11 |
 | 13-C | **Autopsia (no intento nuevo):** forense zips Freqtrade 20M vs control | Trades screen existentes | PnL por par, exit_reason, composición | Inversión explicada por DEXE/ZEC filtrados | **Composición** — control +26k DEXE; 20M dominado SOL; 1× liq.exit | 2026-07-11 |
 | 13-D | **Reconciliación (no intento nuevo):** gap pandas↔Freqtrade + anomalía stops | Control #10 zip + `xsec_lab` fidelidad | Ablación 6 mecánicas; PnL por exit_reason; modo fidelidad 20M | Sim final ±30% FT control **o** gap nombrado | **Parcial** — stops reales −10% (PARAMS_TEMPLATE); research ~2.05× optimista; residual 1.63× (stake policy/rank merge); 20M sigue degradando en fidelidad (8.24→1.66×) | 2026-07-11 |
-| 10-RS | **Re-screen #10 (stop honesto):** misma hipótesis, dos stops pre-fijados | E2, w14 top-3 K4 | Screen Freqtrade `XSecMomentum_rescreen_stop.json`: `stop_design_m35` (−0.35) vs `stop_accidental_m10` (−0.1); criterios rotación + LOO + DD intactos | Cada variante juzgada por separado; si solo pasa −0.1 → PASA con descuento post-hoc explícito; si ninguna → candidato cae | **PENDIENTE** — pre-registrado 2026-07-11; screen tras cierre ventana WF 0 MeanRevBB | 2026-07-11 |
+| 10-RS | **Re-screen #10 (stop honesto):** misma hipótesis, dos stops pre-fijados | E2, w14 top-3 K4 | Screen Freqtrade `XSecMomentum_rescreen_stop.json`: `stop_design_m35` (−0.35) vs `stop_accidental_m10` (−0.1); criterios rotación + LOO + DD intactos | Cada variante juzgada por separado; si solo pasa −0.1 → PASA con descuento post-hoc; si ninguna → candidato cae | **PASA ambos** — `run_id=20260711_100039`; m35 net +252k DD 45.6% LOO bruto +77.6k; m10 net +41k DD 52.9% LOO bruto +23k (reproduce screen #10); validación full = **m35** | 2026-07-11 |
 
 ---
 
@@ -35,7 +35,7 @@
 | Rol | Configuración | Detalle |
 |-----|---------------|---------|
 | **Primaria** | **XSecMomentum-20M** | Mismo motor #10 + filtro liquidez dinámico 20M. **Autopsia 2026-07-11: degradada** — implementación fiel (paridad 0) pero efecto invertido en Freqtrade por composición (DEXE filtrado). No validar. |
-| **Control** | XSecMomentum E2 sin filtro | Screen #10 **PASA suspendido** (fallo-en-vacío #10: stop −0.1 materializado, no −0.35). Re-screen **10-RS** pendiente. |
+| **Control** | XSecMomentum E2 sin filtro, **stop −0.35** (`stop_design_m35`) | Screen **10-RS PASA** (`run_id=20260711_100039`). Screen #10 original **anulado** (fallo-en-vacío #10). m10 PASA como confirmación de insensibilidad, no config de validación. |
 
 ---
 

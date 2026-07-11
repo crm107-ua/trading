@@ -350,12 +350,27 @@ El screen PASA (#10) materializó **stop −10%** vía JSON de variante, no el *
 | Fix | `build_params_template()` lee stop de clase; override explícito `stoploss` en variante |
 | Tests | `test_build_variant_params_respects_xsec_class_stoploss` |
 | Auditoría | `research/audit_screen_stops.py` → `screen_stop_audit_20260711.json` |
-| Re-screen | `XSecMomentum_rescreen_stop.json` — `stop_design_m35` vs `stop_accidental_m10` (**10-RS**, pre-registrado) |
-| Cola | Docker **después** de cierre ventana WF 0 MeanRevBB (~50 epochs restantes) |
+| Re-screen Docker | **Hecho** — `run_id=20260711_100039` (ventana 1 estable, ~6 epochs) |
+| Veredicto #10 | **PASA rehabilitado (10-RS)** — ambos stops pasan; validación full = **m35** |
 
-**Veredicto #10:** **SUSPENDIDO** hasta 10-RS. No usar +40k del zip accidental como criterio de elección de stop.
+**Radiografía edge (zip control accidental m10):** −199k stops / +203k rotaciones / +36k BEAR — edge fino bajo −10%; con m35 el perfil mejora (menos stops, mayor neto).
 
-**Radiografía edge (zip control):** −199k stops / +203k rotaciones / +36k BEAR — edge fino, sensible al nivel de stop.
+---
+
+## Re-screen 10-RS (`run_id=20260711_100039`, 2026-07-11)
+
+**Desenlace: pasan ambos stops** — candidato robusto al nivel del stop.
+
+| Variante | Stop | Trades | Net | Bruto | Fricción | Max DD | LOO excl. | LOO bruto | ¿Pasa rotación? |
+|----------|------|--------|-----|-------|----------|--------|-----------|-----------|-----------------|
+| **stop_design_m35** | **−0.35** | 296 | **+252 092** | +260 761 | 3.3% | **45.6%** | ZEC | **+77 617** | **Sí** |
+| stop_accidental_m10 | −0.10 | 350 | +40 641 | +48 495 | 16.2% | 52.9% | DEXE | +23 006 | Sí (insensibilidad) |
+
+Stops materializados en zip: −0.35 y −0.10 verificados. Screen #10 original anulado.
+
+**Config validación full:** `stop_design_m35` (diseño documentado). m10 no se elige por +41k histórico — solo confirma que el edge no depende exclusivamente del stop apretado.
+
+Reporte: `user_data/validation_reports/screen/XSecMomentum/20260711_100039/screen_report.json`
 
 ---
 
@@ -374,11 +389,13 @@ El screen PASA (#10) materializó **stop −10%** vía JSON de variante, no el *
 
 ## Veredicto
 
-**#10 control:** **PASA SUSPENDIDO** — fallo-en-vacío #10; re-screen **10-RS** pendiente (`stop_design_m35` vs `stop_accidental_m10`).
+**#10 control:** **PASA (10-RS, `run_id=20260711_100039`)** — ambos stops pasan criterios rotación. **Config validación full:** `stop_design_m35` (−0.35). `stop_accidental_m10` anotado como insensibilidad (reproduce +41k del screen anulado).
 
-**XSecMomentum20M (primaria):** **degradada** (recomendación ii fundada: 8.24×→1.66× en modo fidelidad).
+**XSecMomentum20M (primaria):** **degradada** — no validar.
 
-**Instrumento research:** desde #14, criterios deben superarse también en `simulate_freqtrade_fidelity` (~2× optimismo log W-FRI).
+**Instrumento research:** desde #14, criterios en modo fidelidad (~2× optimismo log W-FRI).
+
+**Siguiente hito:** `report.json` MeanRevBB — sin trabajo adicional hasta entonces.
 
 ---
 
