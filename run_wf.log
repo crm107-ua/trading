@@ -1,0 +1,11 @@
+==> Reanudando run_id=20260709_162954
+==> Validación MeanRevBB profile=full
+    IS:  20210101-20241111
+    OOS: 20241112-20260709
+Baseline OOS — restaurado desde checkpoint
+==> Semilla 42 — ya en checkpoint, omitiendo
+==> Semilla 123 — ya en checkpoint, omitiendo
+==> Semilla 456 — ya en checkpoint, omitiendo
+==> Walk-forward 12m/3m (300 epochs/ventana, warmup>=34d, train desde 
+2021-02-04)
+    ventana 0: train 20210204-20220203
