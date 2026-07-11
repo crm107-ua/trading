@@ -108,9 +108,42 @@ Variantes: `user_data/fixtures/screen_variants/XSecMomentum.json`
 
 **Cola:** validación full **detrás** de calibración MeanRevBB. No lanzar `run_validation` ahora.
 
-Reporte original (fees mal parseadas en JSON; métricas corregidas en esta doc): `user_data/validation_reports/screen/XSecMomentum/20260710_162559/screen_report.json`
+---
 
-**Fallo-en-vacío #9:** parser de fees sumaba ratios; sanity-check automático añadido en `screen_strategy.py` para futuros screens.
+## Pre-registro validación full (2026-07-11, congelado antes de `report.json` MeanRevBB)
+
+Basado en research día 2 (`research/results_20260711.md`, intento #13 PASA).
+
+| Rol | Qué se valida |
+|-----|----------------|
+| **Configuración primaria** | **XSecMomentum-20M** — mismo motor screen (#10) + **filtro liquidez dinámico** |
+| **Control** | XSecMomentum E2 **sin filtro** (screen #10) — comparación, no hipótesis operativa post-#13 |
+
+### Regla de liquidez (obligatoria en implementación)
+
+- **Dinámico en cada rebalanceo** (lunes): volumen quote USDT = `volume × close` del par.
+- Ventana: **media móvil 30 días**, desplazada **1 día** (solo historia ≤ t−1, point-in-time).
+- Umbral fijo: **> 20_000_000 USDT/día** (pre-fijado en intento #13, no optimizable).
+- Solo los pares elegibles ese día compiten en el ranking momentum top-3.
+
+**Prohibido:** universo estático (lista fija de pares que superan 20M de media histórica completa) — eso **no** replica el research (`research/r2_liquidity_filter.py`) y cambiaría la hipótesis.
+
+### Evidencia que motiva primaria > control
+
+| Métrica | E2 sin filtro (B) | E2 filtro 20M (B) |
+|---------|-------------------|-------------------|
+| Full | 12.25× | **15.60×** |
+| Mitad 2024-26 | 7.48× (concentrado DEXE/ZEC) | **4.69×** (bate EW y BTC) |
+| R0 ex-DEXE/ZEC 2024-26 | 1.13× (asterisco) | resuelto por 20M |
+
+Patrón monótono en umbrales pre-fijados (5M→20M→50M: 6.4×→15.6×→21.9×): firma de efecto real, no umbral afortunado.
+
+### OBS-11a (candado)
+
+Funding caliente → retornos mejores (signo invertido vs #11). **No explotar.** Ver `docs/hypothesis_registry.md` sección observaciones bloqueadas.
+
+Reporte screen original: `user_data/validation_reports/screen/XSecMomentum/20260710_162559/screen_report.json`  
+**Fallo-en-vacío #9:** parser de fees sumaba ratios; sanity-check en `screen_strategy.py`.
 
 ---
 

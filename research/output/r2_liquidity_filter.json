@@ -1,0 +1,334 @@
+{
+  "params": {
+    "window": 14,
+    "top_n": 3,
+    "fee_B": 0.001,
+    "freq": "W",
+    "thresholds_usdt_fixed": [
+      5000000,
+      20000000,
+      50000000
+    ],
+    "decisive_threshold": 20000000
+  },
+  "criterion": "en 20M: momentum B > EW-filtrado B y > BTC B&H B en AMBAS mitades",
+  "thresholds": {
+    "5M": {
+      "avg_eligible_pairs_per_rebalance": 13.820069204152249,
+      "min_eligible_pairs": 0,
+      "full": {
+        "momentum_A": {
+          "cagr": 0.4404314854549063,
+          "sharpe": 0.349717781682997,
+          "max_drawdown": -0.8381105145264656,
+          "turnover": 0.5305191943840841,
+          "final_wealth": 7.4955080785710795
+        },
+        "momentum_B": {
+          "cagr": 0.40110467310724296,
+          "sharpe": 0.3232037299385192,
+          "max_drawdown": -0.8433869524095636,
+          "turnover": 0.5305191943840841,
+          "final_wealth": 6.433472185682468
+        },
+        "equal_weight_filtered_B": {
+          "cagr": 0.09040914725074911,
+          "sharpe": 0.09683429280322758,
+          "max_drawdown": -0.8322651992355143,
+          "turnover": 0.04256396325248548,
+          "final_wealth": 1.612409834898385
+        },
+        "btc_bh_B": {
+          "cagr": 0.15162009511648966,
+          "sharpe": 0.20315507599531463,
+          "max_drawdown": -0.7662925431645937,
+          "turnover": 0.0,
+          "final_wealth": 2.1797001809305923
+        },
+        "avg_eligible": 13.820069204152249,
+        "min_eligible": 0
+      },
+      "2021-23": {
+        "momentum_A": {
+          "cagr": 0.3300724617685111,
+          "sharpe": 0.24819145561152092,
+          "max_drawdown": -0.8381105145264656,
+          "turnover": 0.532486164299659,
+          "final_wealth": 2.3498080603651124
+        },
+        "momentum_B": {
+          "cagr": 0.2936916169444863,
+          "sharpe": 0.22407294325925825,
+          "max_drawdown": -0.8433869524095636,
+          "turnover": 0.532486164299659,
+          "final_wealth": 2.162501831476831
+        },
+        "equal_weight_filtered_B": {
+          "cagr": 0.1975185827344863,
+          "sharpe": 0.18287720197481863,
+          "max_drawdown": -0.8322651992355143,
+          "turnover": 0.04678468101070869,
+          "final_wealth": 1.7158199581185865
+        },
+        "btc_bh_B": {
+          "cagr": 0.12987286939827913,
+          "sharpe": 0.15612548464639425,
+          "max_drawdown": -0.7662925431645937,
+          "turnover": 0.0,
+          "final_wealth": 1.4415664423018237
+        },
+        "avg_eligible": 13.745222929936306,
+        "min_eligible": 0
+      },
+      "2024-26": {
+        "momentum_A": {
+          "cagr": 0.5998734363283438,
+          "sharpe": 0.5265218884970342,
+          "max_drawdown": -0.6335040528241012,
+          "turnover": 0.5191631027451332,
+          "final_wealth": 3.270500896288665
+        },
+        "momentum_B": {
+          "cagr": 0.5569785190442229,
+          "sharpe": 0.4960897572173557,
+          "max_drawdown": -0.6458484659601451,
+          "turnover": 0.5191631027451332,
+          "final_wealth": 3.0538821670816865
+        },
+        "equal_weight_filtered_B": {
+          "cagr": -0.03949401500449323,
+          "sharpe": -0.05220884489151748,
+          "max_drawdown": -0.6780804486668801,
+          "turnover": 0.0372998445423247,
+          "final_wealth": 0.9033850098349355
+        },
+        "btc_bh_B": {
+          "cagr": 0.15785996882895037,
+          "sharpe": 0.2550371828331222,
+          "max_drawdown": -0.5297176591351062,
+          "turnover": 0.0,
+          "final_wealth": 1.4471467002266916
+        },
+        "avg_eligible": 13.917293233082706,
+        "min_eligible": 12
+      }
+    },
+    "20M": {
+      "avg_eligible_pairs_per_rebalance": 11.602076124567475,
+      "min_eligible_pairs": 0,
+      "full": {
+        "momentum_A": {
+          "cagr": 0.6878077568184071,
+          "sharpe": 0.5112293058286806,
+          "max_drawdown": -0.7834917249229507,
+          "turnover": 0.4922015059599093,
+          "final_wealth": 17.97673487799855
+        },
+        "momentum_B": {
+          "cagr": 0.645012742044897,
+          "sharpe": 0.48618179237957015,
+          "max_drawdown": -0.788274918664412,
+          "turnover": 0.4922015059599093,
+          "final_wealth": 15.600834109667492
+        },
+        "equal_weight_filtered_B": {
+          "cagr": 0.09454912660925197,
+          "sharpe": 0.10201803760843688,
+          "max_drawdown": -0.8317795677933351,
+          "turnover": 0.04732195170881767,
+          "final_wealth": 1.6464907407027878
+        },
+        "btc_bh_B": {
+          "cagr": 0.15162009511648966,
+          "sharpe": 0.20315507599531463,
+          "max_drawdown": -0.7662925431645937,
+          "turnover": 0.0,
+          "final_wealth": 2.1797001809305923
+        },
+        "avg_eligible": 11.602076124567475,
+        "min_eligible": 0
+      },
+      "2021-23": {
+        "momentum_A": {
+          "cagr": 0.56791710011059,
+          "sharpe": 0.39673932025541697,
+          "max_drawdown": -0.7834917249229507,
+          "turnover": 0.4858794104009604,
+          "final_wealth": 3.8462140535372886
+        },
+        "momentum_B": {
+          "cagr": 0.5287370017269335,
+          "sharpe": 0.37444213002025645,
+          "max_drawdown": -0.788274918664412,
+          "turnover": 0.4858794104009604,
+          "final_wealth": 3.565456562687338
+        },
+        "equal_weight_filtered_B": {
+          "cagr": 0.2044693400090356,
+          "sharpe": 0.1905004022136044,
+          "max_drawdown": -0.8317795677933351,
+          "turnover": 0.055424633720026685,
+          "final_wealth": 1.7458227018347732
+        },
+        "btc_bh_B": {
+          "cagr": 0.12987286939827913,
+          "sharpe": 0.15612548464639425,
+          "max_drawdown": -0.7662925431645937,
+          "turnover": 0.0,
+          "final_wealth": 1.4415664423018237
+        },
+        "avg_eligible": 11.433121019108281,
+        "min_eligible": 0
+      },
+      "2024-26": {
+        "momentum_A": {
+          "cagr": 0.8946030011959296,
+          "sharpe": 0.7338054128511017,
+          "max_drawdown": -0.5295712230983166,
+          "turnover": 0.4932868122798051,
+          "final_wealth": 5.0093226414437915
+        },
+        "momentum_B": {
+          "cagr": 0.8463052445211989,
+          "sharpe": 0.7042313362393917,
+          "max_drawdown": -0.5335472830783883,
+          "turnover": 0.4932868122798051,
+          "final_wealth": 4.69353882775789
+        },
+        "equal_weight_filtered_B": {
+          "cagr": -0.03709621935117369,
+          "sharpe": -0.04944482168150082,
+          "max_drawdown": -0.6371203381226058,
+          "turnover": 0.037688170006879435,
+          "final_wealth": 0.9090824368035654
+        },
+        "btc_bh_B": {
+          "cagr": 0.15785996882895037,
+          "sharpe": 0.2550371828331222,
+          "max_drawdown": -0.5297176591351062,
+          "turnover": 0.0,
+          "final_wealth": 1.4471467002266916
+        },
+        "avg_eligible": 11.80451127819549,
+        "min_eligible": 9
+      }
+    },
+    "50M": {
+      "avg_eligible_pairs_per_rebalance": 8.90311418685121,
+      "min_eligible_pairs": 0,
+      "full": {
+        "momentum_A": {
+          "cagr": 0.7896419945243471,
+          "sharpe": 0.5798364187929553,
+          "max_drawdown": -0.7181380151780286,
+          "turnover": 0.4371860762311362,
+          "final_wealth": 24.839602868278135
+        },
+        "momentum_B": {
+          "cagr": 0.7492792603697971,
+          "sharpe": 0.5571587595543122,
+          "max_drawdown": -0.7252580031000784,
+          "turnover": 0.4371860762311362,
+          "final_wealth": 21.90094265259201
+        },
+        "equal_weight_filtered_B": {
+          "cagr": 0.15781637904706036,
+          "sharpe": 0.16645390453342424,
+          "max_drawdown": -0.8209709894217002,
+          "turnover": 0.06321496987922157,
+          "final_wealth": 2.245224232722841
+        },
+        "btc_bh_B": {
+          "cagr": 0.15162009511648966,
+          "sharpe": 0.20315507599531463,
+          "max_drawdown": -0.7662925431645937,
+          "turnover": 0.0,
+          "final_wealth": 2.1797001809305923
+        },
+        "avg_eligible": 8.90311418685121,
+        "min_eligible": 0
+      },
+      "2021-23": {
+        "momentum_A": {
+          "cagr": 0.9743963143749821,
+          "sharpe": 0.6112337074667377,
+          "max_drawdown": -0.7181380151780286,
+          "turnover": 0.4229373173124631,
+          "final_wealth": 7.6716273450544135
+        },
+        "momentum_B": {
+          "cagr": 0.9313799881465732,
+          "sharpe": 0.5914853937306386,
+          "max_drawdown": -0.7252580031000784,
+          "turnover": 0.4229373173124631,
+          "final_wealth": 7.1818035442489965
+        },
+        "equal_weight_filtered_B": {
+          "cagr": 0.269396950165504,
+          "sharpe": 0.24572979910546386,
+          "max_drawdown": -0.8209709894217002,
+          "turnover": 0.062094549877799374,
+          "final_wealth": 2.0431299565960983
+        },
+        "btc_bh_B": {
+          "cagr": 0.12987286939827913,
+          "sharpe": 0.15612548464639425,
+          "max_drawdown": -0.7662925431645937,
+          "turnover": 0.0,
+          "final_wealth": 1.4415664423018237
+        },
+        "avg_eligible": 8.821656050955413,
+        "min_eligible": 0
+      },
+      "2024-26": {
+        "momentum_A": {
+          "cagr": 0.65471014105499,
+          "sharpe": 0.5929664345516052,
+          "max_drawdown": -0.5459119617616466,
+          "turnover": 0.4476592277180581,
+          "final_wealth": 3.5605787193404765
+        },
+        "momentum_B": {
+          "cagr": 0.6163839872422723,
+          "sharpe": 0.5654582555813078,
+          "max_drawdown": -0.5598295927674322,
+          "turnover": 0.4476592277180581,
+          "final_wealth": 3.3562761651950885
+        },
+        "equal_weight_filtered_B": {
+          "cagr": 0.02316715415764503,
+          "sharpe": 0.03013125182709735,
+          "max_drawdown": -0.6371162643656177,
+          "turnover": 0.06451221785900607,
+          "final_wealth": 1.059451131146772
+        },
+        "btc_bh_B": {
+          "cagr": 0.15785996882895037,
+          "sharpe": 0.2550371828331222,
+          "max_drawdown": -0.5297176591351062,
+          "turnover": 0.0,
+          "final_wealth": 1.4471467002266916
+        },
+        "avg_eligible": 8.992481203007518,
+        "min_eligible": 6
+      }
+    }
+  },
+  "criterion_eval_20M": {
+    "2021-23": {
+      "momentum_B_wealth": 3.565456562687338,
+      "ew_filtered_B_wealth": 1.7458227018347732,
+      "btc_B_wealth": 1.4415664423018237,
+      "beats_ew": true,
+      "beats_btc": true
+    },
+    "2024-26": {
+      "momentum_B_wealth": 4.69353882775789,
+      "ew_filtered_B_wealth": 0.9090824368035654,
+      "btc_B_wealth": 1.4471467002266916,
+      "beats_ew": true,
+      "beats_btc": true
+    },
+    "passes": true
+  }
+}

@@ -1,0 +1,1258 @@
+{
+  "note": "Funding de FUTUROS (USDT-perp Binance) como senal para SPOT. p90 rolling 90d fijo.",
+  "funding_coverage": {
+    "AAVE/USDT": {
+      "first_valid": "2021-01-01 00:00:00+00:00",
+      "n_days": 2017
+    },
+    "ADA/USDT": {
+      "first_valid": "2021-01-01 00:00:00+00:00",
+      "n_days": 2017
+    },
+    "BNB/USDT": {
+      "first_valid": "2021-01-01 00:00:00+00:00",
+      "n_days": 2017
+    },
+    "BTC/USDT": {
+      "first_valid": "2021-01-01 00:00:00+00:00",
+      "n_days": 2017
+    },
+    "DEXE/USDT": {
+      "first_valid": "2024-12-24 00:00:00+00:00",
+      "n_days": 564
+    },
+    "DOGE/USDT": {
+      "first_valid": "2021-01-01 00:00:00+00:00",
+      "n_days": 2017
+    },
+    "ETH/USDT": {
+      "first_valid": "2021-01-01 00:00:00+00:00",
+      "n_days": 2017
+    },
+    "LTC/USDT": {
+      "first_valid": "2021-01-01 00:00:00+00:00",
+      "n_days": 2017
+    },
+    "NEAR/USDT": {
+      "first_valid": "2021-01-01 00:00:00+00:00",
+      "n_days": 2017
+    },
+    "SKL/USDT": {
+      "first_valid": "2021-01-01 00:00:00+00:00",
+      "n_days": 2017
+    },
+    "SOL/USDT": {
+      "first_valid": "2021-01-01 00:00:00+00:00",
+      "n_days": 2017
+    },
+    "TRX/USDT": {
+      "first_valid": "2021-01-01 00:00:00+00:00",
+      "n_days": 2017
+    },
+    "UNI/USDT": {
+      "first_valid": "2021-01-01 00:00:00+00:00",
+      "n_days": 2017
+    },
+    "XLM/USDT": {
+      "first_valid": "2021-01-01 00:00:00+00:00",
+      "n_days": 2017
+    },
+    "XRP/USDT": {
+      "first_valid": "2021-01-01 00:00:00+00:00",
+      "n_days": 2017
+    },
+    "ZEC/USDT": {
+      "first_valid": "2021-01-01 00:00:00+00:00",
+      "n_days": 2017
+    }
+  },
+  "intent_11": {
+    "hypothesis": "funding > p90 rolling 90d -> retornos spot forward peores",
+    "criterion": "t < -2 agregado en AMBAS mitades (percentil fijo 0.90)",
+    "aggregate": {
+      "2021-23_h1": {
+        "n_events": 1289,
+        "n_pool": 17301,
+        "mean_event": 0.0022550676053971685,
+        "mean_uncond": 0.0007100242449221618,
+        "diff": 0.0015450433604750067,
+        "tstat": 0.9725870854551376
+      },
+      "2021-23_h3": {
+        "n_events": 1289,
+        "n_pool": 17301,
+        "mean_event": 0.007605260656511275,
+        "mean_uncond": 0.0019113403828178404,
+        "diff": 0.005693920273693434,
+        "tstat": 1.9202188864308707
+      },
+      "2021-23_h7": {
+        "n_events": 1289,
+        "n_pool": 17301,
+        "mean_event": 0.01722983839561656,
+        "mean_uncond": 0.0036521144020172183,
+        "diff": 0.013577723993599343,
+        "tstat": 3.0843227820058567
+      },
+      "2024-26_h1": {
+        "n_events": 1299,
+        "n_pool": 14736,
+        "mean_event": 0.005520220670245591,
+        "mean_uncond": 7.897334193983042e-05,
+        "diff": 0.005441247328305761,
+        "tstat": 3.321370342256176
+      },
+      "2024-26_h3": {
+        "n_events": 1292,
+        "n_pool": 14704,
+        "mean_event": 0.015443609235442654,
+        "mean_uncond": 0.00018231925429797728,
+        "diff": 0.015261289981144677,
+        "tstat": 5.211568781774624
+      },
+      "2024-26_h7": {
+        "n_events": 1265,
+        "n_pool": 14640,
+        "mean_event": 0.026430468655674985,
+        "mean_uncond": 0.0006799752227354149,
+        "diff": 0.02575049343293957,
+        "tstat": 5.971042314064371
+      }
+    },
+    "criterion_by_half": {
+      "2021-23": {
+        "h1": {
+          "tstat": 0.9725870854551376,
+          "passes_t2_negative": false
+        },
+        "h3": {
+          "tstat": 1.9202188864308707,
+          "passes_t2_negative": false
+        },
+        "h7": {
+          "tstat": 3.0843227820058567,
+          "passes_t2_negative": false
+        }
+      },
+      "2024-26": {
+        "h1": {
+          "tstat": 3.321370342256176,
+          "passes_t2_negative": false
+        },
+        "h3": {
+          "tstat": 5.211568781774624,
+          "passes_t2_negative": false
+        },
+        "h7": {
+          "tstat": 5.971042314064371,
+          "passes_t2_negative": false
+        }
+      }
+    },
+    "passes_by_horizon": {
+      "h1": false,
+      "h3": false,
+      "h7": false
+    },
+    "passes_any_horizon": false,
+    "per_pair_rows": [
+      {
+        "pair": "AAVE/USDT",
+        "half": "2021-23",
+        "horizon": 1,
+        "n_events": 59,
+        "mean_event": 0.0008621751959333197,
+        "mean_uncond": 0.00027733881076000435,
+        "diff": 0.0005848363851733154,
+        "tstat": 0.08044795275232874
+      },
+      {
+        "pair": "ADA/USDT",
+        "half": "2021-23",
+        "horizon": 1,
+        "n_events": 87,
+        "mean_event": 0.0034940391647617346,
+        "mean_uncond": 0.001148398255451644,
+        "diff": 0.0023456409093100907,
+        "tstat": 0.460380885937782
+      },
+      {
+        "pair": "BNB/USDT",
+        "half": "2021-23",
+        "horizon": 1,
+        "n_events": 106,
+        "mean_event": 0.000694604326467242,
+        "mean_uncond": 0.001923306880714307,
+        "diff": -0.001228702554247065,
+        "tstat": -0.33360898902901237
+      },
+      {
+        "pair": "BTC/USDT",
+        "half": "2021-23",
+        "horizon": 1,
+        "n_events": 93,
+        "mean_event": -0.0005912786308437207,
+        "mean_uncond": 0.0002897337913212591,
+        "diff": -0.0008810124221649798,
+        "tstat": -0.2747704842500103
+      },
+      {
+        "pair": "DOGE/USDT",
+        "half": "2021-23",
+        "horizon": 1,
+        "n_events": 82,
+        "mean_event": 0.010450204509002485,
+        "mean_uncond": 0.001981529696653993,
+        "diff": 0.008468674812348493,
+        "tstat": 1.0704437221157066
+      },
+      {
+        "pair": "ETH/USDT",
+        "half": "2021-23",
+        "horizon": 1,
+        "n_events": 96,
+        "mean_event": -0.004566837499886981,
+        "mean_uncond": 0.0010153045607726135,
+        "diff": -0.005582142060659594,
+        "tstat": -1.6214259574761063
+      },
+      {
+        "pair": "LTC/USDT",
+        "half": "2021-23",
+        "horizon": 1,
+        "n_events": 86,
+        "mean_event": -0.0022610583901431173,
+        "mean_uncond": -0.0005538767079276453,
+        "diff": -0.001707181682215472,
+        "tstat": -0.32250017045115625
+      },
+      {
+        "pair": "NEAR/USDT",
+        "half": "2021-23",
+        "horizon": 1,
+        "n_events": 95,
+        "mean_event": 0.013898582900883314,
+        "mean_uncond": 0.0009032271356862229,
+        "diff": 0.012995355765197092,
+        "tstat": 1.455475553926028
+      },
+      {
+        "pair": "SKL/USDT",
+        "half": "2021-23",
+        "horizon": 1,
+        "n_events": 64,
+        "mean_event": 0.003717707215150428,
+        "mean_uncond": -7.807154163124457e-05,
+        "diff": 0.0037957787567816726,
+        "tstat": 0.3716591212404984
+      },
+      {
+        "pair": "SOL/USDT",
+        "half": "2021-23",
+        "horizon": 1,
+        "n_events": 92,
+        "mean_event": 0.016193421612092092,
+        "mean_uncond": 0.0037586204216430628,
+        "diff": 0.012434801190449029,
+        "tstat": 1.6628377534202679
+      },
+      {
+        "pair": "TRX/USDT",
+        "half": "2021-23",
+        "horizon": 1,
+        "n_events": 110,
+        "mean_event": 0.002933245014321973,
+        "mean_uncond": 0.001257724602512105,
+        "diff": 0.001675520411809868,
+        "tstat": 0.38925399549480877
+      },
+      {
+        "pair": "UNI/USDT",
+        "half": "2021-23",
+        "horizon": 1,
+        "n_events": 60,
+        "mean_event": -0.0076916844332318565,
+        "mean_uncond": 0.00040937004077203353,
+        "diff": -0.00810105447400389,
+        "tstat": -1.2494024671244592
+      },
+      {
+        "pair": "XLM/USDT",
+        "half": "2021-23",
+        "horizon": 1,
+        "n_events": 86,
+        "mean_event": -0.005154995719193644,
+        "mean_uncond": 3.163357375769572e-05,
+        "diff": -0.005186629292951339,
+        "tstat": -0.9353826234489407
+      },
+      {
+        "pair": "XRP/USDT",
+        "half": "2021-23",
+        "horizon": 1,
+        "n_events": 98,
+        "mean_event": -0.0008102237787609764,
+        "mean_uncond": 0.0009581668835331966,
+        "diff": -0.001768390662294173,
+        "tstat": -0.2812000277588347
+      },
+      {
+        "pair": "ZEC/USDT",
+        "half": "2021-23",
+        "horizon": 1,
+        "n_events": 75,
+        "mean_event": -0.0010303179166598053,
+        "mean_uncond": -0.000664326066019142,
+        "diff": -0.00036599185064066335,
+        "tstat": -0.05777039193098658
+      },
+      {
+        "pair": "AAVE/USDT",
+        "half": "2021-23",
+        "horizon": 3,
+        "n_events": 59,
+        "mean_event": -0.009279635868649239,
+        "mean_uncond": 0.00032756005028374897,
+        "diff": -0.009607195918932988,
+        "tstat": -0.8162804933927921
+      },
+      {
+        "pair": "ADA/USDT",
+        "half": "2021-23",
+        "horizon": 3,
+        "n_events": 87,
+        "mean_event": 0.013525984572121683,
+        "mean_uncond": 0.0029597931517075142,
+        "diff": 0.010566191420414168,
+        "tstat": 1.036570067315283
+      },
+      {
+        "pair": "BNB/USDT",
+        "half": "2021-23",
+        "horizon": 3,
+        "n_events": 106,
+        "mean_event": 0.003530308579133531,
+        "mean_uncond": 0.005636380174166997,
+        "diff": -0.002106071595033466,
+        "tstat": -0.33839066086515757
+      },
+      {
+        "pair": "BTC/USDT",
+        "half": "2021-23",
+        "horizon": 3,
+        "n_events": 93,
+        "mean_event": 0.004569715508800567,
+        "mean_uncond": 0.0008392623389791187,
+        "diff": 0.0037304531698214485,
+        "tstat": 0.7484506118068943
+      },
+      {
+        "pair": "DOGE/USDT",
+        "half": "2021-23",
+        "horizon": 3,
+        "n_events": 82,
+        "mean_event": 0.042729672458773196,
+        "mean_uncond": 0.005963120774511806,
+        "diff": 0.03676655168426139,
+        "tstat": 1.600503741701204
+      },
+      {
+        "pair": "ETH/USDT",
+        "half": "2021-23",
+        "horizon": 3,
+        "n_events": 96,
+        "mean_event": -0.01054994618916875,
+        "mean_uncond": 0.0025060865388703384,
+        "diff": -0.013056032728039088,
+        "tstat": -2.041671893050722
+      },
+      {
+        "pair": "LTC/USDT",
+        "half": "2021-23",
+        "horizon": 3,
+        "n_events": 86,
+        "mean_event": -0.0019255454204330509,
+        "mean_uncond": -0.0020715997661635154,
+        "diff": 0.0001460543457304645,
+        "tstat": 0.016667644695859837
+      },
+      {
+        "pair": "NEAR/USDT",
+        "half": "2021-23",
+        "horizon": 3,
+        "n_events": 95,
+        "mean_event": 0.02606564476894496,
+        "mean_uncond": 0.0027144332350928085,
+        "diff": 0.02335121153385215,
+        "tstat": 1.5998600868923822
+      },
+      {
+        "pair": "SKL/USDT",
+        "half": "2021-23",
+        "horizon": 3,
+        "n_events": 64,
+        "mean_event": 0.031926781167381166,
+        "mean_uncond": -8.785959589868993e-05,
+        "diff": 0.03201464076327985,
+        "tstat": 1.8711972005715498
+      },
+      {
+        "pair": "SOL/USDT",
+        "half": "2021-23",
+        "horizon": 3,
+        "n_events": 92,
+        "mean_event": 0.044885836876563105,
+        "mean_uncond": 0.010677776411999509,
+        "diff": 0.034208060464563594,
+        "tstat": 2.6125051867709734
+      },
+      {
+        "pair": "TRX/USDT",
+        "half": "2021-23",
+        "horizon": 3,
+        "n_events": 110,
+        "mean_event": -0.0009606757064525859,
+        "mean_uncond": 0.003578876211635163,
+        "diff": -0.004539551918087749,
+        "tstat": -0.726189654473035
+      },
+      {
+        "pair": "UNI/USDT",
+        "half": "2021-23",
+        "horizon": 3,
+        "n_events": 60,
+        "mean_event": -0.016037973582076776,
+        "mean_uncond": 0.000805791217047552,
+        "diff": -0.016843764799124326,
+        "tstat": -1.5661086230810746
+      },
+      {
+        "pair": "XLM/USDT",
+        "half": "2021-23",
+        "horizon": 3,
+        "n_events": 86,
+        "mean_event": -0.0019265269747637736,
+        "mean_uncond": -0.0003014721121993548,
+        "diff": -0.0016250548625644189,
+        "tstat": -0.16488780201000663
+      },
+      {
+        "pair": "XRP/USDT",
+        "half": "2021-23",
+        "horizon": 3,
+        "n_events": 98,
+        "mean_event": -0.005050501455294538,
+        "mean_uncond": 0.002716734496619682,
+        "diff": -0.00776723595191422,
+        "tstat": -0.6904978064208851
+      },
+      {
+        "pair": "ZEC/USDT",
+        "half": "2021-23",
+        "horizon": 3,
+        "n_events": 75,
+        "mean_event": -0.011615771248171288,
+        "mean_uncond": -0.002168822282759142,
+        "diff": -0.009446948965412146,
+        "tstat": -0.9766668836434881
+      },
+      {
+        "pair": "AAVE/USDT",
+        "half": "2021-23",
+        "horizon": 7,
+        "n_events": 59,
+        "mean_event": -0.03939737324033163,
+        "mean_uncond": -0.000175823411241834,
+        "diff": -0.0392215498290898,
+        "tstat": -2.529860423898979
+      },
+      {
+        "pair": "ADA/USDT",
+        "half": "2021-23",
+        "horizon": 7,
+        "n_events": 87,
+        "mean_event": 0.02756321183387987,
+        "mean_uncond": 0.005080388184890425,
+        "diff": 0.022482823648989445,
+        "tstat": 1.4007972623084648
+      },
+      {
+        "pair": "BNB/USDT",
+        "half": "2021-23",
+        "horizon": 7,
+        "n_events": 106,
+        "mean_event": 0.005716250143557557,
+        "mean_uncond": 0.012933591792271255,
+        "diff": -0.007217341648713698,
+        "tstat": -0.7714589464309992
+      },
+      {
+        "pair": "BTC/USDT",
+        "half": "2021-23",
+        "horizon": 7,
+        "n_events": 93,
+        "mean_event": 0.006756279061430577,
+        "mean_uncond": 0.0014184902002431737,
+        "diff": 0.005337788861187404,
+        "tstat": 0.7891366599800221
+      },
+      {
+        "pair": "DOGE/USDT",
+        "half": "2021-23",
+        "horizon": 7,
+        "n_events": 82,
+        "mean_event": 0.06883633760133862,
+        "mean_uncond": 0.013640117061521568,
+        "diff": 0.05519622053981705,
+        "tstat": 1.6224790598994956
+      },
+      {
+        "pair": "ETH/USDT",
+        "half": "2021-23",
+        "horizon": 7,
+        "n_events": 96,
+        "mean_event": 0.0009685411775450397,
+        "mean_uncond": 0.004845509714851518,
+        "diff": -0.003876968537306478,
+        "tstat": -0.4454358277132416
+      },
+      {
+        "pair": "LTC/USDT",
+        "half": "2021-23",
+        "horizon": 7,
+        "n_events": 86,
+        "mean_event": -0.0019274498593099775,
+        "mean_uncond": -0.005492553667288332,
+        "diff": 0.0035651038079783544,
+        "tstat": 0.32255306387936056
+      },
+      {
+        "pair": "NEAR/USDT",
+        "half": "2021-23",
+        "horizon": 7,
+        "n_events": 95,
+        "mean_event": 0.06903045605725067,
+        "mean_uncond": 0.00568935630036042,
+        "diff": 0.06334109975689024,
+        "tstat": 2.91288709723315
+      },
+      {
+        "pair": "SKL/USDT",
+        "half": "2021-23",
+        "horizon": 7,
+        "n_events": 64,
+        "mean_event": 0.10448891798723173,
+        "mean_uncond": -0.0010901875723512817,
+        "diff": 0.10557910555958301,
+        "tstat": 4.495440179162355
+      },
+      {
+        "pair": "SOL/USDT",
+        "half": "2021-23",
+        "horizon": 7,
+        "n_events": 92,
+        "mean_event": 0.1007252684655097,
+        "mean_uncond": 0.024230741081342266,
+        "diff": 0.07649452738416744,
+        "tstat": 3.7169897670648115
+      },
+      {
+        "pair": "TRX/USDT",
+        "half": "2021-23",
+        "horizon": 7,
+        "n_events": 110,
+        "mean_event": -0.00306314659136074,
+        "mean_uncond": 0.008133339592543644,
+        "diff": -0.011196486183904383,
+        "tstat": -1.3533090729583406
+      },
+      {
+        "pair": "UNI/USDT",
+        "half": "2021-23",
+        "horizon": 7,
+        "n_events": 60,
+        "mean_event": -0.04486337110983515,
+        "mean_uncond": 0.0008749442464898479,
+        "diff": -0.04573831535632499,
+        "tstat": -2.930455017741584
+      },
+      {
+        "pair": "XLM/USDT",
+        "half": "2021-23",
+        "horizon": 7,
+        "n_events": 86,
+        "mean_event": -0.00546922814275248,
+        "mean_uncond": -0.0034173575811747366,
+        "diff": -0.002051870561577744,
+        "tstat": -0.15746910578793344
+      },
+      {
+        "pair": "XRP/USDT",
+        "half": "2021-23",
+        "horizon": 7,
+        "n_events": 98,
+        "mean_event": -0.01220605721253216,
+        "mean_uncond": 0.005367730915498239,
+        "diff": -0.0175737881280304,
+        "tstat": -1.1004201502618545
+      },
+      {
+        "pair": "ZEC/USDT",
+        "half": "2021-23",
+        "horizon": 7,
+        "n_events": 75,
+        "mean_event": -0.03315948386007592,
+        "mean_uncond": -0.005934590840673682,
+        "diff": -0.027224893019402237,
+        "tstat": -1.9974126462337225
+      },
+      {
+        "pair": "AAVE/USDT",
+        "half": "2024-26",
+        "horizon": 1,
+        "n_events": 98,
+        "mean_event": 0.002067632869532879,
+        "mean_uncond": -0.00021992084920803402,
+        "diff": 0.002287553718740913,
+        "tstat": 0.40316997939083365
+      },
+      {
+        "pair": "ADA/USDT",
+        "half": "2024-26",
+        "horizon": 1,
+        "n_events": 84,
+        "mean_event": 0.003220216499317944,
+        "mean_uncond": -0.0014304806339725834,
+        "diff": 0.0046506971332905276,
+        "tstat": 0.7959250424659784
+      },
+      {
+        "pair": "BNB/USDT",
+        "half": "2024-26",
+        "horizon": 1,
+        "n_events": 118,
+        "mean_event": 0.004893901940657086,
+        "mean_uncond": 0.0006591098107823227,
+        "diff": 0.004234792129874763,
+        "tstat": 1.4656767245472622
+      },
+      {
+        "pair": "BTC/USDT",
+        "half": "2024-26",
+        "horizon": 1,
+        "n_events": 95,
+        "mean_event": 0.00013320656441778472,
+        "mean_uncond": 0.0004012962267504627,
+        "diff": -0.00026808966233267796,
+        "tstat": -0.09703277973750549
+      },
+      {
+        "pair": "DEXE/USDT",
+        "half": "2024-26",
+        "horizon": 1,
+        "n_events": 29,
+        "mean_event": 0.00169564726588913,
+        "mean_uncond": 0.002341912183715978,
+        "diff": -0.0006462649178268481,
+        "tstat": -0.03587365970684593
+      },
+      {
+        "pair": "DOGE/USDT",
+        "half": "2024-26",
+        "horizon": 1,
+        "n_events": 91,
+        "mean_event": 0.011990464403580226,
+        "mean_uncond": -0.0002339358895021362,
+        "diff": 0.012224400293082362,
+        "tstat": 1.6948634686045894
+      },
+      {
+        "pair": "ETH/USDT",
+        "half": "2024-26",
+        "horizon": 1,
+        "n_events": 104,
+        "mean_event": 0.0017508357089201772,
+        "mean_uncond": -0.0002960656154548452,
+        "diff": 0.0020469013243750223,
+        "tstat": 0.592284009072365
+      },
+      {
+        "pair": "LTC/USDT",
+        "half": "2024-26",
+        "horizon": 1,
+        "n_events": 87,
+        "mean_event": 0.0057922948410104435,
+        "mean_uncond": -0.0005580868957385732,
+        "diff": 0.006350381736749016,
+        "tstat": 1.2055757695901907
+      },
+      {
+        "pair": "NEAR/USDT",
+        "half": "2024-26",
+        "horizon": 1,
+        "n_events": 75,
+        "mean_event": 0.015253633563914102,
+        "mean_uncond": -0.000754321255970614,
+        "diff": 0.016007954819884717,
+        "tstat": 1.907904139294659
+      },
+      {
+        "pair": "SKL/USDT",
+        "half": "2024-26",
+        "horizon": 1,
+        "n_events": 45,
+        "mean_event": 0.00646111007737206,
+        "mean_uncond": -0.0028153368367288822,
+        "diff": 0.009276446914100941,
+        "tstat": 0.9756076676273852
+      },
+      {
+        "pair": "SOL/USDT",
+        "half": "2024-26",
+        "horizon": 1,
+        "n_events": 105,
+        "mean_event": 0.0025809308020669354,
+        "mean_uncond": -0.0003747392921927388,
+        "diff": 0.0029556700942596744,
+        "tstat": 0.7354351108303075
+      },
+      {
+        "pair": "TRX/USDT",
+        "half": "2024-26",
+        "horizon": 1,
+        "n_events": 79,
+        "mean_event": 0.002895619553459605,
+        "mean_uncond": 0.0012182179101043848,
+        "diff": 0.00167740164335522,
+        "tstat": 0.17022412389113184
+      },
+      {
+        "pair": "UNI/USDT",
+        "half": "2024-26",
+        "horizon": 1,
+        "n_events": 91,
+        "mean_event": 0.009377824567466001,
+        "mean_uncond": -0.0008203937584155657,
+        "diff": 0.010198218325881567,
+        "tstat": 1.585710841847398
+      },
+      {
+        "pair": "XLM/USDT",
+        "half": "2024-26",
+        "horizon": 1,
+        "n_events": 70,
+        "mean_event": 0.006596552497950727,
+        "mean_uncond": 0.00038743371076328505,
+        "diff": 0.0062091187871874415,
+        "tstat": 0.6628208330351878
+      },
+      {
+        "pair": "XRP/USDT",
+        "half": "2024-26",
+        "horizon": 1,
+        "n_events": 75,
+        "mean_event": 0.010615463951975962,
+        "mean_uncond": 0.000607765431904604,
+        "diff": 0.010007698520071358,
+        "tstat": 1.3729301130998397
+      },
+      {
+        "pair": "ZEC/USDT",
+        "half": "2024-26",
+        "horizon": 1,
+        "n_events": 53,
+        "mean_event": 0.0044407195836393045,
+        "mean_uncond": 0.0031511192242002226,
+        "diff": 0.001289600359439082,
+        "tstat": 0.11949561457785526
+      },
+      {
+        "pair": "AAVE/USDT",
+        "half": "2024-26",
+        "horizon": 3,
+        "n_events": 96,
+        "mean_event": 0.017076818925082015,
+        "mean_uncond": -0.0005895161613180505,
+        "diff": 0.017666335086400066,
+        "tstat": 1.7813655462547744
+      },
+      {
+        "pair": "ADA/USDT",
+        "half": "2024-26",
+        "horizon": 3,
+        "n_events": 84,
+        "mean_event": 0.014325489620896428,
+        "mean_uncond": -0.004146788517063288,
+        "diff": 0.018472278137959715,
+        "tstat": 1.7096356320375365
+      },
+      {
+        "pair": "BNB/USDT",
+        "half": "2024-26",
+        "horizon": 3,
+        "n_events": 117,
+        "mean_event": 0.015052606738816412,
+        "mean_uncond": 0.001953164269243003,
+        "diff": 0.013099442469573409,
+        "tstat": 2.540647334957162
+      },
+      {
+        "pair": "BTC/USDT",
+        "half": "2024-26",
+        "horizon": 3,
+        "n_events": 95,
+        "mean_event": 0.0002854611307804094,
+        "mean_uncond": 0.0011807369536155432,
+        "diff": -0.0008952758228351339,
+        "tstat": -0.1981985069797243
+      },
+      {
+        "pair": "DEXE/USDT",
+        "half": "2024-26",
+        "horizon": 3,
+        "n_events": 27,
+        "mean_event": -0.045045878115217215,
+        "mean_uncond": 0.006620303667851262,
+        "diff": -0.05166618178306848,
+        "tstat": -1.0333281945445296
+      },
+      {
+        "pair": "DOGE/USDT",
+        "half": "2024-26",
+        "horizon": 3,
+        "n_events": 91,
+        "mean_event": 0.029245038937355524,
+        "mean_uncond": -0.0006122762959134103,
+        "diff": 0.029857315233268934,
+        "tstat": 2.4117213646422018
+      },
+      {
+        "pair": "ETH/USDT",
+        "half": "2024-26",
+        "horizon": 3,
+        "n_events": 104,
+        "mean_event": -0.0028062547459077403,
+        "mean_uncond": -0.0008808090990224529,
+        "diff": -0.0019254456468852875,
+        "tstat": -0.2939758191779673
+      },
+      {
+        "pair": "LTC/USDT",
+        "half": "2024-26",
+        "horizon": 3,
+        "n_events": 87,
+        "mean_event": 0.018841688239213887,
+        "mean_uncond": -0.0015517443286194883,
+        "diff": 0.020393432567833374,
+        "tstat": 2.104519919205439
+      },
+      {
+        "pair": "NEAR/USDT",
+        "half": "2024-26",
+        "horizon": 3,
+        "n_events": 75,
+        "mean_event": 0.029389866732927913,
+        "mean_uncond": -0.0022839685588498773,
+        "diff": 0.031673835291777794,
+        "tstat": 2.3004378483042287
+      },
+      {
+        "pair": "SKL/USDT",
+        "half": "2024-26",
+        "horizon": 3,
+        "n_events": 45,
+        "mean_event": 0.01164896063823918,
+        "mean_uncond": -0.009677756227860688,
+        "diff": 0.021326716866099868,
+        "tstat": 1.3560253497134693
+      },
+      {
+        "pair": "SOL/USDT",
+        "half": "2024-26",
+        "horizon": 3,
+        "n_events": 105,
+        "mean_event": 0.012685390391056808,
+        "mean_uncond": -0.0009727402236794521,
+        "diff": 0.01365813061473626,
+        "tstat": 1.8589638663538008
+      },
+      {
+        "pair": "TRX/USDT",
+        "half": "2024-26",
+        "horizon": 3,
+        "n_events": 79,
+        "mean_event": 0.0014781528050694399,
+        "mean_uncond": 0.0036632085396860713,
+        "diff": -0.0021850557346166314,
+        "tstat": -0.21613724764952796
+      },
+      {
+        "pair": "UNI/USDT",
+        "half": "2024-26",
+        "horizon": 3,
+        "n_events": 90,
+        "mean_event": 0.025723455850804006,
+        "mean_uncond": -0.002369721236525595,
+        "diff": 0.028093177087329602,
+        "tstat": 2.4138492456655003
+      },
+      {
+        "pair": "XLM/USDT",
+        "half": "2024-26",
+        "horizon": 3,
+        "n_events": 70,
+        "mean_event": 0.026274190653326052,
+        "mean_uncond": 0.001232467265334272,
+        "diff": 0.02504172338799178,
+        "tstat": 1.3713052344802055
+      },
+      {
+        "pair": "XRP/USDT",
+        "half": "2024-26",
+        "horizon": 3,
+        "n_events": 75,
+        "mean_event": 0.0357412596792956,
+        "mean_uncond": 0.001901181549638141,
+        "diff": 0.03384007812965746,
+        "tstat": 2.1761204276571107
+      },
+      {
+        "pair": "ZEC/USDT",
+        "half": "2024-26",
+        "horizon": 3,
+        "n_events": 52,
+        "mean_event": 0.029185292871792754,
+        "mean_uncond": 0.009451366472251643,
+        "diff": 0.01973392639954111,
+        "tstat": 1.1975396044147728
+      },
+      {
+        "pair": "AAVE/USDT",
+        "half": "2024-26",
+        "horizon": 7,
+        "n_events": 95,
+        "mean_event": 0.059331686920158146,
+        "mean_uncond": -0.0010392364339253343,
+        "diff": 0.06037092335408348,
+        "tstat": 4.044938007511109
+      },
+      {
+        "pair": "ADA/USDT",
+        "half": "2024-26",
+        "horizon": 7,
+        "n_events": 83,
+        "mean_event": 0.023672197597903503,
+        "mean_uncond": -0.008777734950490198,
+        "diff": 0.0324499325483937,
+        "tstat": 2.0656503357582503
+      },
+      {
+        "pair": "BNB/USDT",
+        "half": "2024-26",
+        "horizon": 7,
+        "n_events": 116,
+        "mean_event": 0.019772640750462783,
+        "mean_uncond": 0.004677835903914748,
+        "diff": 0.015094804846548036,
+        "tstat": 2.008822373151255
+      },
+      {
+        "pair": "BTC/USDT",
+        "half": "2024-26",
+        "horizon": 7,
+        "n_events": 91,
+        "mean_event": 0.00042334733631704244,
+        "mean_uncond": 0.0027882024016607867,
+        "diff": -0.002364855065343744,
+        "tstat": -0.331111298845801
+      },
+      {
+        "pair": "DEXE/USDT",
+        "half": "2024-26",
+        "horizon": 7,
+        "n_events": 23,
+        "mean_event": -0.12424799630178937,
+        "mean_uncond": 0.014825950196497144,
+        "diff": -0.13907394649828653,
+        "tstat": -2.142945853854362
+      },
+      {
+        "pair": "DOGE/USDT",
+        "half": "2024-26",
+        "horizon": 7,
+        "n_events": 90,
+        "mean_event": 0.047584934255821346,
+        "mean_uncond": -0.0008789620919880624,
+        "diff": 0.048463896347809406,
+        "tstat": 2.654139874364347
+      },
+      {
+        "pair": "ETH/USDT",
+        "half": "2024-26",
+        "horizon": 7,
+        "n_events": 102,
+        "mean_event": -0.0038701280052283156,
+        "mean_uncond": -0.0018973621766239864,
+        "diff": -0.0019727658286043293,
+        "tstat": -0.1955429589038493
+      },
+      {
+        "pair": "LTC/USDT",
+        "half": "2024-26",
+        "horizon": 7,
+        "n_events": 85,
+        "mean_event": 0.0283318514057482,
+        "mean_uncond": -0.0032189330757272754,
+        "diff": 0.031550784481475476,
+        "tstat": 2.197775746064936
+      },
+      {
+        "pair": "NEAR/USDT",
+        "half": "2024-26",
+        "horizon": 7,
+        "n_events": 75,
+        "mean_event": 0.043495152706505814,
+        "mean_uncond": -0.004753493510223108,
+        "diff": 0.04824864621672892,
+        "tstat": 2.2459328544975294
+      },
+      {
+        "pair": "SKL/USDT",
+        "half": "2024-26",
+        "horizon": 7,
+        "n_events": 45,
+        "mean_event": 0.005470010193741633,
+        "mean_uncond": -0.023500904590682208,
+        "diff": 0.02897091478442384,
+        "tstat": 1.2032794844374302
+      },
+      {
+        "pair": "SOL/USDT",
+        "half": "2024-26",
+        "horizon": 7,
+        "n_events": 104,
+        "mean_event": 0.0281269827722477,
+        "mean_uncond": -0.0017320354045113988,
+        "diff": 0.0298590181767591,
+        "tstat": 3.155529492444109
+      },
+      {
+        "pair": "TRX/USDT",
+        "half": "2024-26",
+        "horizon": 7,
+        "n_events": 79,
+        "mean_event": -0.0025796318409367987,
+        "mean_uncond": 0.008692448198042699,
+        "diff": -0.011272080038979497,
+        "tstat": -1.0772110409188331
+      },
+      {
+        "pair": "UNI/USDT",
+        "half": "2024-26",
+        "horizon": 7,
+        "n_events": 87,
+        "mean_event": 0.03481860432561978,
+        "mean_uncond": -0.005363711351950693,
+        "diff": 0.04018231567757047,
+        "tstat": 2.347615146402375
+      },
+      {
+        "pair": "XLM/USDT",
+        "half": "2024-26",
+        "horizon": 7,
+        "n_events": 67,
+        "mean_event": 0.05850767817523124,
+        "mean_uncond": 0.0035013376235060586,
+        "diff": 0.05500634055172518,
+        "tstat": 1.72205675006419
+      },
+      {
+        "pair": "XRP/USDT",
+        "half": "2024-26",
+        "horizon": 7,
+        "n_events": 75,
+        "mean_event": 0.07038958375147387,
+        "mean_uncond": 0.004947642922000399,
+        "diff": 0.06544194082947348,
+        "tstat": 3.0247835836612444
+      },
+      {
+        "pair": "ZEC/USDT",
+        "half": "2024-26",
+        "horizon": 7,
+        "n_events": 48,
+        "mean_event": 0.03342793282656695,
+        "mean_uncond": 0.02260855990426706,
+        "diff": 0.010819372922299886,
+        "tstat": 0.4107099194358851
+      }
+    ],
+    "veto_on_xsec_informative": {
+      "label": "xsec_veto_funding_hot",
+      "full": {
+        "free_B": {
+          "cagr": 0.5745391978839567,
+          "sharpe": 0.4257410059779421,
+          "max_drawdown": -0.8872832401154831,
+          "turnover": 0.5264800080558287,
+          "final_wealth": 12.25152165741737
+        },
+        "restricted_B": {
+          "cagr": 0.19785140248238098,
+          "sharpe": 0.1690614039437636,
+          "max_drawdown": -0.9102660849194079,
+          "turnover": 0.587482038734636,
+          "final_wealth": 2.708604665790633
+        },
+        "restricted_A": {
+          "cagr": 0.23513889275593636,
+          "sharpe": 0.19776346536359424,
+          "max_drawdown": -0.9052533750571784,
+          "turnover": 0.587482038734636,
+          "final_wealth": 3.207938265754798
+        },
+        "weeks_full_portfolio_pct": 0.972318339100346,
+        "n_rebalances": 578
+      },
+      "2021-23": {
+        "free_B": {
+          "cagr": 0.1957892475179821,
+          "sharpe": 0.15467034707664865,
+          "max_drawdown": -0.8872832401154831,
+          "turnover": 0.537120759743801,
+          "final_wealth": 1.7084090756773362
+        },
+        "restricted_B": {
+          "cagr": 0.04898458610208167,
+          "sharpe": 0.040951628940929276,
+          "max_drawdown": -0.9102660849194079,
+          "turnover": 0.5945458198440478,
+          "final_wealth": 1.1540053181887184
+        },
+        "restricted_A": {
+          "cagr": 0.08197543079107872,
+          "sharpe": 0.06745921144938069,
+          "max_drawdown": -0.9052533750571784,
+          "turnover": 0.5945458198440478,
+          "final_wealth": 1.2661590205122915
+        },
+        "weeks_full_portfolio_pct": 0.9617834394904459,
+        "n_rebalances": 314
+      },
+      "2024-26": {
+        "free_B": {
+          "cagr": 1.2215823211270789,
+          "sharpe": 0.8498943030059791,
+          "max_drawdown": -0.6089553072961077,
+          "turnover": 0.5048730834131357,
+          "final_wealth": 7.483939494978734
+        },
+        "restricted_B": {
+          "cagr": 0.4879198914858811,
+          "sharpe": 0.428471325004024,
+          "max_drawdown": -0.6387093541280695,
+          "turnover": 0.5677417568522029,
+          "final_wealth": 2.723765964076898
+        },
+        "restricted_A": {
+          "cagr": 0.53280524086162,
+          "sharpe": 0.4605860920675285,
+          "max_drawdown": -0.629828530562373,
+          "turnover": 0.5677417568522029,
+          "final_wealth": 2.935733627269148
+        },
+        "weeks_full_portfolio_pct": 0.9624060150375939,
+        "n_rebalances": 266
+      }
+    }
+  },
+  "intent_12": {
+    "hypothesis": "top-3 momentum restringido a funding <= 0 mejora al libre",
+    "criterion": "mejora Sharpe B en ambas mitades Y >=60% semanas cartera completa",
+    "suite": {
+      "label": "xsec_only_funding_neg",
+      "full": {
+        "free_B": {
+          "cagr": 0.5745391978839567,
+          "sharpe": 0.4257410059779421,
+          "max_drawdown": -0.8872832401154831,
+          "turnover": 0.5264800080558287,
+          "final_wealth": 12.25152165741737
+        },
+        "restricted_B": {
+          "cagr": 0.29003414463535004,
+          "sharpe": 0.26904204274557353,
+          "max_drawdown": -0.7694964633527202,
+          "turnover": 0.5155357100315526,
+          "final_wealth": 4.07815894126144
+        },
+        "restricted_A": {
+          "cagr": 0.3252069071712682,
+          "sharpe": 0.2974484434534598,
+          "max_drawdown": -0.7589987410943736,
+          "turnover": 0.5155357100315526,
+          "final_wealth": 4.730921156317899
+        },
+        "weeks_full_portfolio_pct": 0.5121107266435986,
+        "n_rebalances": 578
+      },
+      "2021-23": {
+        "free_B": {
+          "cagr": 0.1957892475179821,
+          "sharpe": 0.15467034707664865,
+          "max_drawdown": -0.8872832401154831,
+          "turnover": 0.537120759743801,
+          "final_wealth": 1.7084090756773362
+        },
+        "restricted_B": {
+          "cagr": 0.4710215461130387,
+          "sharpe": 0.3460430947473302,
+          "max_drawdown": -0.7694964633527202,
+          "turnover": 0.46951985246273353,
+          "final_wealth": 3.177269098234572
+        },
+        "restricted_A": {
+          "cagr": 0.5074374801480186,
+          "sharpe": 0.3679511650165819,
+          "max_drawdown": -0.7589987410943736,
+          "turnover": 0.46951985246273353,
+          "final_wealth": 3.4187232090373803
+        },
+        "weeks_full_portfolio_pct": 0.49044585987261147,
+        "n_rebalances": 314
+      },
+      "2024-26": {
+        "free_B": {
+          "cagr": 1.2215823211270789,
+          "sharpe": 0.8498943030059791,
+          "max_drawdown": -0.6089553072961077,
+          "turnover": 0.5048730834131357,
+          "final_wealth": 7.483939494978734
+        },
+        "restricted_B": {
+          "cagr": 0.10937795825719543,
+          "sharpe": 0.14926242913229504,
+          "max_drawdown": -0.6462061872817293,
+          "turnover": 0.5661302083704602,
+          "final_wealth": 1.2991843269458223
+        },
+        "restricted_A": {
+          "cagr": 0.14274761008034376,
+          "sharpe": 0.1918741268801038,
+          "max_drawdown": -0.6343551894035124,
+          "turnover": 0.5661302083704602,
+          "final_wealth": 1.399991008692548
+        },
+        "weeks_full_portfolio_pct": 0.5338345864661654,
+        "n_rebalances": 266
+      }
+    },
+    "criterion_eval": {
+      "sharpe_improves_2021_23": true,
+      "sharpe_improves_2024_26": false,
+      "weeks_full_portfolio_pct_full": 0.5121107266435986,
+      "weeks_full_ge_60pct": false,
+      "passes": false
+    }
+  }
+}

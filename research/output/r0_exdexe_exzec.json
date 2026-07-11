@@ -1,0 +1,419 @@
+{
+  "control_of": "intent #10 (10-R0, no cuenta como intento nuevo)",
+  "excluded": [
+    "DEXE/USDT",
+    "ZEC/USDT"
+  ],
+  "params": {
+    "window": 14,
+    "top_n": 3,
+    "fee_B": 0.001,
+    "freq": "W"
+  },
+  "criterion": {
+    "wealth_B_gt_equal_weight_reduced": true,
+    "wealth_B_gt_threshold": true,
+    "threshold": 2.0,
+    "momentum_B_wealth": 3.807739387342283,
+    "equal_weight_B_wealth": 1.9456611728186881,
+    "passes": true
+  },
+  "full_sample": {
+    "baseline_16": {
+      "label": "e2_16_pares",
+      "n_pairs": 16,
+      "momentum_A": {
+        "cagr": 0.6183929187587263,
+        "sharpe": 0.45146830654638226,
+        "max_drawdown": -0.8833738114041141,
+        "turnover": 0.5264800080558287,
+        "final_wealth": 14.2574045389432
+      },
+      "equal_weight_A": {
+        "cagr": 0.16609744439280671,
+        "sharpe": 0.17034895308310719,
+        "max_drawdown": -0.8440589165573567,
+        "turnover": 0.031415347799340264,
+        "final_wealth": 2.3353041367071987
+      },
+      "btc_bh_A": {
+        "cagr": 0.15162009511648966,
+        "sharpe": 0.20315507599531463,
+        "max_drawdown": -0.7662925431645937,
+        "turnover": 0.0,
+        "final_wealth": 2.1797001809305923
+      },
+      "momentum_B": {
+        "cagr": 0.5745391978839567,
+        "sharpe": 0.4257410059779421,
+        "max_drawdown": -0.8872832401154831,
+        "turnover": 0.5264800080558287,
+        "final_wealth": 12.25152165741737
+      },
+      "equal_weight_B": {
+        "cagr": 0.16418753396706598,
+        "sharpe": 0.16853302759405783,
+        "max_drawdown": -0.8444765476820343,
+        "turnover": 0.031415347799340264,
+        "final_wealth": 2.3142704876228564
+      },
+      "btc_bh_B": {
+        "cagr": 0.15162009511648966,
+        "sharpe": 0.20315507599531463,
+        "max_drawdown": -0.7662925431645937,
+        "turnover": 0.0,
+        "final_wealth": 2.1797001809305923
+      }
+    },
+    "reduced_14": {
+      "label": "e2_sin_dexe_zec",
+      "n_pairs": 14,
+      "momentum_A": {
+        "cagr": 0.30909385232166575,
+        "sharpe": 0.25836770119861796,
+        "max_drawdown": -0.8160519404500635,
+        "turnover": 0.5193117944028551,
+        "final_wealth": 4.42202383792518
+      },
+      "equal_weight_A": {
+        "cagr": 0.12986568218285588,
+        "sharpe": 0.1345510125773516,
+        "max_drawdown": -0.8272790380514927,
+        "turnover": 0.02889976130131683,
+        "final_wealth": 1.9619227458648862
+      },
+      "btc_bh_A": {
+        "cagr": 0.15162009511648966,
+        "sharpe": 0.20315507599531463,
+        "max_drawdown": -0.7662925431645937,
+        "turnover": 0.0,
+        "final_wealth": 2.1797001809305923
+      },
+      "momentum_B": {
+        "cagr": 0.274097690720283,
+        "sharpe": 0.2323853604116247,
+        "max_drawdown": -0.821848408112459,
+        "turnover": 0.5193117944028551,
+        "final_wealth": 3.807739387342283
+      },
+      "equal_weight_B": {
+        "cagr": 0.12816318715394925,
+        "sharpe": 0.13289052682773553,
+        "max_drawdown": -0.8277313214300888,
+        "turnover": 0.02889976130131683,
+        "final_wealth": 1.9456611728186881
+      },
+      "btc_bh_B": {
+        "cagr": 0.15162009511648966,
+        "sharpe": 0.20315507599531463,
+        "max_drawdown": -0.7662925431645937,
+        "turnover": 0.0,
+        "final_wealth": 2.1797001809305923
+      }
+    }
+  },
+  "halves": {
+    "2021-23": {
+      "baseline_16": {
+        "label": "e2_16_2021-23",
+        "n_pairs": 16,
+        "momentum_A": {
+          "cagr": 0.2297137064312007,
+          "sharpe": 0.17885186596075833,
+          "max_drawdown": -0.8833738114041141,
+          "turnover": 0.537120759743801,
+          "final_wealth": 1.8577264676953138
+        },
+        "equal_weight_A": {
+          "cagr": 0.28256737274327404,
+          "sharpe": 0.2486926633370954,
+          "max_drawdown": -0.8440589165573567,
+          "turnover": 0.03321993139152292,
+          "final_wealth": 2.1072823279094752
+        },
+        "btc_bh_A": {
+          "cagr": 0.12987286939827913,
+          "sharpe": 0.15612548464639425,
+          "max_drawdown": -0.7662925431645937,
+          "turnover": 0.0,
+          "final_wealth": 1.4415664423018237
+        },
+        "momentum_B": {
+          "cagr": 0.1957892475179821,
+          "sharpe": 0.15467034707664865,
+          "max_drawdown": -0.8872832401154831,
+          "turnover": 0.537120759743801,
+          "final_wealth": 1.7084090756773362
+        },
+        "equal_weight_B": {
+          "cagr": 0.2803501936953172,
+          "sharpe": 0.24696498442011205,
+          "max_drawdown": -0.8444765476820343,
+          "turnover": 0.03321993139152292,
+          "final_wealth": 2.096389987226523
+        },
+        "btc_bh_B": {
+          "cagr": 0.12987286939827913,
+          "sharpe": 0.15612548464639425,
+          "max_drawdown": -0.7662925431645937,
+          "turnover": 0.0,
+          "final_wealth": 1.4415664423018237
+        }
+      },
+      "reduced_14": {
+        "label": "e2_reducido_2021-23",
+        "n_pairs": 14,
+        "momentum_A": {
+          "cagr": 0.5521316383142092,
+          "sharpe": 0.37792286242249673,
+          "max_drawdown": -0.8160519404500635,
+          "turnover": 0.5139931575850206,
+          "final_wealth": 3.731391951194338
+        },
+        "equal_weight_A": {
+          "cagr": 0.37198099145297747,
+          "sharpe": 0.3145593097392662,
+          "max_drawdown": -0.8272790380514927,
+          "turnover": 0.03240263919446171,
+          "final_wealth": 2.5786132830911512
+        },
+        "btc_bh_A": {
+          "cagr": 0.12987286939827913,
+          "sharpe": 0.15612548464639425,
+          "max_drawdown": -0.7662925431645937,
+          "turnover": 0.0,
+          "final_wealth": 1.4415664423018237
+        },
+        "momentum_B": {
+          "cagr": 0.5111316965242658,
+          "sharpe": 0.35493246267491946,
+          "max_drawdown": -0.821848408112459,
+          "turnover": 0.5139931575850206,
+          "final_wealth": 3.443878849641548
+        },
+        "equal_weight_B": {
+          "cagr": 0.3696675443860771,
+          "sharpe": 0.3128828458854701,
+          "max_drawdown": -0.8277313214300888,
+          "turnover": 0.03240263919446171,
+          "final_wealth": 2.5656117662544426
+        },
+        "btc_bh_B": {
+          "cagr": 0.12987286939827913,
+          "sharpe": 0.15612548464639425,
+          "max_drawdown": -0.7662925431645937,
+          "turnover": 0.0,
+          "final_wealth": 1.4415664423018237
+        }
+      }
+    },
+    "2024-26": {
+      "baseline_16": {
+        "label": "e2_16_2024-26",
+        "n_pairs": 16,
+        "momentum_A": {
+          "cagr": 1.2810801143016985,
+          "sharpe": 0.8779611418916919,
+          "max_drawdown": -0.6005237407000761,
+          "turnover": 0.5048730834131357,
+          "final_wealth": 7.9996882390874875
+        },
+        "equal_weight_A": {
+          "cagr": 0.027212919639580724,
+          "sharpe": 0.03488434976592299,
+          "max_drawdown": -0.6561291990470379,
+          "turnover": 0.02923276233693053,
+          "final_wealth": 1.0700463479523679
+        },
+        "btc_bh_A": {
+          "cagr": 0.15785996882895037,
+          "sharpe": 0.2550371828331222,
+          "max_drawdown": -0.5297176591351062,
+          "turnover": 0.0,
+          "final_wealth": 1.4471467002266916
+        },
+        "momentum_B": {
+          "cagr": 1.2215823211270789,
+          "sharpe": 0.8498943030059791,
+          "max_drawdown": -0.6089553072961077,
+          "turnover": 0.5048730834131357,
+          "final_wealth": 7.483939494978734
+        },
+        "equal_weight_B": {
+          "cagr": 0.02564218580773847,
+          "sharpe": 0.03289649455031157,
+          "max_drawdown": -0.6567325517286033,
+          "turnover": 0.02923276233693053,
+          "final_wealth": 1.0659252898835079
+        },
+        "btc_bh_B": {
+          "cagr": 0.15785996882895037,
+          "sharpe": 0.2550371828331222,
+          "max_drawdown": -0.5297176591351062,
+          "turnover": 0.0,
+          "final_wealth": 1.4471467002266916
+        }
+      },
+      "reduced_14": {
+        "label": "e2_reducido_2024-26",
+        "n_pairs": 14,
+        "momentum_A": {
+          "cagr": 0.08031146090467778,
+          "sharpe": 0.08903089529427254,
+          "max_drawdown": -0.78893208338768,
+          "turnover": 0.5165659652670244,
+          "final_wealth": 1.215054600496859
+        },
+        "equal_weight_A": {
+          "cagr": -0.11411292512179594,
+          "sharpe": -0.1561187223376271,
+          "max_drawdown": -0.7205292754140427,
+          "turnover": 0.024768729426514688,
+          "final_wealth": 0.7367350990198238
+        },
+        "btc_bh_A": {
+          "cagr": 0.15785996882895037,
+          "sharpe": 0.2550371828331222,
+          "max_drawdown": -0.5297176591351062,
+          "turnover": 0.0,
+          "final_wealth": 1.4471467002266916
+        },
+        "momentum_B": {
+          "cagr": 0.05148969748017462,
+          "sharpe": 0.05786846458480114,
+          "max_drawdown": -0.7970320747395323,
+          "turnover": 0.5165659652670244,
+          "final_wealth": 1.13496556021274
+        },
+        "equal_weight_B": {
+          "cagr": -0.11526082787038039,
+          "sharpe": -0.1577916026207442,
+          "max_drawdown": -0.7210399861636902,
+          "turnover": 0.024768729426514688,
+          "final_wealth": 0.7343302973910111
+        },
+        "btc_bh_B": {
+          "cagr": 0.15785996882895037,
+          "sharpe": 0.2550371828331222,
+          "max_drawdown": -0.5297176591351062,
+          "turnover": 0.0,
+          "final_wealth": 1.4471467002266916
+        }
+      }
+    }
+  },
+  "pair_contribution_table": [
+    {
+      "pair": "SOL/USDT",
+      "log_pnl_contribution": 0.9524576557087178,
+      "mean_daily_quote_volume_usdt": 413648056.53156316,
+      "pnl_per_musd_volume": 0.0023025797913691906,
+      "excluded_in_r0": false
+    },
+    {
+      "pair": "AAVE/USDT",
+      "log_pnl_contribution": 0.5601682542364123,
+      "mean_daily_quote_volume_usdt": 35857274.56991367,
+      "pnl_per_musd_volume": 0.015622164845356815,
+      "excluded_in_r0": false
+    },
+    {
+      "pair": "ZEC/USDT",
+      "log_pnl_contribution": 0.4337674995168705,
+      "mean_daily_quote_volume_usdt": 41857580.46362792,
+      "pnl_per_musd_volume": 0.010362937721490904,
+      "excluded_in_r0": true
+    },
+    {
+      "pair": "NEAR/USDT",
+      "log_pnl_contribution": 0.3920754397125845,
+      "mean_daily_quote_volume_usdt": 59376328.35567986,
+      "pnl_per_musd_volume": 0.00660322809729745,
+      "excluded_in_r0": false
+    },
+    {
+      "pair": "BTC/USDT",
+      "log_pnl_contribution": 0.3642227643466234,
+      "mean_daily_quote_volume_usdt": 2560884312.455054,
+      "pnl_per_musd_volume": 0.0001422253877596885,
+      "excluded_in_r0": false
+    },
+    {
+      "pair": "DOGE/USDT",
+      "log_pnl_contribution": 0.34605245326813977,
+      "mean_daily_quote_volume_usdt": 349510664.7000369,
+      "pnl_per_musd_volume": 0.000990105562487299,
+      "excluded_in_r0": false
+    },
+    {
+      "pair": "TRX/USDT",
+      "log_pnl_contribution": 0.3342122756274575,
+      "mean_daily_quote_volume_usdt": 95378902.81782879,
+      "pnl_per_musd_volume": 0.003504048230307222,
+      "excluded_in_r0": false
+    },
+    {
+      "pair": "XRP/USDT",
+      "log_pnl_contribution": 0.28023038924175425,
+      "mean_daily_quote_volume_usdt": 371972328.3717895,
+      "pnl_per_musd_volume": 0.0007533635377351554,
+      "excluded_in_r0": false
+    },
+    {
+      "pair": "DEXE/USDT",
+      "log_pnl_contribution": 0.2770477586252278,
+      "mean_daily_quote_volume_usdt": 3149280.9192852266,
+      "pnl_per_musd_volume": 0.08797175156038721,
+      "excluded_in_r0": true
+    },
+    {
+      "pair": "ETH/USDT",
+      "log_pnl_contribution": 0.24282868058868418,
+      "mean_daily_quote_volume_usdt": 1358096807.1201372,
+      "pnl_per_musd_volume": 0.0001788007153213221,
+      "excluded_in_r0": false
+    },
+    {
+      "pair": "ADA/USDT",
+      "log_pnl_contribution": 0.1443105460595415,
+      "mean_daily_quote_volume_usdt": 183874175.71910775,
+      "pnl_per_musd_volume": 0.0007848331365465646,
+      "excluded_in_r0": false
+    },
+    {
+      "pair": "XLM/USDT",
+      "log_pnl_contribution": 0.021424289234673745,
+      "mean_daily_quote_volume_usdt": 39760188.84138718,
+      "pnl_per_musd_volume": 0.0005388377132749623,
+      "excluded_in_r0": false
+    },
+    {
+      "pair": "UNI/USDT",
+      "log_pnl_contribution": -0.009542902417607337,
+      "mean_daily_quote_volume_usdt": 42036981.95770606,
+      "pnl_per_musd_volume": -0.00022701207301724404,
+      "excluded_in_r0": false
+    },
+    {
+      "pair": "BNB/USDT",
+      "log_pnl_contribution": -0.06704201221315262,
+      "mean_daily_quote_volume_usdt": 335629403.6712634,
+      "pnl_per_musd_volume": -0.00019975011569253864,
+      "excluded_in_r0": false
+    },
+    {
+      "pair": "LTC/USDT",
+      "log_pnl_contribution": -0.3771174074452112,
+      "mean_daily_quote_volume_usdt": 89382906.18061051,
+      "pnl_per_musd_volume": -0.004219122241149705,
+      "excluded_in_r0": false
+    },
+    {
+      "pair": "SKL/USDT",
+      "log_pnl_contribution": -1.237819295562155,
+      "mean_daily_quote_volume_usdt": 6917662.231598148,
+      "pnl_per_musd_volume": -0.1789360703256234,
+      "excluded_in_r0": false
+    }
+  ]
+}

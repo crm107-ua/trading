@@ -16,6 +16,33 @@
 | 8 | E3 — Reversión post-extremos ±2σ (retorno 1/3/7d) | 16 pares 1d | Event study pandas; split 2021-23 / 2024-26 | t-stat>2 vs incondicional en **ambas** mitades | **DESCARTADA** — 9 filas \|t\|>2 pero 0 estables en ambas mitades (intent #8) | 2026-07-10 |
 | 9 | E4 — Estacionalidad día-de-semana | 16 pares 1d | Medias por weekday; split fijo | t-stat>2 en **ambas** mitades o descartar | **DESCARTADA** — 2 filas \|t\|>2, 0 estables (intent #9) | 2026-07-10 |
 | 10 | XSecMomentum P1: rotación 1d top-3 w14 rebalanceo lunes, universo E2, filtro BEAR | 16 pares 1d | Screen Freqtrade + `--bias-controls` (LOO + max DD<60%) | screen_protocol rotación + controles sesgo research | **PASA confirmado (screen)** — fees auditadas (16% fricción real); research_baseline + wide; conservative falla DD/LOO (intent #10) | 2026-07-10 |
+| 10-R0 | **Control de #10 (no es intento nuevo):** el efecto E2 sobrevive excluyendo DEXE y ZEC simultáneamente (los dos sospechosos de iliquidez) | 14 pares 1d (E2 sin DEXE/ZEC) | `xsec_lab` top-3 w14 W, versión B, datadir local PC | Wealth B > equal-weight del universo reducido **Y** wealth B > 2× — umbral fijado antes de calcular | **PASA** — B 3.81× vs EW 1.95× vs umbral 2×; pero mitad 2024-26 débil (B 1.13× < BTC 1.45×) — ver `r0_exdexe_exzec.json` | 2026-07-11 |
+| 11 | Funding extremo = sobrecalentamiento: funding perp > p90 rolling 90d del par → retornos spot forward 1/3/7d peores que incondicionales | Universo E2 con perp USDT en Binance, funding 8h→diario | Event study pandas condicionado a funding alto; split 2021-23 / 2024-26 | t-stat > 2 (retorno condicionado < incondicional) en **ambas** mitades, por agregado; percentil 90 fijo, sin optimizar | **DESCARTADA** — signo CONTRARIO: t agregados +0.97…+5.97 (funding alto → retornos MEJORES); veto hunde la cartera 12.3×→2.7× (intent #11) | 2026-07-11 |
+| 12 | Funding negativo + momentum positivo = señal contraria favorable: top-3 momentum restringido a pares con funding ≤ 0 al rebalanceo mejora al top-3 libre | Universo E2 con perp, spot 1d | Cartera top-3 w14 W restringida vs libre, versión B, ambas mitades | Mejora Sharpe B en **ambas** mitades **Y** ≥60% de semanas con cartera completa (3 posiciones) | **DESCARTADA** — Sharpe mejora 21-23 (0.15→0.35) pero colapsa 24-26 (0.85→0.15); semanas completas 51% < 60% (intent #12) | 2026-07-11 |
+| 13 | El edge E2 no depende de la cola ilíquida: momentum top-3 sobrevive filtrando por volumen medio 30d | E2 filtrado por volumen (3 umbrales fijos: 5M / 20M / 50M USDT/día — los tres se reportan, no se elige a posteriori) | Top-3 w14 W sobre universo filtrado, versión B vs EW filtrado y BTC B&H, ambas mitades | En el umbral 20M: B bate EW-filtrado **y** BTC en **ambas** mitades | **PASA** — 20M: 21-23 B 3.57 vs EW 1.75/BTC 1.44; 24-26 B 4.69 vs EW 0.91/BTC 1.45; full 15.6× (intent #13) | 2026-07-11 |
+
+---
+
+## Pre-registro validación XSecMomentum (2026-07-11, antes de `report.json` MeanRevBB)
+
+**Congelar antes de leer el veredicto del control.** No modifica código hoy; fija qué se valida y qué es control.
+
+| Rol | Configuración | Detalle |
+|-----|---------------|---------|
+| **Primaria** | **XSecMomentum-20M** | Mismo motor #10 (top-3 w14, rebalanceo lunes, filtro BEAR BTC@1d). **Filtro de liquidez dinámico:** en cada rebalanceo, solo entran pares con **volumen quote medio 30d causal** (media móvil 30d desplazada 1 día, solo historia ≤ t−1) **> 20M USDT/día**. Replica `research/r2_liquidity_filter.py`, no una lista estática de pares por media histórica completa. |
+| **Control** | XSecMomentum E2 sin filtro | Screen PASA (#10, `run_id=20260710_162559`). Sirve de comparación; no es la hipótesis operativa post-#13. |
+
+**Por qué primaria y no variante secundaria:** #13 pasa en 20M con patrón monótono 5M→20M→50M (edge se fortalece al quitar iliquidez). R0 (#10-R0) pasa el criterio global pero 2024-26 sin DEXE/ZEC queda en 1.13×; con filtro 20M la misma mitad da **4.69×** — la variante 20M resuelve el asterisco de R0 mejor que el universo original.
+
+**Implementación Freqtrade (cuando toque, post-calibración):** el filtro debe evaluarse **en cada lunes de rebalanceo** con ventana 30d hasta la vela anterior; prohibido sustituir por universo estático precomputado (cambiaría la hipótesis).
+
+---
+
+## Observaciones bloqueadas (no explotar sin pre-registro nuevo)
+
+| ID | Observación | Candado |
+|----|-------------|---------|
+| OBS-11a | En #11 el signo salió **invertido**: funding > p90 rolling 90d precede retornos spot forward **mejores** (t agregado hasta +5.97 en 2024-26). Tentador como señal de continuación. | **Hipótesis post-hoc** (signo volteado tras ver datos). Máximo descuento por multiplicidad. Si algún día se prueba → **intento nuevo** con criterio OOS estricto pre-fijado **antes** de correr. **Hoy no.** |
 
 ---
 
