@@ -133,8 +133,16 @@ def _extract_error_tail(output: str, *, max_chars: int = 4000) -> str:
   return output[-max_chars:]
 
 
-def run_freqtrade(args: list[str], *, timeout: int | None = None) -> CommandResult:
-  cmd = ["docker", "compose", "run", "--rm", "freqtrade", *args]
+def run_freqtrade(
+  args: list[str],
+  *,
+  timeout: int | None = None,
+  env: dict[str, str] | None = None,
+) -> CommandResult:
+  cmd = ["docker", "compose", "run", "--rm"]
+  for key, value in (env or {}).items():
+    cmd.extend(["-e", f"{key}={value}"])
+  cmd.extend(["freqtrade", *args])
   try:
     proc = subprocess.run(
       cmd,
@@ -309,7 +317,11 @@ def run_hyperopt(
   ]
   if enable_protections:
     args.append("--enable-protections")
-  return run_freqtrade(args, timeout=hyperopt_timeout_seconds(epochs))
+  return run_freqtrade(
+    args,
+    timeout=hyperopt_timeout_seconds(epochs),
+    env={"QUANT_ROBUST_MIN_TRADES": str(min_trades)},
+  )
 
 
 def latest_backtest_zip() -> Path | None:

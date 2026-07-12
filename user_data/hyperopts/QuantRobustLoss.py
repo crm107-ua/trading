@@ -14,9 +14,19 @@ from pandas import DataFrame
 from freqtrade.data.metrics import calculate_max_drawdown, calculate_sharpe
 from freqtrade.optimize.hyperopt import IHyperOptLoss
 
-MIN_TRADES = 100
+MIN_TRADES_DEFAULT = 100
 DD_WEIGHT = 2.0
 INSUFFICIENT_TRADES_LOSS = 10_000.0
+
+
+def _min_trades_threshold() -> int:
+  """Alineado con ``--min-trades`` del CLI vía env (orquestador)."""
+  import os
+
+  raw = os.environ.get("QUANT_ROBUST_MIN_TRADES", "").strip()
+  if raw:
+    return max(1, int(raw))
+  return MIN_TRADES_DEFAULT
 
 
 class QuantRobustLoss(IHyperOptLoss):
@@ -30,7 +40,7 @@ class QuantRobustLoss(IHyperOptLoss):
     *args,
     **kwargs,
   ) -> float:
-    if trade_count < MIN_TRADES:
+    if trade_count < _min_trades_threshold():
       return INSUFFICIENT_TRADES_LOSS
 
     sharpe = calculate_sharpe(results, min_date, max_date, starting_balance)

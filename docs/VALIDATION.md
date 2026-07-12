@@ -20,11 +20,13 @@ python -m pipeline.run_validation XSecMomentum --profile full \
 ```bash
 python -m pipeline.run_validation XSecMomentum --profile full \
   --extra-config user_data/config/screen_xsec.json \
-  --wf-epochs 100
+  --wf-epochs 100 \
+  --wf-min-trades 30
 ```
 
 - `--extra-config` repetible; entra en `config_files` y `config_merged_sha256` del reporte.
 - `--wf-epochs 100` solo afecta hyperopts de ventana WF; semillas siguen a 300 (perfil `full`).
+- `--wf-min-trades 30` obligatorio para XSec: ventanas train 12m generan ~45 trades (perfil `full` usa 100 en semillas).
 - Warmup WF: leído del `.py` de la estrategia (`startup_candle_count` + `timeframe`); XSecMomentum 1d → 220 velas ≈ 220 días.
 
 ## Perfiles

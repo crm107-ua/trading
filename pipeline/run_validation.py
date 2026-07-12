@@ -297,6 +297,11 @@ def main(
     "--wf-epochs",
     help="Epochs hyperopt por ventana walk-forward (default: igual que --epochs del perfil)",
   ),
+  wf_min_trades: int | None = typer.Option(
+    None,
+    "--wf-min-trades",
+    help="min-trades hyperopt WF (default: igual que perfil; XSec 12m suele necesitar 30)",
+  ),
   extra_config: list[str] = typer.Option(
     [],
     "--extra-config",
@@ -322,6 +327,7 @@ def main(
       resume_run_id=resume_run_id,
       adopt_partial_hyperopt=adopt_partial_hyperopt,
       wf_epochs=wf_epochs,
+      wf_min_trades=wf_min_trades,
       extra_config=extra_config,
       dry_plan=dry_plan,
     )
@@ -349,6 +355,7 @@ def _run_validation(
   resume_run_id: str | None,
   adopt_partial_hyperopt: bool,
   wf_epochs: int | None,
+  wf_min_trades: int | None,
   extra_config: list[str],
   dry_plan: bool,
 ) -> None:
@@ -357,6 +364,7 @@ def _run_validation(
   wf_epochs_n = wf_epochs if wf_epochs is not None else epochs_n
   seeds_n = seeds if seeds is not None else defaults["seeds"]
   min_trades_n = int(defaults["min_trades"])
+  wf_min_trades_n = int(wf_min_trades) if wf_min_trades is not None else min_trades_n
   opt_spaces = hyperopt_spaces_for(strategy)
   do_wf = defaults["walk_forward"] and not skip_walk_forward
   extra_paths = _resolve_extra_configs(extra_config) if extra_config else []
@@ -423,6 +431,7 @@ def _run_validation(
       "wf_epochs": wf_epochs_n,
       "seeds": seeds_n,
       "min_trades": min_trades_n,
+      "wf_min_trades": wf_min_trades_n,
       "hyperopt_spaces": opt_spaces,
       "hyperopt_job_workers": hyperopt_job_workers(),
       "hyperopt_reproducibility_note": (
@@ -588,7 +597,7 @@ def _run_validation(
       wf_train_min = earliest_train_start(split.full_start, strategy)
       console.print(
         f"[cyan]==> Walk-forward 12m/3m ({wf_epochs_n} epochs/ventana, "
-        f"warmup>={wf_warmup_days}d, train desde {wf_train_min.isoformat()})[/cyan]"
+        f"min_trades={wf_min_trades_n}, warmup>={wf_warmup_days}d, train desde {wf_train_min.isoformat()})[/cyan]"
       )
       windows = generate_walk_forward_windows(
         split.full_start,
@@ -680,7 +689,7 @@ def _run_validation(
           enable_protections=enable_protections,
           archive_dir=params_archive,
           label=wf_label,
-          min_trades=min_trades_n,
+          min_trades=wf_min_trades_n,
           spaces=opt_spaces,
           adopt_partial=False,
           context=wf_ctx,

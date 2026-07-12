@@ -102,6 +102,26 @@ Tras desplegar resume granular WF en el servidor, el usuario pidió **mover el r
 
 ---
 
+## XSecMomentum — WF wf0 sin export JSON (2026-07-12)
+
+### Síntoma
+
+`RuntimeError: hyperopt no exportó XSecMomentum.json (wf0_train seed=42)` tras 91/100 épocas. Lock liberado; vigilante alertó correctamente. Resume sin cambios repitió el fallo.
+
+### Causa
+
+Doble umbral en conflicto:
+
+1. `--min-trades 100` (perfil `full`) en ventanas WF train **12m**: XSec rebalancea semanalmente → ~45 trades/año.
+2. **`QuantRobustLoss`** tenía `MIN_TRADES = 100` hardcodeado (independiente del CLI). Todas las épocas recibían `loss=10000` y Freqtrade no escribía `XSecMomentum.json`.
+
+### Fix
+
+- `--wf-min-trades 30` (solo hyperopts WF; semillas siguen en 100).
+- `QuantRobustLoss` lee `QUANT_ROBUST_MIN_TRADES` (inyectado por orquestador vía Docker `-e`, alineado con `--min-trades`).
+
+---
+
 | Item | Archivo | Prioridad |
 |------|---------|-----------|
 | Lock **audit-log** + heartbeat | `pipeline/run_lock.py`, tests | Alta (antes del batch) |
