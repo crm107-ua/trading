@@ -136,7 +136,7 @@ def test_resume_run_leaves_lock_during_startup(tmp_path: Path, monkeypatch: pyte
   monkeypatch.setattr(rv, "resolve_data_end", lambda _d: date(2024, 6, 30))
   monkeypatch.setattr(rv, "compute_is_oos_split", lambda _tr, data_end: split)
   monkeypatch.setattr(rv, "regime_distribution_for_timerange", lambda _tr: {})
-  monkeypatch.setattr(rv, "config_metadata", lambda: {"config_merged_sha256": "0" * 64, "config_files": []})
+  monkeypatch.setattr(rv, "config_metadata", lambda _paths=None: {"config_merged_sha256": "0" * 64, "config_files": []})
   monkeypatch.setattr(rv, "docker_runtime_info", lambda: {})
   monkeypatch.setattr(rv, "hyperopt_job_workers", lambda: 1)
   monkeypatch.setattr(rv, "hyperopt_spaces_for", lambda _s: ["buy"])
@@ -163,6 +163,8 @@ def test_resume_run_leaves_lock_during_startup(tmp_path: Path, monkeypatch: pyte
       resume_run_id=run_id,
       adopt_partial_hyperopt=False,
       wf_epochs=None,
+      extra_config=[],
+      dry_plan=False,
     )
 
   thread = threading.Thread(target=run_validate)
