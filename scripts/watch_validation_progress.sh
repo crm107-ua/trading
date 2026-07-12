@@ -22,7 +22,8 @@ while true; do
     exit 0
   fi
   line="$(_ts) $("$PY" "${ROOT}/scripts/validation_progress.py" \
-    --strategy "$STRATEGY" --run-id "$RUN_ID" 2>/dev/null || echo "PROGRESO — error calculando progreso")"
+    --strategy "$STRATEGY" --run-id "$RUN_ID" --format compact 2>/dev/null \
+    || echo "PROGRESO — error calculando progreso")"
   echo "$line" >>"$OUT_LOG"
   sleep "$INTERVAL"
 done

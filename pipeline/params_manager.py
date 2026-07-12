@@ -53,6 +53,7 @@ def archive_strategy_params(
   label: str,
   *,
   source: Path | None = None,
+  extra_meta: dict | None = None,
 ) -> Path | None:
   """Archiva params actuales (o ``source``) como ``{label}.json``."""
   archive_dir.mkdir(parents=True, exist_ok=True)
@@ -67,6 +68,8 @@ def archive_strategy_params(
     "archived_at": datetime.now(timezone.utc).isoformat(),
     "source": str(src),
   }
+  if extra_meta:
+    meta.update(extra_meta)
   dest.with_suffix(".meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
   return dest
 

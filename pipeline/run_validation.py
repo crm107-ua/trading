@@ -59,9 +59,17 @@ from pipeline.strategy_spaces import hyperopt_spaces_for
 from pipeline.strategy_warmup import earliest_train_start, warmup_days
 from pipeline.walk_forward import (
   OosSegmentResult,
+  WalkForwardWindow,
   generate_walk_forward_windows,
   stitch_oos_equity,
   walk_forward_efficiency,
+)
+from pipeline.wf_resume import (
+  WfWindowRecord,
+  adopt_or_recover_wf_window,
+  evaluate_wf_adoption,
+  merge_checkpoint_wf_completed,
+  save_wf_segment,
 )
 
 console = Console()
@@ -139,6 +147,7 @@ def _hyperopt_and_archive(
   spaces: list[str],
   adopt_partial: bool = False,
   context: str | None = None,
+  archive_extra_meta: dict | None = None,
 ) -> tuple[Path | None, str]:
   """Hyperopt IS con params limpios; archiva el json generado."""
   ctx = context or f"seed={seed}"
@@ -154,7 +163,7 @@ def _hyperopt_and_archive(
         f"({adoption.epochs_done}/{adoption.epochs_requested}, "
         f"ratio={adoption.completion_ratio:.1%})[/yellow]"
       )
-      archived = archive_strategy_params(strategy, archive_dir, label)
+      archived = archive_strategy_params(strategy, archive_dir, label, extra_meta=archive_extra_meta)
       if archived is None:
         raise RuntimeError(f"adopción no exportó {strategy}.json ({ctx})")
       return archived, adoption.note
@@ -173,7 +182,9 @@ def _hyperopt_and_archive(
 
     raise RuntimeError(f"hyperopt falló ({ctx})\n{_extract_error_tail(result.output)}")
 
-  archived = archive_strategy_params(strategy, archive_dir, label)
+  archived = archive_strategy_params(
+    strategy, archive_dir, label, extra_meta=archive_extra_meta
+  )
   if archived is None:
     raise RuntimeError(f"hyperopt no exportó {strategy}.json ({ctx})")
 
@@ -521,7 +532,68 @@ def _run_validation(
       report["steps"]["walk_forward_windows"] = [w.to_dict() for w in windows]
       oos_segments: list[OosSegmentResult] = []
 
+      def _wf_backtest(timerange: str, params_file: Path, **kwargs) -> tuple[dict, str, Path]:
+        return _backtest_with_params(
+          strategy,
+          timerange,
+          params_file,
+          enable_protections=enable_protections,
+          allow_defaults=kwargs.get("allow_defaults", False),
+        )
+
+      # Inventario de adopciones (log explícito antes de ejecutar)
+      adoption_plan: list = []
       for window in windows:
+        decision = evaluate_wf_adoption(window, params_archive)
+        adoption_plan.append(decision)
+        if decision.adopted:
+          console.print(
+            f"[dim]    WF ventana {window.index} — adoptable: {decision.reason}[/dim]"
+          )
+        elif decision.source:
+          console.print(
+            f"[yellow]    WF ventana {window.index} — descartada: {decision.reason}[/yellow]"
+          )
+
+      ck_payload_base = {
+        "run_id": run_id,
+        "strategy": strategy,
+        "baseline_oos": baseline_oos,
+        "completed_seeds": sorted(completed_seeds),
+        "seed_results": [asdict(s) for s in seed_results],
+        "seed_params_raw": seed_params_raw,
+      }
+      if checkpoint and checkpoint.get("wf_windows_completed"):
+        ck_payload_base["wf_windows_completed"] = list(checkpoint["wf_windows_completed"])
+
+      for window in windows:
+        record, adopt_decision = adopt_or_recover_wf_window(
+          window,
+          params_archive,
+          backtest=_wf_backtest,
+          enable_protections=enable_protections,
+        )
+        if record is not None:
+          console.print(
+            f"[dim]==> WF ventana {window.index} — completada "
+            f"({'recuperada' if record.recovered else 'checkpoint/disco'}), omitiendo[/dim]"
+          )
+          is_profits_wf.append(float(record.is_metrics.get("profit_total_abs") or 0))
+          seg = record.to_segment()
+          oos_segments.append(seg)
+          oos_profits_wf.append(seg.profit_abs)
+          ck_payload_base["wf_windows_completed"] = merge_checkpoint_wf_completed(
+            ck_payload_base, record
+          )
+          _save_checkpoint(run_path, ck_payload_base)
+          touch_lock_heartbeat()
+          continue
+
+        if adopt_decision.source and not adopt_decision.adopted:
+          console.print(
+            f"[yellow]    ventana {window.index}: no adoptada — {adopt_decision.reason}[/yellow]"
+          )
+
         wf_label = f"wf{window.index}_train"
         wf_ctx = f"{wf_label} seed=42"
         console.print(f"    ventana {window.index}: train {window.train_timerange}")
@@ -537,6 +609,11 @@ def _run_validation(
           spaces=opt_spaces,
           adopt_partial=False,
           context=wf_ctx,
+          archive_extra_meta={
+            "hyperopt_timerange": window.train_timerange,
+            "test_timerange": window.test_timerange,
+            "wf_window": window.index,
+          },
         )
         is_m, _, _ = _backtest_with_params(
           strategy,
@@ -557,17 +634,25 @@ def _run_validation(
         )
         clear_strategy_params(strategy)
 
-        seg = OosSegmentResult(
-          window_index=window.index,
-          profit_ratio=float(oos_m.get("profit_total") or 0),
-          profit_abs=float(oos_m.get("profit_total_abs") or 0),
-          trades=int(oos_m.get("trades") or 0),
-          sharpe=float(oos_m.get("sharpe") or 0),
-          starting_capital=0.0,
-          ending_capital=0.0,
+        finished = WfWindowRecord(
+          window=window.index,
+          train=window.train_timerange,
+          test=window.test_timerange,
+          params_file=str(archived),
+          is_metrics=is_m,
+          oos_metrics=oos_m,
+          completed_at=datetime.now(timezone.utc).isoformat(),
+          recovered=False,
         )
+        save_wf_segment(params_archive, finished)
+
+        seg = finished.to_segment()
         oos_segments.append(seg)
         oos_profits_wf.append(seg.profit_abs)
+        ck_payload_base["wf_windows_completed"] = merge_checkpoint_wf_completed(
+          ck_payload_base, finished
+        )
+        _save_checkpoint(run_path, ck_payload_base)
         touch_lock_heartbeat()
 
       stitched = stitch_oos_equity(oos_segments)

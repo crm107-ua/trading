@@ -54,6 +54,18 @@ pm2 restart meanrevbb-validation   # tras arreglar Docker
 pm2 save
 ```
 
+### Monitor desde PC1 (solo lectura)
+
+```powershell
+# Una consulta
+pwsh scripts/watch_server_validation.ps1 -Once -Format bar
+
+# Bucle cada 2 min (no lanza validación en PC1)
+pwsh scripts/watch_server_validation.ps1 -IntervalSec 120 -Format bar
+```
+
+Formatos: `compact` (grep/logs), `bar` (terminal), `full` (detalle + ETA).
+
 ### Prerrequisito bloqueante: Docker
 
 `carlos` **no** está en el grupo `docker`. PM2 arrancó y paró con:

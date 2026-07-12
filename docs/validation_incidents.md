@@ -54,7 +54,28 @@ Backtest de humo de RelativeMomentum (Docker) actualizó `user_data/hyperopt_res
 
 ---
 
-## Cola post-lock (resumen)
+## Apagón servidor + resume WF granular (2026-07-12)
+
+### Síntoma
+
+Servidor apagado por el usuario ~03:30 tras completar WF ventanas 0–5 (`wf0`…`wf5_train.json` en disco). Al reiniciar (~10:33), PM2 relanzó `--resume-run-id 20260709_162954` pero el pipeline **rehizo WF desde ventana 0** (sin checkpoint por ventana). Pérdida: ~6 ventanas de hyperopt + ventana 6 parcial.
+
+### Causa apagón
+
+Diagnóstico sin privilegios root en journal/dmesg completo. `uptime` tras reboot: ~10:33 (uptime 1h54 a las 12:27). **Hipótesis principal: apagado manual / corte eléctrico**, no OOM (sin evidencia en logs accesibles; disco 87%, RAM holgada antes del stop).
+
+### Mitigación aplicada
+
+- **`pipeline/wf_resume.py`**: skip de ventanas WF si `wfN.json` (segment) coincide timerange con el plan, o recuperación desde `wfN_train.json` por backtest IS+OOS (sin re-hyperopt).
+- **`checkpoint.json`**: campo `wf_windows_completed[]` actualizado tras cada ventana.
+- Rechazo explícito si `hyperopt_timerange` en meta ≠ plan (caso PC1 pre-fix warmup `20210101-*`).
+- Parada deliberada 12:27 para desplegar fix; resume con adopción ventanas 0–5 de anoche.
+
+### Lección
+
+Tercer incidente de muerte en 72h. Sin resume granular, probabilidad de completar 32h+ seguidas era baja. **No apagar el servidor** hasta `report.json`.
+
+---
 
 | Item | Archivo | Prioridad |
 |------|---------|-----------|
