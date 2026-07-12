@@ -65,7 +65,7 @@
         "profit_factor": 0.5618192571735102
       },
       "params_file": "C:\\Users\\carom\\Desktop\\trading\\user_data\\validation_reports\\MeanRevBB\\20260709_162954\\params\\is_seed123.json",
-      "param_divergence_vs_seed0": null
+      "param_divergence_vs_seed0": 0.0672417271993543
     },
     {
       "seed": 456,
@@ -90,7 +90,7 @@
         "profit_factor": 0.5649226161309353
       },
       "params_file": "C:\\Users\\carom\\Desktop\\trading\\user_data\\validation_reports\\MeanRevBB\\20260709_162954\\params\\is_seed456.json",
-      "param_divergence_vs_seed0": null
+      "param_divergence_vs_seed0": 0.2130202958376333
     }
   ],
   "seed_params_raw": [
@@ -191,16 +191,142 @@
       "export_time": "2026-07-10 15:41:32.633512+00:00"
     }
   ],
-  "hyperopt_checkpoints": {
-    "456": [
-      ".last_result.json",
-      "hyperopt_tickerdata.pkl",
-      "strategy_MeanRevBB_2026-07-09_11-42-36.fthypt",
-      "strategy_MeanRevBB_2026-07-09_11-58-32.fthypt",
-      "strategy_MeanRevBB_2026-07-09_16-30-35.fthypt",
-      "strategy_MeanRevBB_2026-07-09_20-22-37.fthypt",
-      "strategy_MeanRevBB_2026-07-10_08-00-53.fthypt",
-      "strategy_MeanRevBB_2026-07-10_11-21-44.fthypt"
-    ]
-  }
+  "wf_windows_completed": [
+    {
+      "window": 0,
+      "train": "20210204-20220203",
+      "test": "20220204-20220503",
+      "params_file": "/var/www/html/trader/user_data/validation_reports/MeanRevBB/20260709_162954/params/wf0_train.json",
+      "completed_at": "2026-07-12T10:30:49.661903+00:00",
+      "recovered": true
+    },
+    {
+      "window": 1,
+      "train": "20210504-20220503",
+      "test": "20220504-20220803",
+      "params_file": "/var/www/html/trader/user_data/validation_reports/MeanRevBB/20260709_162954/params/wf1_train.json",
+      "completed_at": "2026-07-12T10:31:32.012038+00:00",
+      "recovered": true
+    },
+    {
+      "window": 2,
+      "train": "20210804-20220803",
+      "test": "20220804-20221103",
+      "params_file": "/var/www/html/trader/user_data/validation_reports/MeanRevBB/20260709_162954/params/wf2_train.json",
+      "completed_at": "2026-07-12T10:32:10.588944+00:00",
+      "recovered": true
+    },
+    {
+      "window": 3,
+      "train": "20211104-20221103",
+      "test": "20221104-20230203",
+      "params_file": "/var/www/html/trader/user_data/validation_reports/MeanRevBB/20260709_162954/params/wf3_train.json",
+      "completed_at": "2026-07-12T10:32:49.155479+00:00",
+      "recovered": true
+    },
+    {
+      "window": 4,
+      "train": "20220204-20230203",
+      "test": "20230204-20230503",
+      "params_file": "/var/www/html/trader/user_data/validation_reports/MeanRevBB/20260709_162954/params/wf4_train.json",
+      "completed_at": "2026-07-12T10:33:27.570643+00:00",
+      "recovered": true
+    },
+    {
+      "window": 5,
+      "train": "20220504-20230503",
+      "test": "20230504-20230803",
+      "params_file": "/var/www/html/trader/user_data/validation_reports/MeanRevBB/20260709_162954/params/wf5_train.json",
+      "completed_at": "2026-07-12T10:34:07.662008+00:00",
+      "recovered": true
+    },
+    {
+      "window": 6,
+      "train": "20220804-20230803",
+      "test": "20230804-20231103",
+      "params_file": "C:\\Users\\carom\\Desktop\\trading\\user_data\\validation_reports\\MeanRevBB\\20260709_162954\\params\\wf6_train.json",
+      "completed_at": "2026-07-12T11:31:35.499383+00:00",
+      "recovered": false
+    },
+    {
+      "window": 7,
+      "train": "20221104-20231103",
+      "test": "20231104-20240203",
+      "params_file": "C:\\Users\\carom\\Desktop\\trading\\user_data\\validation_reports\\MeanRevBB\\20260709_162954\\params\\wf7_train.json",
+      "completed_at": "2026-07-12T12:13:57.036877+00:00",
+      "recovered": false
+    },
+    {
+      "window": 8,
+      "train": "20230204-20240203",
+      "test": "20240204-20240503",
+      "params_file": "C:\\Users\\carom\\Desktop\\trading\\user_data\\validation_reports\\MeanRevBB\\20260709_162954\\params\\wf8_train.json",
+      "completed_at": "2026-07-12T13:08:12.567405+00:00",
+      "recovered": false
+    },
+    {
+      "window": 9,
+      "train": "20230504-20240503",
+      "test": "20240504-20240803",
+      "params_file": "C:\\Users\\carom\\Desktop\\trading\\user_data\\validation_reports\\MeanRevBB\\20260709_162954\\params\\wf9_train.json",
+      "completed_at": "2026-07-12T13:46:05.586480+00:00",
+      "recovered": false
+    },
+    {
+      "window": 10,
+      "train": "20230804-20240803",
+      "test": "20240804-20241103",
+      "params_file": "C:\\Users\\carom\\Desktop\\trading\\user_data\\validation_reports\\MeanRevBB\\20260709_162954\\params\\wf10_train.json",
+      "completed_at": "2026-07-12T14:22:54.533373+00:00",
+      "recovered": false
+    },
+    {
+      "window": 11,
+      "train": "20231104-20241103",
+      "test": "20241104-20250203",
+      "params_file": "C:\\Users\\carom\\Desktop\\trading\\user_data\\validation_reports\\MeanRevBB\\20260709_162954\\params\\wf11_train.json",
+      "completed_at": "2026-07-12T15:00:42.630432+00:00",
+      "recovered": false
+    },
+    {
+      "window": 12,
+      "train": "20240204-20250203",
+      "test": "20250204-20250503",
+      "params_file": "C:\\Users\\carom\\Desktop\\trading\\user_data\\validation_reports\\MeanRevBB\\20260709_162954\\params\\wf12_train.json",
+      "completed_at": "2026-07-12T15:41:37.176847+00:00",
+      "recovered": false
+    },
+    {
+      "window": 13,
+      "train": "20240504-20250503",
+      "test": "20250504-20250803",
+      "params_file": "C:\\Users\\carom\\Desktop\\trading\\user_data\\validation_reports\\MeanRevBB\\20260709_162954\\params\\wf13_train.json",
+      "completed_at": "2026-07-12T16:40:36.963130+00:00",
+      "recovered": false
+    },
+    {
+      "window": 14,
+      "train": "20240804-20250803",
+      "test": "20250804-20251103",
+      "params_file": "C:\\Users\\carom\\Desktop\\trading\\user_data\\validation_reports\\MeanRevBB\\20260709_162954\\params\\wf14_train.json",
+      "completed_at": "2026-07-12T17:25:29.082338+00:00",
+      "recovered": false
+    },
+    {
+      "window": 15,
+      "train": "20241104-20251103",
+      "test": "20251104-20260203",
+      "params_file": "C:\\Users\\carom\\Desktop\\trading\\user_data\\validation_reports\\MeanRevBB\\20260709_162954\\params\\wf15_train.json",
+      "completed_at": "2026-07-12T18:12:00.467871+00:00",
+      "recovered": false
+    },
+    {
+      "window": 16,
+      "train": "20250204-20260203",
+      "test": "20260204-20260503",
+      "params_file": "C:\\Users\\carom\\Desktop\\trading\\user_data\\validation_reports\\MeanRevBB\\20260709_162954\\params\\wf16_train.json",
+      "completed_at": "2026-07-12T19:01:32.243078+00:00",
+      "recovered": false
+    }
+  ]
 }
