@@ -77,6 +77,31 @@ Tercer incidente de muerte en 72h. Sin resume granular, probabilidad de completa
 
 ---
 
+## Migración servidor → PC1 contra recomendación (2026-07-12 ~12:44)
+
+### Contexto
+
+Tras desplegar resume granular WF en el servidor, el usuario pidió **mover el run de vuelta a PC1** para ganar velocidad (~50 min/ventana vs ~2 h en servidor). La recomendación operativa era **no migrar** con el run en curso (riesgo de dos orquestadores, estado divergente, pérdida de ventana parcial).
+
+### Qué se hizo
+
+1. Parada limpia en servidor: `pm2 stop meanrevbb-validation`, lock libre, sin contenedor efímero.
+2. Sincronización `user_data/validation_reports/MeanRevBB/20260709_162954/` (checkpoint con 6 ventanas WF, params, segmentos).
+3. `meanrevbb-validation` **eliminado de PM2** en servidor (`pm2 delete` + `pm2 save`) — evita segundo orquestador con el mismo `run_id`.
+4. Resume en PC1: `--resume-run-id 20260709_162954`; semillas + ventanas 0–5 omitidas; ventana 6 hyperopt reiniciada.
+
+### Resultado
+
+**Final limpio.** El resume granular acotó el coste: ~15 épocas perdidas en ventana 6 parcial (no todo el WF). Run activo en PC1 (`pid` local, lock LOCKED).
+
+### Lección
+
+- Migración en caliente sigue siendo **contra recomendación** aunque salga bien; el registro debe incluir apuestas ganadas.
+- Prerequisito para que sea procedimiento y no improvisación: **un solo orquestador** (servidor desregistrado de PM2) + checkpoint granular en disco.
+- **PC1 no se apaga** hasta `report.json` (esta máquina ya mató el run el viernes 11 jul).
+
+---
+
 | Item | Archivo | Prioridad |
 |------|---------|-----------|
 | Lock **audit-log** + heartbeat | `pipeline/run_lock.py`, tests | Alta (antes del batch) |

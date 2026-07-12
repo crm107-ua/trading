@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import date
 from dateutil.relativedelta import relativedelta
 
@@ -26,10 +26,15 @@ class WalkForwardWindow:
     return format_timerange(self.test_start, self.test_end)
 
   def to_dict(self) -> dict:
-    d = asdict(self)
-    d["train_timerange"] = self.train_timerange
-    d["test_timerange"] = self.test_timerange
-    return d
+    return {
+      "index": self.index,
+      "train_start": self.train_start.isoformat(),
+      "train_end": self.train_end.isoformat(),
+      "test_start": self.test_start.isoformat(),
+      "test_end": self.test_end.isoformat(),
+      "train_timerange": self.train_timerange,
+      "test_timerange": self.test_timerange,
+    }
 
 
 def generate_walk_forward_windows(

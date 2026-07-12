@@ -114,10 +114,31 @@ Para las **otras cuatro** estrategias, la opción elegida es **B — WF reducido
 
 Checklist escrito antes de `run_validation_batch.ps1`:
 
-- [ ] Umbrales congelados en git (post-calibración MeanRevBB).
+- [x] Umbrales congelados en git (post-calibración MeanRevBB) — **2026-07-12**.
 - [x] Opción WF **B** (`--wf-epochs 100`) — congelada 2026-07-10.
 - [ ] `--adopt-partial-hyperopt` activo en el script de batch o en cada comando manual.
-- [ ] MeanRevBB `report.json` cerrado; no mezclar calibración con batch en curso.
+- [x] MeanRevBB `report.json` cerrado; no mezclar calibración con batch en curso.
+
+## Calibración congelada — MeanRevBB (2026-07-12)
+
+| Campo | Valor |
+|-------|--------|
+| `run_id` | `20260709_162954` |
+| Veredicto emitido | **SOBREAJUSTADA** |
+| Regla aplicada | **2** — umbrales sin modificación |
+| `reasons` | OOS con PnL negativo; WFE 0.00 &lt; 0.5 |
+| Observación | **SIN-EDGE uniforme**, no espejismo IS (IS peor que OOS). La etiqueta SOBREAJUSTADA es imprecisa; mejora futura del motor **post-congelación**, sin tocar hoy. |
+| WFE / stitching | 10.000 → 2.883 (−71%); 16/17 ventanas OOS en pérdida |
+| `max_param_divergence` | 0.213 (&lt; 0.25) |
+| OOS regímenes | RANGE 51.5% / BEAR 27.0% / BULL 21.5% — favorable y aun así negativo |
+
+**Decisión:** congelar `verdict.py` / `verdict_engine.py` tal cual. MeanRevBB archivada como intento #1 de validación full, expediente completo.
+
+**Procedencia / versiones:** el `report.json` registra `git_hash` final (`3476243`, fix WF resume + serialización fechas) en todos los pasos; las **semillas** corrieron bajo código anterior. Cruce de versiones documentado en [`validation_incidents.md`](validation_incidents.md) (migraciones PC1↔servidor, apagones, resume granular).
+
+**Siguiente candidato:** XSecMomentum (`--wf-epochs 100`, `user_data/config/screen_xsec.json`) — ver secuencia post-calibración acordada.
+
+---
 
 ## Referencia de umbrales actuales (`verdict.py`)
 

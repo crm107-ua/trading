@@ -39,6 +39,14 @@ def test_walk_forward_generates_multiple_windows() -> None:
   assert windows[0].test_start > windows[0].train_end
 
 
+def test_walk_forward_window_to_dict_json_serializable() -> None:
+  windows = generate_walk_forward_windows(date(2021, 2, 4), date(2026, 5, 3))
+  payload = windows[0].to_dict()
+  json.dumps(payload)
+  assert payload["train_start"] == "2021-02-04"
+  assert "train_timerange" in payload
+
+
 def test_walk_forward_respects_warmup_offset() -> None:
   from pipeline.strategy_warmup import earliest_train_start, warmup_days
 
