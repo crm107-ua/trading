@@ -55,7 +55,8 @@ Cuando se invoque `user_data/tools/dryrun_gap_report.py` tras el veredicto:
 | Criterio | Umbral |
 |----------|--------|
 | Slippage medio real | Documentar vs asumido (fee 0.1% / order book top) |
-| **Slippage pre-registro 13-F** | **< 0.56% por lado** (medio medido en dry-run) — por debajo del nivel donde el múltiplo fidelidad m35 cae a la mitad (~7.25× → ~3.6×). Ver `research/output/stress_13f_20260713.json` F1. |
+| **Slippage pre-registro 13-F (uniforme)** | **< 0.56% por lado** — mitad del múltiplo fidelidad m35 (~7.25× → ~3.6×). |
+| **Slippage guía diferenciada 13-F** | **< 0.36% base** / **< 0.72%** en pares iliquidos (2×) — más realista para ZEC/DEXE donde se concentra el PnL. Comparar fills contra **ambos** al leer `dryrun_gap_report`. Ver `research/output/stress_13f_20260713.json` F1. |
 | Rebalanceos en timing esperado | Señal lunes / fill martes open |
 | Divergencia PnL relativo vs backtest mismo timerange | **< 30%** |
 

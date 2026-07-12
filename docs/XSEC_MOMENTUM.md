@@ -462,9 +462,11 @@ Artefacto: `research/output/diagnose_m35_13e_20260711.json`
 | 0.20% | 5.68× | −62% |
 | 0.50% | 3.94× | −66% |
 
-**Mitad del edge (~3.6×):** ~**0.56% por lado** (uniforme). Pre-registro dry-run: slippage medio medido **< 0.56%** (`dryrun_protocol.md`).
+**Mitad del edge (~3.6×):** ~**0.56% por lado** (parrilla uniforme). Pre-registro dry-run: slippage medio medido **< 0.56%** (`dryrun_protocol.md`).
 
-Versión iliquidos 2× (pares con MM30 < 20M en algún día): degrada más rápido; no reabre filtro 20M.
+**Guía más realista:** parrilla **diferenciada** (iliquidos 2× en pares con MM30 < 20M) — mitad del edge a **~0.36% base** / ~0.72% en concentradores de PnL (ZEC, DEXE, etc.). Al medir fills en dry-run, comparar contra **ambos** umbrales.
+
+Versión iliquidos 2×: degrada más rápido; no reabre filtro 20M.
 
 ### F2 — Riesgo de secuencia (operador sobrevive)
 
@@ -485,7 +487,7 @@ Bootstrap 10 000 × bloques mensuales sobre 296 trades m35:
 
 ### Lo que puede tocarte vivir
 
-Leer **antes** de cualquier go-live. El −46% del screen no es la peor historia plausible: reordenando meses históricos, la mediana del bootstrap llega a −83%, y en 3 de cada 4 simulaciones la cuenta toca −60% en algún momento. Rachas de 12 pérdidas seguidas y más de dos años bajo el agua (p90) son normales en esta distribución. No es una predicción — es lo que el pasado concentrado en ZEC/DEXE permite imaginar si la secuencia futura se parece. La incertidumbre real es mayor.
+Leer **antes** de cualquier go-live. El −46% del screen no es la peor historia plausible: reordenando meses históricos, la mediana del bootstrap llega a −83%, y en 3 de cada 4 simulaciones la cuenta toca −60% en algún momento. Rachas de 12 pérdidas seguidas y más de dos años bajo el agua (p90) son normales en esta distribución. El DD observado (−46%) está en el **p90** del bootstrap — la ordenación histórica real fue de las *afortunadas*. No invalida el edge; mueve la conclusión operativa al go/no-go: si pasa los jueces, la talla será **fracción de capital**, no capital completo (mitad en la estrategia ⇒ −83% estrategia ≈ −41% cuenta). La incertidumbre real es mayor que el bootstrap.
 
 ### F3 — Capacidad
 
@@ -509,7 +511,12 @@ Umbral >10% trades impactados: ~**30k USDT** (escala lineal). ZEC/DEXE concentra
 | Sáb | 9.02× | −62% |
 | Dom | 7.22× | −55% |
 
-Lunes está en la **banda inferior** del rango (no outlier positivo). Jueves alto = fragilidad documentada; **no se cambia** el lunes→martes del candidato.
+**Lectura corregida:** lunes **no** está en banda central — está en el **suelo** del rango (7.25× vs 7.22–21.35×; solo domingo es peor). Dos caras:
+
+- **Buena:** el candidato validado usa un día *conservador*; la validación corre con el peor pie del rango simulado — un PASA es más creíble.
+- **Cautelosa:** rango 7–21× con N≈2 cohetes dominando el PnL es casi seguro ruido de “qué día pillaste la entrada del cohete”, no estacionalidad real — otra medida de sensibilidad a detalles finos.
+
+Jueves alto = observación **bloqueada**; **no se cambia** lunes→martes del candidato.
 
 Artefactos: `research/output/stress_13f_20260713.json`, PNGs `stress_13f_*.png`
 
