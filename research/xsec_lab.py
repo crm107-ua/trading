@@ -769,6 +769,10 @@ class FidelityConfig:
   bear_filter: bool = True
   top_n: int = 3
   exit_rank_k: int = 4
+  slippage_per_side: float = 0.0
+  illiquid_slippage_per_side: float | None = None
+  illiquid_pairs: frozenset[str] = frozenset()
+  rebalance_signal_weekday: int = 0
 
 
 def load_ohlcv_1d(
@@ -865,6 +869,14 @@ def simulate_freqtrade_fidelity(
   n_bear = 0
   startup_skip = 220
 
+  def _slippage(pair: str) -> float:
+    if (
+      config.illiquid_slippage_per_side is not None
+      and pair in config.illiquid_pairs
+    ):
+      return config.illiquid_slippage_per_side
+    return config.slippage_per_side
+
   def _slot_value(slot: dict, dt: pd.Timestamp) -> float:
     px = close.loc[dt, slot["pair"]]
     if pd.isna(px):
@@ -876,6 +888,9 @@ def simulate_freqtrade_fidelity(
     slot = slots[i]
     if not slot:
       return
+    slip = _slippage(slot["pair"])
+    if slip:
+      price *= 1.0 - slip
     proceeds = slot["stake"] * price / slot["entry_price"]
     if config.fee_per_side:
       proceeds *= 1.0 - fee_rate
@@ -897,6 +912,9 @@ def simulate_freqtrade_fidelity(
     px = float(open_.loc[dt, pair])
     if pd.isna(px) or px <= 0:
       return
+    slip = _slippage(pair)
+    if slip:
+      px *= 1.0 + slip
     free = next((j for j, s in enumerate(slots) if s is None), None)
     if free is None:
       return
@@ -938,12 +956,13 @@ def simulate_freqtrade_fidelity(
           stop_px = slot["entry_price"] * (1.0 + config.stop_on_low)
           _close_slot(si, dt, stop_px, "stop")
 
-    # Freqtrade 1d: señal lunes (cierre), ejecución martes open (100% trades en zip control).
+    # Freqtrade 1d: señal weekday (cierre), ejecución día siguiente open.
     exec_rebalance = False
     signal_dt = dt
-    if config.monday_rebalance and dt.weekday() == 1 and i > 0:
+    exec_weekday = (config.rebalance_signal_weekday + 1) % 7
+    if config.monday_rebalance and dt.weekday() == exec_weekday and i > 0:
       prev = close.index[i - 1]
-      if prev.weekday() == 0:
+      if prev.weekday() == config.rebalance_signal_weekday:
         exec_rebalance = True
         signal_dt = prev
     elif not config.monday_rebalance and dt in rb_signal_days:
@@ -983,8 +1002,11 @@ def simulate_freqtrade_fidelity(
     dates_out.append(dt)
 
   equity = pd.Series(equity_hist, index=pd.DatetimeIndex(dates_out, tz="UTC"))
+  peak = equity.cummax()
+  dd = (equity - peak) / peak
   stats = {
     "final_wealth_mult": float(equity.iloc[-1] / initial_wallet),
+    "max_drawdown": float(dd.min()),
     "n_stops": float(n_stops),
     "n_rotations": float(n_rotations),
     "n_bear": float(n_bear),

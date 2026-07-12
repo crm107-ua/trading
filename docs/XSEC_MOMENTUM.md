@@ -446,6 +446,75 @@ Artefacto: `research/output/diagnose_m35_13e_20260711.json`
 
 ---
 
+## Diagnóstico 13-F — estrés-test m35 (2026-07-13)
+
+**Pregunta:** ¿el candidato sobrevive slippage, mala secuencia, tamaño y fragilidad de día? (Juez 0 — no altera validación ni dry-run.)
+
+**Regla:** caracterización, no optimización. Ningún número de aquí cambia params, universo ni lunes→martes.
+
+### F1 — Slippage (cohete capturable)
+
+| Slippage/lado | Múltiplo fidelidad | Max DD |
+|---------------|-------------------|--------|
+| 0% | 7.25× | −59% |
+| 0.05% | 6.82× | −60% |
+| 0.10% | 6.42× | −61% |
+| 0.20% | 5.68× | −62% |
+| 0.50% | 3.94× | −66% |
+
+**Mitad del edge (~3.6×):** ~**0.56% por lado** (uniforme). Pre-registro dry-run: slippage medio medido **< 0.56%** (`dryrun_protocol.md`).
+
+Versión iliquidos 2× (pares con MM30 < 20M en algún día): degrada más rápido; no reabre filtro 20M.
+
+### F2 — Riesgo de secuencia (operador sobrevive)
+
+Bootstrap 10 000 × bloques mensuales sobre 296 trades m35:
+
+| Métrica | Valor |
+|---------|-------|
+| Max DD observado (trayectoria zip) | −46% |
+| Max DD bootstrap mediana | −83% |
+| Max DD bootstrap p90 | **−46%** |
+| Max DD bootstrap p95 | −39% |
+| Rachas perdedoras p90 | 12 trades seguidos |
+| Meses bajo el agua p90 | ~26 |
+| P(tocar −60%) en 5 años | **75%** |
+| P(tocar −70%) en 5 años | **63%** |
+
+**Advertencia metodológica:** el bootstrap asume que el futuro se parece al pasado muestreado (con concentración ZEC/DEXE). Es **cota inferior** de incertidumbre real, no predicción.
+
+### Lo que puede tocarte vivir
+
+Leer **antes** de cualquier go-live. El −46% del screen no es la peor historia plausible: reordenando meses históricos, la mediana del bootstrap llega a −83%, y en 3 de cada 4 simulaciones la cuenta toca −60% en algún momento. Rachas de 12 pérdidas seguidas y más de dos años bajo el agua (p90) son normales en esta distribución. No es una predicción — es lo que el pasado concentrado en ZEC/DEXE permite imaginar si la secuencia futura se parece. La incertidumbre real es mayor.
+
+### F3 — Capacidad
+
+| Capital | % trades stake/vol > 1% |
+|---------|-------------------------|
+| 10k | 2.0% |
+| 50k | 16.6% |
+| 100k | 22.0% |
+
+Umbral >10% trades impactados: ~**30k USDT** (escala lineal). ZEC/DEXE concentran PnL; ratios stake/vol en 10k son bajos (mediana ZEC 0.23%, DEXE 0.57% del vol diario).
+
+### F4 — Día de rebalanceo (siete reportados, ninguno elegido)
+
+| Señal | Múltiplo | Max DD |
+|-------|----------|--------|
+| Lun (validado) | 7.25× | −59% |
+| Mar | 12.27× | −66% |
+| Mié | 18.43× | −69% |
+| Jue | **21.35×** | −63% |
+| Vie | 8.04× | −65% |
+| Sáb | 9.02× | −62% |
+| Dom | 7.22× | −55% |
+
+Lunes está en la **banda inferior** del rango (no outlier positivo). Jueves alto = fragilidad documentada; **no se cambia** el lunes→martes del candidato.
+
+Artefactos: `research/output/stress_13f_20260713.json`, PNGs `stress_13f_*.png`
+
+---
+
 ## MeanRevBB al cierre fix #10 (2026-07-11 ~12:00 UTC+2)
 
 | Campo | Valor |

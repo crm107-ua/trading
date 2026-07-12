@@ -55,6 +55,7 @@ Cuando se invoque `user_data/tools/dryrun_gap_report.py` tras el veredicto:
 | Criterio | Umbral |
 |----------|--------|
 | Slippage medio real | Documentar vs asumido (fee 0.1% / order book top) |
+| **Slippage pre-registro 13-F** | **< 0.56% por lado** (medio medido en dry-run) — por debajo del nivel donde el múltiplo fidelidad m35 cae a la mitad (~7.25× → ~3.6×). Ver `research/output/stress_13f_20260713.json` F1. |
 | Rebalanceos en timing esperado | Señal lunes / fill martes open |
 | Divergencia PnL relativo vs backtest mismo timerange | **< 30%** |
 

@@ -1,0 +1,323 @@
+{
+  "diagnostic": "13-F",
+  "date": "2026-07-13",
+  "zip": "backtest-result-2026-07-11_10-01-04.zip",
+  "rule": "Caracterizaci\u00f3n \u2014 no optimizaci\u00f3n. Resultados no alteran params/d\u00eda/universo.",
+  "F1_slippage": {
+    "baseline_mult": 7.2536911057388425,
+    "baseline_max_dd": -0.5921856840513539,
+    "uniform": [
+      {
+        "slippage_per_side_pct": 0.0,
+        "final_mult": 7.2536911057388425,
+        "max_dd": -0.5921856840513539
+      },
+      {
+        "slippage_per_side_pct": 0.05,
+        "final_mult": 6.823138473086338,
+        "max_dd": -0.5991246259855507
+      },
+      {
+        "slippage_per_side_pct": 0.1,
+        "final_mult": 6.418275930933315,
+        "max_dd": -0.6059433025574965
+      },
+      {
+        "slippage_per_side_pct": 0.2,
+        "final_mult": 5.679550096552041,
+        "max_dd": -0.6192283194638029
+      },
+      {
+        "slippage_per_side_pct": 0.5,
+        "final_mult": 3.937465112057993,
+        "max_dd": -0.6567085383996881
+      },
+      {
+        "slippage_per_side_pct": 0.6,
+        "final_mult": 3.40760453063603,
+        "max_dd": -0.6758316467776083
+      },
+      {
+        "slippage_per_side_pct": 0.8,
+        "final_mult": 2.6206118906936444,
+        "max_dd": -0.6974619412995308
+      },
+      {
+        "slippage_per_side_pct": 1.0,
+        "final_mult": 2.0558758690860137,
+        "max_dd": -0.7176242063727926
+      }
+    ],
+    "differentiated_low_liq_2x": [
+      {
+        "slippage_base_pct": 0.0,
+        "slippage_illiquid_pct": 0,
+        "illiquid_pairs": [
+          "AAVE/USDT",
+          "ADA/USDT",
+          "DEXE/USDT",
+          "LTC/USDT",
+          "NEAR/USDT",
+          "SKL/USDT",
+          "TRX/USDT",
+          "UNI/USDT",
+          "XLM/USDT",
+          "ZEC/USDT"
+        ],
+        "final_mult": 7.2536911057388425,
+        "max_dd": -0.5921856840513539
+      },
+      {
+        "slippage_base_pct": 0.05,
+        "slippage_illiquid_pct": 0.1,
+        "illiquid_pairs": [
+          "AAVE/USDT",
+          "ADA/USDT",
+          "DEXE/USDT",
+          "LTC/USDT",
+          "NEAR/USDT",
+          "SKL/USDT",
+          "TRX/USDT",
+          "UNI/USDT",
+          "XLM/USDT",
+          "ZEC/USDT"
+        ],
+        "final_mult": 6.558659042547352,
+        "max_dd": -0.6031979193382424
+      },
+      {
+        "slippage_base_pct": 0.1,
+        "slippage_illiquid_pct": 0.2,
+        "illiquid_pairs": [
+          "AAVE/USDT",
+          "ADA/USDT",
+          "DEXE/USDT",
+          "LTC/USDT",
+          "NEAR/USDT",
+          "SKL/USDT",
+          "TRX/USDT",
+          "UNI/USDT",
+          "XLM/USDT",
+          "ZEC/USDT"
+        ],
+        "final_mult": 5.930626956460227,
+        "max_dd": -0.613906242819416
+      },
+      {
+        "slippage_base_pct": 0.2,
+        "slippage_illiquid_pct": 0.4,
+        "illiquid_pairs": [
+          "AAVE/USDT",
+          "ADA/USDT",
+          "DEXE/USDT",
+          "LTC/USDT",
+          "NEAR/USDT",
+          "SKL/USDT",
+          "TRX/USDT",
+          "UNI/USDT",
+          "XLM/USDT",
+          "ZEC/USDT"
+        ],
+        "final_mult": 4.850204250505248,
+        "max_dd": -0.6344452191988126
+      },
+      {
+        "slippage_base_pct": 0.5,
+        "slippage_illiquid_pct": 1.0,
+        "illiquid_pairs": [
+          "AAVE/USDT",
+          "ADA/USDT",
+          "DEXE/USDT",
+          "LTC/USDT",
+          "NEAR/USDT",
+          "SKL/USDT",
+          "TRX/USDT",
+          "UNI/USDT",
+          "XLM/USDT",
+          "ZEC/USDT"
+        ],
+        "final_mult": 2.5506547303462694,
+        "max_dd": -0.6970985305788188
+      },
+      {
+        "slippage_base_pct": 0.6,
+        "slippage_illiquid_pct": 1.2,
+        "illiquid_pairs": [
+          "AAVE/USDT",
+          "ADA/USDT",
+          "DEXE/USDT",
+          "LTC/USDT",
+          "NEAR/USDT",
+          "SKL/USDT",
+          "TRX/USDT",
+          "UNI/USDT",
+          "XLM/USDT",
+          "ZEC/USDT"
+        ],
+        "final_mult": 2.064310085444914,
+        "max_dd": -0.7132831514809649
+      },
+      {
+        "slippage_base_pct": 0.8,
+        "slippage_illiquid_pct": 1.6,
+        "illiquid_pairs": [
+          "AAVE/USDT",
+          "ADA/USDT",
+          "DEXE/USDT",
+          "LTC/USDT",
+          "NEAR/USDT",
+          "SKL/USDT",
+          "TRX/USDT",
+          "UNI/USDT",
+          "XLM/USDT",
+          "ZEC/USDT"
+        ],
+        "final_mult": 1.387251450335583,
+        "max_dd": -0.7503123305085482
+      },
+      {
+        "slippage_base_pct": 1.0,
+        "slippage_illiquid_pct": 2.0,
+        "illiquid_pairs": [
+          "AAVE/USDT",
+          "ADA/USDT",
+          "DEXE/USDT",
+          "LTC/USDT",
+          "NEAR/USDT",
+          "SKL/USDT",
+          "TRX/USDT",
+          "UNI/USDT",
+          "XLM/USDT",
+          "ZEC/USDT"
+        ],
+        "final_mult": 0.9332133162098968,
+        "max_dd": -0.7852213904345953
+      }
+    ],
+    "break_even_mult_1x_slippage_pct": null,
+    "half_edge_slippage_pct_uniform": 0.5586228849775872,
+    "half_edge_slippage_pct_diff": 0.3595997851202505,
+    "dryrun_preregister_max_slippage_pct": 0.5586228849775872,
+    "dryrun_preregister_note": "Slippage medio medido en dry-run debe quedar POR DEBAJO de este umbral (mitad del m\u00faltiplo fidelidad baseline)."
+  },
+  "F2_sequence_risk": {
+    "n_iterations": 10000,
+    "n_trades_source": 296,
+    "n_month_blocks": 53,
+    "observed_max_dd_wallet_approx": -0.45611892182049285,
+    "max_dd_distribution": {
+      "median": -0.8275278272576988,
+      "p75": -0.5996374925135097,
+      "p90": -0.45666250036028816,
+      "p95": -0.3858535220428748
+    },
+    "losing_streak_p90": 12,
+    "underwater_months_p90": 26.133333333333333,
+    "prob_touch_minus_60pct": 0.7496,
+    "prob_touch_minus_70pct": 0.6334,
+    "methodology_warning": "Bootstrap por bloques mensuales sobre 296 trades del zip m35. Asume que el futuro se parece al pasado muestreado (concentraci\u00f3n ZEC/DEXE). Cota inferior de incertidumbre real, no predicci\u00f3n."
+  },
+  "F3_capacity": {
+    "by_capital": [
+      {
+        "capital_usdt": 10000,
+        "pct_trades_over_1pct_daily_vol": 2.027027027027027,
+        "median_stake_vol_ratio": 0.00017365692620249865,
+        "p90_stake_vol_ratio": 0.0038159378904957042
+      },
+      {
+        "capital_usdt": 50000,
+        "pct_trades_over_1pct_daily_vol": 16.554054054054053,
+        "median_stake_vol_ratio": 0.0008682846310124931,
+        "p90_stake_vol_ratio": 0.01907968945247852
+      },
+      {
+        "capital_usdt": 100000,
+        "pct_trades_over_1pct_daily_vol": 21.95945945945946,
+        "median_stake_vol_ratio": 0.0017365692620249862,
+        "p90_stake_vol_ratio": 0.03815937890495704
+      }
+    ],
+    "capital_over_10pct_trades_at_1pct_vol": 30000,
+    "pair_capacity_focus": [
+      {
+        "pair": "ZEC/USDT",
+        "pnl_usdt": 152298.03920367002,
+        "n_trades": 22,
+        "median_stake_vol_ratio_10k": 0.0023292084088808885,
+        "p90_stake_vol_ratio_10k": 0.006503370474941326
+      },
+      {
+        "pair": "DEXE/USDT",
+        "pnl_usdt": 87784.80994713999,
+        "n_trades": 21,
+        "median_stake_vol_ratio_10k": 0.005682541015968713,
+        "p90_stake_vol_ratio_10k": 0.02756457384973454
+      }
+    ],
+    "conclusion": "Con stakes reales del zip (10k, compound/3), solo ~2% de trades superan 1% del vol diario. ZEC y DEXE concentran PnL; ratios stake/vol medios bajos en 10k. Umbral >10% trades impactados: ~30000 USDT (escala lineal). Filtro 20M (intento #13) degrad\u00f3 en fidelidad 8.24\u21921.66\u00d7 \u2014 no reabrir; solo referencia cruzada."
+  },
+  "F4_rebalance_weekday": {
+    "all_seven_reported": [
+      {
+        "signal_weekday": 0,
+        "signal_day": "Mon",
+        "exec_day": "Tue",
+        "final_mult": 7.2536911057388425,
+        "max_dd": -0.5921856840513539
+      },
+      {
+        "signal_weekday": 1,
+        "signal_day": "Tue",
+        "exec_day": "Wed",
+        "final_mult": 12.269726352024632,
+        "max_dd": -0.6584254145183349
+      },
+      {
+        "signal_weekday": 2,
+        "signal_day": "Wed",
+        "exec_day": "Thu",
+        "final_mult": 18.434088061995677,
+        "max_dd": -0.6879264763834362
+      },
+      {
+        "signal_weekday": 3,
+        "signal_day": "Thu",
+        "exec_day": "Fri",
+        "final_mult": 21.35274078759842,
+        "max_dd": -0.6349752964586827
+      },
+      {
+        "signal_weekday": 4,
+        "signal_day": "Fri",
+        "exec_day": "Sat",
+        "final_mult": 8.043216541192912,
+        "max_dd": -0.6459014689205984
+      },
+      {
+        "signal_weekday": 5,
+        "signal_day": "Sat",
+        "exec_day": "Sun",
+        "final_mult": 9.016702707854893,
+        "max_dd": -0.6248216492229021
+      },
+      {
+        "signal_weekday": 6,
+        "signal_day": "Sun",
+        "exec_day": "Mon",
+        "final_mult": 7.222390664548466,
+        "max_dd": -0.5460108139925747
+      }
+    ],
+    "monday_mult": 7.2536911057388425,
+    "range_mult_min": 7.222390664548466,
+    "range_mult_max": 21.35274078759842,
+    "monday_in_central_band": true,
+    "blocked_observation": "No elegir d\u00eda \u00f3ptimo. Candidato validado usa lunes\u2192martes; cualquier outlier positivo en otro d\u00eda = fragilidad documentada, no acci\u00f3n."
+  },
+  "artifacts_png": [
+    "stress_13f_slippage.png",
+    "stress_13f_bootstrap_dd.png",
+    "stress_13f_capacity.png"
+  ]
+}
