@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 
+ROOT = Path(__file__).resolve().parents[1]
+
 from pipeline.params_manager import (
   flatten_params_export,
   param_divergence,
@@ -381,3 +383,162 @@ def test_adopt_min_ratio_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
   monkeypatch.setenv("HYPEROPT_ADOPT_MIN_RATIO", "0.9")
   assert adopt_min_completion_ratio() == 0.9
+
+
+def test_extra_config_merged_hash_differs() -> None:
+  from pipeline.config_hash import config_metadata, merged_config_hash, resolve_config_paths
+
+  base_hash = merged_config_hash()
+  extra = ROOT / "user_data" / "config" / "screen_xsec.json"
+  assert extra.is_file()
+  paths = resolve_config_paths([extra])
+  with_extra = merged_config_hash(paths)
+  meta = config_metadata(paths)
+  assert with_extra != base_hash
+  assert meta["config_files"] == [
+    "user_data/config/base.json",
+    "user_data/config/backtest.json",
+    "user_data/config/screen_xsec.json",
+  ]
+
+
+def test_base_config_args_extra_order() -> None:
+  from pipeline.freqtrade_cli import base_config_args
+
+  extra = ROOT / "user_data" / "config" / "screen_xsec.json"
+  args = base_config_args([extra])
+  assert args == [
+    "--config",
+    "user_data/config/base.json",
+    "--config",
+    "user_data/config/backtest.json",
+    "--config",
+    "user_data/config/screen_xsec.json",
+  ]
+
+
+def test_hyperopt_command_includes_extra_config() -> None:
+  from pipeline.freqtrade_cli import format_freqtrade_command
+  from pipeline.config_hash import resolve_config_paths
+
+  paths = resolve_config_paths([ROOT / "user_data" / "config" / "screen_xsec.json"])
+  cmd = format_freqtrade_command(
+    "hyperopt",
+    "XSecMomentum",
+    "20210101-20231231",
+    config_paths=paths,
+    epochs=100,
+    random_state=42,
+    spaces=["buy"],
+    min_trades=100,
+  )
+  assert "--config user_data/config/screen_xsec.json" in cmd
+  assert "--epochs 100" in cmd
+  assert "--spaces buy" in cmd
+
+
+def test_wf_epochs_in_dry_plan() -> None:
+  from pipeline.validation_plan import build_validation_plan
+
+  plan = build_validation_plan(
+    strategy="XSecMomentum",
+    timerange="20210101-20231231",
+    profile="full",
+    wf_epochs=100,
+    extra_config_paths=[ROOT / "user_data" / "config" / "screen_xsec.json"],
+  )
+  assert plan["wf_epochs"] == 100
+  assert plan["epochs"] == 300
+  wf_cmds = [c for c in plan["commands"] if c["phase"] == "wf_hyperopt"]
+  assert wf_cmds
+  assert "--epochs 100" in wf_cmds[0]["command"]
+
+
+def test_dry_plan_xsec_smoke() -> None:
+  from pipeline.validation_plan import build_validation_plan, format_plan_text
+
+  plan = build_validation_plan(
+    strategy="XSecMomentum",
+    timerange="20210101-20231231",
+    profile="full",
+    wf_epochs=100,
+    extra_config_paths=[ROOT / "user_data" / "config" / "screen_xsec.json"],
+  )
+  text = format_plan_text(plan)
+  assert "DRY-PLAN XSecMomentum" in text
+  assert "screen_xsec.json" in text
+  assert plan["warmup"]["startup_candles"] == 220
+  assert plan["warmup"]["timeframe"] == "1d"
+  assert plan["warmup"]["warmup_days"] == 220
+
+
+def test_xsec_hyperopt_spaces_buy_only() -> None:
+  from pipeline.strategy_spaces import hyperopt_spaces_for
+
+  assert hyperopt_spaces_for("XSecMomentum") == ["buy"]
+
+
+def test_xsec_warmup_from_strategy_file() -> None:
+  from pipeline.strategy_warmup import parse_strategy_file_meta, warmup_days
+
+  candles, tf = parse_strategy_file_meta("XSecMomentum")
+  assert candles == 220
+  assert tf == "1d"
+  assert warmup_days("XSecMomentum") == 220
+
+
+def test_xsec_wf_window_respects_warmup() -> None:
+  from pipeline.strategy_warmup import earliest_train_start, warmup_days
+  from pipeline.walk_forward import generate_walk_forward_windows
+
+  data_start = date(2021, 1, 1)
+  min_start = earliest_train_start(data_start, "XSecMomentum")
+  assert warmup_days("XSecMomentum") == 220
+  assert min_start == date(2021, 8, 9)
+  windows = generate_walk_forward_windows(
+    data_start,
+    date(2026, 7, 1),
+    earliest_train_start=min_start,
+  )
+  assert windows
+  assert windows[0].train_start >= min_start
+
+
+def test_xsec_params_verify_hyperopt_shape() -> None:
+  from pipeline.params_manager import verify_params_loaded
+
+  expected = {
+    "strategy_name": "XSecMomentum",
+    "params": {
+      "buy": {
+        "momentum_window": 14,
+        "top_n": 3,
+        "exit_rank_k": 4,
+      },
+      "sell": {},
+      "roi": {"0": 100},
+      "stoploss": {"stoploss": -0.35},
+    },
+  }
+  path = Path("tmp_xsec_params.json")
+  path.write_text(json.dumps(expected), encoding="utf-8")
+  log = (
+    "Strategy Parameter: momentum_window = 14\n"
+    "Strategy Parameter: top_n = 3\n"
+    "Strategy Parameter: exit_rank_k = 4\n"
+  )
+  ok, issues = verify_params_loaded(path, log, allow_defaults=False)
+  path.unlink()
+  assert ok, issues
+
+
+def test_enable_protections_flag_in_backtest_command() -> None:
+  from pipeline.freqtrade_cli import format_freqtrade_command
+
+  cmd = format_freqtrade_command(
+    "backtesting",
+    "XSecMomentum",
+    "20210101-20231231",
+    enable_protections=True,
+  )
+  assert cmd.endswith("--enable-protections") or "--enable-protections" in cmd

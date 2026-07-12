@@ -13,6 +13,16 @@ DEFAULT_CONFIG_FILES = (
 )
 
 
+def resolve_config_paths(extra_paths: list[Path] | None = None) -> list[Path]:
+  """Orden estable: base + backtest + extras (mismo orden que CLI Freqtrade)."""
+  files = list(DEFAULT_CONFIG_FILES)
+  if extra_paths:
+    for path in extra_paths:
+      p = path if path.is_absolute() else ROOT / path
+      files.append(p.resolve())
+  return files
+
+
 def deep_merge(base: dict, override: dict) -> dict:
   out = dict(base)
   for key, value in override.items():

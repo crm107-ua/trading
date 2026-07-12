@@ -19,6 +19,7 @@ from pipeline.docker_image import (
   image_digest_from_ref,
   pinned_image_ref,
 )
+from pipeline.config_hash import resolve_config_paths
 
 # ``hyperopt -j`` forma parte de la secuencia de puntos evaluados (junto a --random-state).
 # Hyperopt paralelo falla con el stack config/user_data del lab (ver probe_vanilla_hyperopt_parallel.ps1).
@@ -159,13 +160,67 @@ def run_freqtrade(args: list[str], *, timeout: int | None = None) -> CommandResu
     )
 
 
-def base_config_args() -> list[str]:
-  return [
-    "--config",
-    "user_data/config/base.json",
-    "--config",
-    "user_data/config/backtest.json",
+def base_config_args(extra_config_paths: list[Path] | None = None) -> list[str]:
+  args: list[str] = []
+  for path in resolve_config_paths(extra_config_paths):
+    rel = str(path.relative_to(ROOT)).replace("\\", "/")
+    args.extend(["--config", rel])
+  return args
+
+
+def format_freqtrade_command(
+  subcmd: str,
+  strategy: str,
+  timerange: str,
+  *,
+  config_paths: list[Path] | None = None,
+  epochs: int | None = None,
+  random_state: int | None = None,
+  spaces: list[str] | None = None,
+  min_trades: int | None = None,
+  enable_protections: bool = True,
+) -> str:
+  """Representación legible del comando docker (dry-plan)."""
+  cfg_args: list[str] = []
+  for path in config_paths or resolve_config_paths(None):
+    rel = str(path.relative_to(ROOT)).replace("\\", "/")
+    cfg_args.extend(["--config", rel])
+  args = [
+    "docker compose run --rm freqtrade",
+    subcmd,
+    *cfg_args,
+    "--strategy",
+    strategy,
+    "--strategy-path",
+    "user_data/strategies",
+    "--timerange",
+    timerange,
   ]
+  if subcmd == "hyperopt":
+    args.extend(
+      [
+        "--hyperopt-path",
+        "user_data/hyperopts",
+        "--spaces",
+        *(spaces or ["buy", "sell"]),
+        "--epochs",
+        str(epochs or 0),
+        "--random-state",
+        str(random_state or 0),
+        "--min-trades",
+        str(min_trades or 100),
+        "--hyperopt-loss",
+        "QuantRobustLoss",
+        "--print-json",
+        "-j",
+        str(hyperopt_job_workers()),
+      ]
+    )
+  elif subcmd == "backtesting":
+    args.extend(["--cache", "none", "--export", "trades"])
+  if enable_protections:
+    args.append("--enable-protections")
+  return " ".join(args)
 
 
 def _read_last_result_name() -> str | None:
@@ -181,11 +236,12 @@ def run_backtest(
   *,
   enable_protections: bool = True,
   cache: str = "none",
+  extra_config_paths: list[Path] | None = None,
 ) -> tuple[CommandResult, Path | None]:
   before = _read_last_result_name()
   args = [
     "backtesting",
-    *base_config_args(),
+    *base_config_args(extra_config_paths),
     "--strategy",
     strategy,
     "--strategy-path",
@@ -223,11 +279,12 @@ def run_hyperopt(
   hyperopt_loss: str = "QuantRobustLoss",
   min_trades: int = 100,
   spaces: list[str] | None = None,
+  extra_config_paths: list[Path] | None = None,
 ) -> CommandResult:
   space_args = spaces or ["buy", "sell"]
   args = [
     "hyperopt",
-    *base_config_args(),
+    *base_config_args(extra_config_paths),
     "--hyperopt-path",
     "user_data/hyperopts",
     "--strategy",
