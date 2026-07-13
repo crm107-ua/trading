@@ -1,7 +1,11 @@
 # Estado del proyecto — cierre de ciclo (2026-07-13)
 
-**Estado:** **EN PAUSA** — sin candidato vivo para go-live.  
+**Estado:** **CERRADO CON RESPUESTA** (no pausa por cansancio).  
 **Último intento:** #14 Funding Rate Carry (`run_id=20260713_screen`) → **MUERTA (D-3)**; veredicto sustantivo: *real pero no rentable*.
+
+> *La pausa no es fatiga sino espacio de búsqueda agotado bajo las restricciones actuales (10k, Binance retail, sin cola). Cualquier reapertura que relaje una restricción es proyecto nuevo, no iteración.*
+
+**Sesión de ideación (2026-07-13):** 5 familias retail mapeadas, 0 supervivientes en papel — [`IDEATION_SESSION_20260713.md`](IDEATION_SESSION_20260713.md).
 
 ---
 

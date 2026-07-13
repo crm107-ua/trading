@@ -4,7 +4,11 @@
 
 **Leyenda de resultado:** `DESCARTADA` | `VIVA (research)` | `VIVA (implementar)` | `INCONCLUSO` | `PENDIENTE` | `MUERTA` | `SOBREAJUSTADA`
 
-**Estado del proyecto (2026-07-13):** **EN PAUSA** — 8/8 intentos principales cerrados sin go-live. Taxonomía de cierre y condición de reapertura en [`docs/PROJECT_STATUS.md`](PROJECT_STATUS.md).
+**Estado del proyecto (2026-07-13):** **EN PAUSA — CERRADO CON RESPUESTA.** 8/8 intentos principales cerrados sin go-live + sesión de ideación en papel (5 familias, 0 supervivientes). Ver [`docs/IDEATION_SESSION_20260713.md`](IDEATION_SESSION_20260713.md).
+
+> *La pausa no es fatiga sino espacio de búsqueda agotado bajo las restricciones actuales (10k, Binance retail, sin cola). Cualquier reapertura que relaje una restricción es proyecto nuevo, no iteración.*
+
+**Respuesta del capítulo:** no hay edge retail-accesible bajo estas restricciones — demostrado por protocolo propio (8 validaciones + 5 muertes en papel).
 
 **Taxonomía de muerte:** **A** sin edge/fricción · **B** sobreajuste · **C** edge real no rentable (#14).
 
