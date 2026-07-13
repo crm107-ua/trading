@@ -27,10 +27,14 @@
 | 10-RS | **Re-screen #10 (stop honesto):** misma hipótesis, dos stops pre-fijados | E2, w14 top-3 K4 | Screen Freqtrade `XSecMomentum_rescreen_stop.json`: `stop_design_m35` (−0.35) vs `stop_accidental_m10` (−0.1); criterios rotación + LOO + DD intactos | Cada variante juzgada por separado; si solo pasa −0.1 → PASA con descuento post-hoc; si ninguna → candidato cae | **PASA ambos** — `run_id=20260711_100039`; m35 net +252k DD 45.6% LOO bruto +77.6k; m10 net +41k; validación full = **m35** | 2026-07-11 |
 | 13-E | **Diagnóstico (no intento nuevo):** m35 sospechosamente bueno + concentración ZEC | Zip m35 + `simulate_freqtrade_fidelity` stop −35% | Gap instrumento↔FT; PnL por par; ZEC por año; counterfactual ex-ZEC | Nombrar gap si >2×; expectativa WF pre-escrita | **Gap invertido 3.6×** (FT 26× vs fidelidad 7.25×); ZEC 60% PnL (90% en 2025); compound en sim solo 1.06×; ex-ZEC aprox 11× DD 51% — ver `diagnose_m35_13e_20260711.json` | 2026-07-11 |
 | 13-F | **Diagnóstico (no intento nuevo):** estrés slippage, secuencia, capacidad, día rebalanceo m35 | Zip m35 + `simulate_freqtrade_fidelity` + bootstrap trades | F1 parrilla slippage fija; F2 bootstrap 10k bloques mensuales; F3 stake/vol; F4 siete días reportados sin elegir | Caracterización — no altera params/universo/día | **Ver** `stress_13f_20260713.json` — half-edge slippage ~0.56%/lado; bootstrap DD p90 −46%; capacidad ~30k USDT umbral impacto; lunes en banda inferior F4 | 2026-07-13 |
+| 10-V | **Validación full control #10 (m35):** XSecMomentum E2, stop −0.35, hyperopt semillas + WF 15×100 épocas | 16 pares 1d, `screen_xsec.json`, split IS/OOS + WF | `calibration_protocol.md` — divergencia ≤0.25, WFE ≥0.5, veredicto vinculante | **SOBREAJUSTADA** — `run_id=20260712_191406`; div **0.30**; WFE **0.20**; motivos: inestabilidad semillas + WFE bajo; baseline OOS defaults (Sharpe 0.40, +47%) **>** semillas hyperopt OOS; **no vivo para go-live**; dry-run = epílogo operativo | 2026-07-13 |
+| 14 | **Funding Rate Carry (perpetuos):** cobrar funding pagado por longs apalancados retail — **delta-neutral** spot+perp | Whitelist 4 pares (BTC, ETH, BNB, SOL), funding ≥4 años | Simulador dual-leg `research/funding_carry_lab.py` — screen + WF 15× + OOS; **sin** hyperopt; **sin** Freqtrade | Pre-reg `docs/PREREG_14_FUNDING_CARRY.md`; muerte D-1 carry<fricción, Sharpe OOS<0.5, conc.>40%, WFE<0.5; cierre **2026-08-31** | **VIVA (pre-reg congelado)** — implementar sim + 1 run | 2026-07-13 |
 
 ---
 
 ## Pre-registro validación XSecMomentum (2026-07-11, antes de `report.json` MeanRevBB)
+
+**Estado 2026-07-13:** validación full ejecutada → **SOBREAJUSTADA** (`10-V`, `run_id=20260712_191406`). Candidato **archivado** — no go-live. Ver cierre en `docs/XSEC_MOMENTUM.md` § Cierre intento #10.
 
 **Congelar antes de leer el veredicto del control.** No modifica código hoy; fija qué se valida y qué es control.
 

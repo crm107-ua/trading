@@ -120,14 +120,14 @@ Materialización del pre-registro candidato #10 / research #13. **No es intento 
 
 Reporte: `user_data/validation_reports/screen/XSecMomentum20M/20260711_092654/screen_report.json`
 
-### Estado validación full (congelado)
+### Estado validación full
 
-| Rol | Config | Screen confirmación |
-|-----|--------|---------------------|
-| **Primaria** | XSecMomentum20M, filtro dinámico 20M | **Implementada; screen NO PASA; autopsia 2026-07-11 → degradada (ii)** |
-| **Control** | XSecMomentum sin filtro (#10) | PASA (screen #10) — **única config validación full** |
+| Rol | Config | Estado |
+|-----|--------|--------|
+| **Primaria** | XSecMomentum20M, filtro dinámico 20M | **Degradada** — no validar |
+| **Control #10 m35** | XSecMomentum E2, stop −0.35 (`10-RS`) | Screen **PASA** → validación full **SOBREAJUSTADA** (`20260712_191406`) — **archivado, no go-live** |
 
-WF protocolo: 100 epochs según cola post-MeanRevBB.
+Reporte: `user_data/validation_reports/XSecMomentum/20260712_191406/report.json`
 
 ---
 
@@ -446,6 +446,48 @@ Artefacto: `research/output/diagnose_m35_13e_20260711.json`
 
 ---
 
+## Desviación de protocolo — `min_trades` WF (2026-07-12, run `20260712_191406`)
+
+**Clasificación:** defecto de **materialización** del plan pre-registrado — no ajuste mirando resultados (no había resultados que mirar: el hyperopt moría).
+
+### Qué decía el pre-registro
+
+El perfil `full` del orquestador (`docs/VALIDATION.md`, pre-registro 2026-07-11) aplicaba **`--min-trades 100`** a **todos** los hyperopts, incluido walk-forward — mismo valor que semillas IS y que MeanRevBB (timeframe 5m, muchos trades en 3.3 años IS).
+
+### Qué ocurrió en ejecución
+
+| Paso | Timerange train | Trades observados | `min_trades` plan | Resultado |
+|------|-----------------|-------------------|-------------------|-----------|
+| Semillas IS | ~3.3 años (`20210101-20241111`) | 161–260 / semilla | **100** | ✅ Hyperopt exporta JSON |
+| WF ventana 0 train | **12 meses** (`20210809-20220808`) | **~45** (rebalanceo semanal 1d) | **100** | ❌ Todas las épocas `loss=10000`/`100000`; sin `XSecMomentum.json`; run aborta |
+
+Causa física: ningún epoch en una ventana WF de 12m puede alcanzar 100 trades con rotación semanal. El hyperopt no fallaba por timeout sino porque **ningún candidato era válido** bajo el umbral.
+
+Segundo defecto (misma clase): `QuantRobustLoss` tenía `MIN_TRADES = 100` **hardcodeado**, independiente del `--min-trades` del CLI — incluso tras bajar el flag del CLI, la loss seguía penalizando. Fix: `QUANT_ROBUST_MIN_TRADES` inyectado por Docker desde el orquestador.
+
+### Cambio aplicado (mitad de run)
+
+| Hyperopt | `min_trades` | Flag / mecanismo |
+|----------|--------------|------------------|
+| **Semillas IS** (42, 123, 456) | **100** | Perfil `full` (sin cambio) |
+| **WF train** (cada ventana 12m) | **30** | `--wf-min-trades 30` + `QUANT_ROBUST_MIN_TRADES` |
+
+**Asimetría explícita para el lector del `report.json`:** semillas y WF **no** comparten el mismo umbral de trades mínimos. Las semillas IS en ~3.3 años sí alcanzan 100 trades — no invalida la comparación semilla-a-semilla. El WF con 30 refleja la densidad real de la estrategia en ventanas anuales; imponer 100 habría hecho **imposible** el WF, no más estricto.
+
+**No es:** relajar umbral porque los resultados salieran mal. **Es:** corregir un plan que asumía densidad de trades de MeanRevBB/5m en una estrategia 1d semanal.
+
+### Registro operativo
+
+- Incidente técnico: `docs/validation_incidents.md` (sección 2026-07-12).
+- Comando resume vigente: `--wf-epochs 100 --wf-min-trades 30 --resume-run-id 20260712_191406`.
+- Checkpoint granular: apagados nocturnos sin pérdida de ventanas completadas (resume pagó construcción).
+
+### Deuda pipeline (anotada — no fix en este run)
+
+`min_trades` del hyperopt debe **escalar con la duración del timerange y la frecuencia de la estrategia** (p. ej. derivar de trades esperados en ventana train, o perfilar por timeframe/rebalanceo). Hoy el perfil `full` fija 100 global; eso es correcto para 5m multi-trade, incorrecto para rotación 1d en WF 12m.
+
+---
+
 ## Diagnóstico 13-F — estrés-test m35 (2026-07-13)
 
 **Pregunta:** ¿el candidato sobrevive slippage, mala secuencia, tamaño y fragilidad de día? (Juez 0 — no altera validación ni dry-run.)
@@ -537,9 +579,28 @@ Artefactos: `research/output/stress_13f_20260713.json`, PNGs `stress_13f_*.png`
 
 ## Veredicto
 
-**#10 control:** **PASA (10-RS)** — config validación **m35**. Entra a validación **entendido**: 26× FT vs 7.25× fidelidad (gap invertido 3.6×); ZEC 60% PnL (90% en 2025). PASA no implica que el titular sea robusto sin leer WF.
+**#10 control m35:** screen **PASA (10-RS)**; validación full **SOBREAJUSTADA** (`run_id=20260712_191406`, 2026-07-13). **Archivado** — no candidato vivo. El PASA screen no implica robustez; el veredicto full es vinculante.
 
-**Siguiente hito:** `report.json` MeanRevBB — sin trabajo adicional hasta entonces.
+**Lecciones del arco screen→validación:** gap FT/fidelidad (13-E); hyperopt empeora vs defaults OOS; `min_trades` WF (desviación documentada); caso de estudio en § Cierre intento #10.
+
+**Dry-run m35:** epílogo operativo (ejecución, slippage, pandas↔bot); no invalida ni revive el veredicto.
+
+---
+
+## Cierre intento #10 (2026-07-13)
+
+**Decisión:** opción **c** — archivar. No iterar #10 sin hipótesis nueva pre-registrada.
+
+| Artefacto | Ruta |
+|-----------|------|
+| Reporte vinculante | `user_data/validation_reports/XSecMomentum/20260712_191406/report.json` |
+| Registro | `hypothesis_registry.md` fila **10-V** |
+| Desviación `wf-min-trades` | § Desviación de protocolo — `min_trades` WF en este doc |
+| Incidentes técnicos | `docs/validation_incidents.md` |
+
+**Motivos veredicto:** divergencia params 0.30 (>0.25); WFE 0.20 (<0.50).
+
+**No es opción:** relajar protocolo; re-correr #10 como «segunda oportunidad»; **b′** (defaults fijos sin hyperopt) salvo pre-registro explícito como experimento metodológico post-mortem.
 
 ---
 

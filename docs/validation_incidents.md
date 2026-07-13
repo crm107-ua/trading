@@ -120,10 +120,19 @@ Doble umbral en conflicto:
 - `--wf-min-trades 30` (solo hyperopts WF; semillas siguen en 100).
 - `QuantRobustLoss` lee `QUANT_ROBUST_MIN_TRADES` (inyectado por orquestador vía Docker `-e`, alineado con `--min-trades`).
 
+### Expediente pre-veredicto
+
+Desviación de protocolo documentada en `docs/XSEC_MOMENTUM.md` (sección *Desviación de protocolo — min_trades WF*): materialización del plan, no ajuste por resultados; asimetría semillas 100 vs WF 30.
+
+### Deuda pipeline
+
+`min_trades` debe escalar con duración de timerange y frecuencia de la estrategia — **anotada, no implementada en este run** (véase misma sección en `XSEC_MOMENTUM.md`).
+
 ---
 
 | Item | Archivo | Prioridad |
 |------|---------|-----------|
+| `min_trades` escala por timerange/frecuencia estrategia | `pipeline/run_validation.py`, perfiles | Media (deuda post-XSec) |
 | Lock **audit-log** + heartbeat | `pipeline/run_lock.py`, tests | Alta (antes del batch) |
 | Test resume deja lock | `tests/test_validation_pipeline.py` | Alta |
 | Screen export aislado | `user_data/tools/screen_strategy.py` | Alta |
