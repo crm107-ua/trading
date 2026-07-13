@@ -1,0 +1,169 @@
+{
+  "hypothesis": 14,
+  "phase": "screen",
+  "run_id": "20260713_screen",
+  "prereg": "docs/PREREG_14_FUNDING_CARRY.md",
+  "frozen_params": {
+    "whitelist": [
+      "BTC/USDT",
+      "ETH/USDT",
+      "BNB/USDT",
+      "SOL/USDT"
+    ],
+    "entry_ann_pct": 0.12,
+    "entry_streak": 3,
+    "exit_ann_pct": 0.06,
+    "max_hold_days": 21,
+    "initial_capital": 10000.0,
+    "max_positions": 2,
+    "margin_model": "isolated_1x_dual_leg_slot_budget_over_2"
+  },
+  "cost_model_B": {
+    "fee_spot": 0.001,
+    "fee_perp": 0.0005,
+    "slip_spot": 0.001,
+    "slip_perp": 0.001
+  },
+  "modeling_notes": [
+    "funding_signed_each_8h",
+    "separate_spot_and_mark_prices",
+    "four_leg_friction_per_cycle",
+    "return_on_total_account_not_position_notional"
+  ],
+  "screen": {
+    "verdict": "MUERTA",
+    "death_condition": "D-3",
+    "passes_screen": false,
+    "gates": {
+      "net_pnl_positive": true,
+      "d1_carry_ge_friction": true,
+      "cycles_ge_20": true,
+      "half_2021_23_positive": true,
+      "half_2024_26_positive": true,
+      "max_dd_lt_30pct": true
+    },
+    "components": {
+      "funding_signed_usdt": 1694.609525795804,
+      "basis_usdt": -201.83585831313323,
+      "fees_usdt": 396.9082391264347,
+      "slippage_usdt": 529.278264121351,
+      "friction_total_usdt": 926.1865032477856,
+      "net_usdt": 566.5871642348852,
+      "cycles_closed": 48,
+      "by_pair": {
+        "ETH/USDT": {
+          "fees": 82.27759341147365,
+          "slippage": 109.71880249759522,
+          "funding_signed": 597.9774860408113,
+          "basis": -46.03384689111543
+        },
+        "BTC/USDT": {
+          "fees": 57.51607386063779,
+          "slippage": 76.69940010609592,
+          "funding_signed": 448.4195986929145,
+          "basis": -33.90487573671726
+        },
+        "BNB/USDT": {
+          "fees": 152.25606167789354,
+          "slippage": 203.0332637268247,
+          "funding_signed": 240.46501395907362,
+          "basis": -75.54446890022048
+        },
+        "SOL/USDT": {
+          "fees": 104.85851017642997,
+          "slippage": 139.82679779083495,
+          "funding_signed": 407.74742710300677,
+          "basis": -46.352666785080025
+        }
+      }
+    },
+    "account": {
+      "initial_usdt": 10000.0,
+      "final_equity_usdt": 10758.504104208907,
+      "return_on_account_pct": 7.58504104208908,
+      "cagr": 0.013334123522249719,
+      "sharpe": 1.6031780863396612,
+      "max_drawdown": -0.015125220778396065
+    },
+    "halves": {
+      "2021-23": {
+        "equity_start": 10000.0,
+        "equity_end": 10678.749171189436,
+        "pnl_net_usdt": 678.7491711894363,
+        "sharpe": 2.1640172654387815,
+        "max_drawdown": -0.015125220778396065
+      },
+      "2024-26": {
+        "equity_start": 10683.605878867747,
+        "equity_end": 10758.504104208907,
+        "pnl_net_usdt": 74.89822534115956,
+        "sharpe": 0.49808360272968133,
+        "max_drawdown": -0.008957032766748307
+      }
+    },
+    "concentration_by_pair": {
+      "ETH/USDT": 0.6352901476804467,
+      "BTC/USDT": 0.4947151412580558,
+      "BNB/USDT": -0.335992045642151,
+      "SOL/USDT": 0.20598675670364844
+    },
+    "max_concentration": 0.6352901476804467,
+    "d3_concentration_fail": true,
+    "cycles_closed": 48,
+    "friction_per_cycle_nominal_pct": 0.7000000000000001,
+    "trades_sample": [
+      {
+        "pair": "ETH/USDT",
+        "entry_time": "2021-01-30 00:00:00+00:00",
+        "exit_time": "2021-02-20 00:00:00+00:00",
+        "days_held": 21.0,
+        "notional_leg": 2500.0,
+        "funding_settled": 195.40085000000002,
+        "basis_realized": -7.680022344039571,
+        "friction_cycle": 17.5
+      },
+      {
+        "pair": "BNB/USDT",
+        "entry_time": "2021-02-20 00:00:00+00:00",
+        "exit_time": "2021-02-22 16:00:00+00:00",
+        "days_held": 2.6666666666666665,
+        "notional_leg": 2574.934089423715,
+        "funding_settled": 30.72949516725066,
+        "basis_realized": -1.326558325887305,
+        "friction_cycle": 18.024538625966002
+      },
+      {
+        "pair": "BTC/USDT",
+        "entry_time": "2021-02-02 08:00:00.006000+00:00",
+        "exit_time": "2021-02-23 08:00:00.006000+00:00",
+        "days_held": 21.0,
+        "notional_leg": 2500.1416683338343,
+        "funding_settled": 167.24610185360797,
+        "basis_realized": -5.696062500703306,
+        "friction_cycle": 17.50099167833684
+      },
+      {
+        "pair": "ETH/USDT",
+        "entry_time": "2021-02-22 16:00:00+00:00",
+        "exit_time": "2021-03-15 16:00:00.030000+00:00",
+        "days_held": 21.000000347222223,
+        "notional_leg": 2585.5699414865403,
+        "funding_settled": 72.95317453971288,
+        "basis_realized": -7.809808028108598,
+        "friction_cycle": 18.098989590405782
+      },
+      {
+        "pair": "BNB/USDT",
+        "entry_time": "2021-03-09 08:00:00+00:00",
+        "exit_time": "2021-03-16 08:00:00.008000+00:00",
+        "days_held": 7.000000092592593,
+        "notional_leg": 2587.8988463375176,
+        "funding_settled": 48.895165585966396,
+        "basis_realized": 1.0595324559300536,
+        "friction_cycle": 18.115291924362623
+      }
+    ],
+    "trades_total": 48
+  },
+  "discipline": "Parametros 12%/3/6%/21d congelados. Cerca del umbral = muerte, no casi. Prohibido hyperopt manual post-screen."
+}

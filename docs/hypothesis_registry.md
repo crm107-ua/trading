@@ -2,7 +2,11 @@
 
 **Regla:** el contador `#` **nunca se resetea**. Cada fila es un intento registrado **antes** de ejecutar la prueba. Si un resultado pasa un criterio, el reporte debe citar el número de intento acumulado (p. ej. «pasa siendo el intento #12»). A más intentos acumulados, más escrutinio y más exigencia de out-of-sample antes de creerlo — corrección informal por multiplicidad.
 
-**Leyenda de resultado:** `DESCARTADA` | `VIVA (research)` | `VIVA (implementar)` | `INCONCLUSO` | `PENDIENTE`
+**Leyenda de resultado:** `DESCARTADA` | `VIVA (research)` | `VIVA (implementar)` | `INCONCLUSO` | `PENDIENTE` | `MUERTA` | `SOBREAJUSTADA`
+
+**Estado del proyecto (2026-07-13):** **EN PAUSA** — 8/8 intentos principales cerrados sin go-live. Taxonomía de cierre y condición de reapertura en [`docs/PROJECT_STATUS.md`](PROJECT_STATUS.md).
+
+**Taxonomía de muerte:** **A** sin edge/fricción · **B** sobreajuste · **C** edge real no rentable (#14).
 
 | # | Hipótesis | Universo | Método de prueba | Criterio pre-fijado | Resultado | Fecha |
 |---|-----------|----------|------------------|---------------------|-----------|-------|
@@ -28,7 +32,7 @@
 | 13-E | **Diagnóstico (no intento nuevo):** m35 sospechosamente bueno + concentración ZEC | Zip m35 + `simulate_freqtrade_fidelity` stop −35% | Gap instrumento↔FT; PnL por par; ZEC por año; counterfactual ex-ZEC | Nombrar gap si >2×; expectativa WF pre-escrita | **Gap invertido 3.6×** (FT 26× vs fidelidad 7.25×); ZEC 60% PnL (90% en 2025); compound en sim solo 1.06×; ex-ZEC aprox 11× DD 51% — ver `diagnose_m35_13e_20260711.json` | 2026-07-11 |
 | 13-F | **Diagnóstico (no intento nuevo):** estrés slippage, secuencia, capacidad, día rebalanceo m35 | Zip m35 + `simulate_freqtrade_fidelity` + bootstrap trades | F1 parrilla slippage fija; F2 bootstrap 10k bloques mensuales; F3 stake/vol; F4 siete días reportados sin elegir | Caracterización — no altera params/universo/día | **Ver** `stress_13f_20260713.json` — half-edge slippage ~0.56%/lado; bootstrap DD p90 −46%; capacidad ~30k USDT umbral impacto; lunes en banda inferior F4 | 2026-07-13 |
 | 10-V | **Validación full control #10 (m35):** XSecMomentum E2, stop −0.35, hyperopt semillas + WF 15×100 épocas | 16 pares 1d, `screen_xsec.json`, split IS/OOS + WF | `calibration_protocol.md` — divergencia ≤0.25, WFE ≥0.5, veredicto vinculante | **SOBREAJUSTADA** — `run_id=20260712_191406`; div **0.30**; WFE **0.20**; motivos: inestabilidad semillas + WFE bajo; baseline OOS defaults (Sharpe 0.40, +47%) **>** semillas hyperopt OOS; **no vivo para go-live**; dry-run = epílogo operativo | 2026-07-13 |
-| 14 | **Funding Rate Carry (perpetuos):** cobrar funding pagado por longs apalancados retail — **delta-neutral** spot+perp | Whitelist 4 pares (BTC, ETH, BNB, SOL), funding ≥4 años | Simulador dual-leg `research/funding_carry_lab.py` — screen + WF 15× + OOS; **sin** hyperopt; **sin** Freqtrade | Pre-reg `docs/PREREG_14_FUNDING_CARRY.md`; muerte D-1 carry<fricción, Sharpe OOS<0.5, conc.>40%, WFE<0.5; cierre **2026-08-31** | **VIVA (pre-reg congelado)** — implementar sim + 1 run | 2026-07-13 |
+| 14 | **Funding Rate Carry (perpetuos):** cobrar funding pagado por longs apalancados retail — **delta-neutral** spot+perp | Whitelist 4 pares (BTC, ETH, BNB, SOL), funding ≥4 años | Simulador dual-leg `research/funding_carry_lab.py` — screen único (`run_id=20260713_screen`) | Pre-reg `docs/PREREG_14_FUNDING_CARRY.md`; params 12%/3/6%/21d congelados — **cerca del umbral = muerte** | **MUERTA (D-3)** — screen: carry neto **+1 695** > fricción **926** (D-1 no); PnL neto **+567 USDT** (+7,6% cuenta, CAGR **1,3%**); **ETH 63,5%** PnL neto (>40%); **sin WF** | 2026-07-13 |
 
 ---
 
@@ -71,7 +75,8 @@
 
 | ID | Observación | Candado |
 |----|-------------|---------|
-| OBS-11a | En #11 el signo salió **invertido**: funding > p90 rolling 90d precede retornos spot forward **mejores** (t agregado hasta +5.97 en 2024-26). Tentador como señal de continuación. | **Hipótesis post-hoc** (signo volteado tras ver datos). Máximo descuento por multiplicidad. Si algún día se prueba → **intento nuevo** con criterio OOS estricto pre-fijado **antes** de correr. **Hoy no.** |
+| OBS-14a | Screen #14: carry neto supera fricción (D-1 no dispara) pero PnL neto marginal (+567 USDT / 5,5 años) y muerte **D-3** por ETH 63,5%. Tentador ajustar umbral entrada 12%→10%. | **Prohibido** — hyperopt manual (#10 con otra ropa). Cerca del umbral = muerte. #14 cerrada. |
+| OBS-14b | Predicción de fallo **D-1** fue informativamente incorrecta: el carry **existe** (+1 695 vs fricción 926) con basis y DD modelados. Muerte real: **tamaño del edge** (CAGR 1,3%; 2024–26 +75 USDT) + concentración. Clase **C** en taxonomía — distinta de sobreajuste. | Registrado en `PROJECT_STATUS.md`. No reabrir #14 para «confirmar» D-1. |
 
 ---
 
