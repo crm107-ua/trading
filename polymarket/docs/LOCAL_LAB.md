@@ -49,6 +49,22 @@ También: `python -m polymarket.src.bot --mode paper-maker --minutes 30`
 
 ---
 
+## NVIDIA NIM (opcional)
+
+Si defines `NVIDIA_API_KEY`, el paper-maker local consultará NVIDIA NIM para decidir la **acción** (`quote`/`hold`).
+Si falla o excede latencia, cae a `hold` (fallback seguro).
+
+Test de conectividad/latencia:
+
+```powershell
+$env:NVIDIA_API_KEY = "nvapi-..."
+python -m polymarket.research.local_lab.test_nvidia_nim
+```
+
+Docs: `docs/NVIDIA_NIM.md`.
+
+---
+
 ## Estrategias disponibles (local)
 
 | ID | Origen | Descripción |

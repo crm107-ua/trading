@@ -28,6 +28,7 @@ from polymarket.research.local_lab.strategies import STRATEGIES, QuoteIntent
 from polymarket.src.data.book_utils import best_bid_ask
 from polymarket.src.pricing.fair_value import estimate_fair_values
 from polymarket.src.signals.features import build_market_features
+from polymarket.src.ai.decision_engine import decide_quote_action
 
 ROOT = Path(__file__).resolve().parents[2]
 MAKER_CFG = ROOT / "config" / "maker.json"
@@ -67,6 +68,8 @@ class PaperSession:
     strike: float | None = None
     window_end_ns: int | None = None
     spot_history: list[tuple[int, float]] = field(default_factory=list)
+    nim_decisions_used: int = 0
+    last_nim_latency_ms: int | None = None
 
     def _strategy_fn(self):
         fn = STRATEGIES[self.strategy_id]
@@ -235,6 +238,28 @@ class PaperSession:
             if quote is None:
                 await asyncio.sleep(poll_s)
                 continue
+            # Optional NVIDIA decision gating (lab-only). Never changes frozen quote params.
+            snap = {
+                "spot": state["spot"],
+                "strike": self.strike or state["spot"],
+                "time_remaining_s": time_rem,
+                "best_bid": state["best_bid"],
+                "best_ask": state["best_ask"],
+                "last_trade": state["last_trade"],
+                "last_quote_spot": self.last_quote_spot,
+                "requote_spot_move_usd": requote_move,
+                "inventory_shares": self.inventory_shares,
+                "quote_bid": quote.bid,
+                "quote_ask": quote.ask,
+                "quote_size": quote.size_shares,
+            }
+            decision, nim = decide_quote_action(snapshot=snap, latency_budget_ms=750)
+            if nim is not None:
+                self.nim_decisions_used += 1
+                self.last_nim_latency_ms = nim.latency_ms
+            if decision.action == "hold":
+                await asyncio.sleep(poll_s)
+                continue
             self.quotes_logged += 1
             self._check_fill(state["last_trade"], quote, fair, state["spot"])
             await asyncio.sleep(poll_s)
@@ -258,6 +283,8 @@ class PaperSession:
             "duration_minutes": minutes,
             "fills": len(self.fills),
             "quotes_logged": self.quotes_logged,
+            "nim_decisions_used": self.nim_decisions_used,
+            "nim_last_latency_ms": self.last_nim_latency_ms,
             "spread_captured_usdc": round(self.spread_total, 2),
             "adverse_cost_usdc": round(self.adverse_total, 2),
             "bankroll_end_usdc": round(self.bankroll, 2),

@@ -1,0 +1,28 @@
+{
+  "runId": "20260713_212720",
+  "verdict": "EVAL_INVALID",
+  "reason": "mixed_models",
+  "metrics": {
+    "heldoutQuestionsN": 0,
+    "brier": 0,
+    "brierMarket": 0,
+    "skill": 0,
+    "brierDiff": {
+      "mean": 0,
+      "ci95": {
+        "lo": 0,
+        "hi": 0
+      }
+    },
+    "ece": 0,
+    "forecastFailedRate": 1,
+    "ingestRejectRate": 0
+  },
+  "integrity": {
+    "leakageSuspected": true,
+    "canaryBrierByModel": {
+      "gpt-4.1-mini": 1
+    },
+    "configHash": "ebb00002c9a9ffdafb66a8254beee278e3d8d7fc4289a8d83965aa92da33c5cf"
+  }
+}

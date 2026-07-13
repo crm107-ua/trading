@@ -1,0 +1,77 @@
+{
+  "frozen": true,
+  "frozenAt": "2026-07-13T23:15:00.000Z",
+  "freezeHash": "ebb00002c9a9ffdafb66a8254beee278e3d8d7fc4289a8d83965aa92da33c5cf",
+  "protocol": {
+    "horizonsHoursBeforeResolution": [
+      24,
+      72,
+      168
+    ],
+    "selection": {
+      "minLiquidityProxy": 1000,
+      "includeCategories": [],
+      "excludeCategories": [],
+      "dateRange": {
+        "resolutionFrom": "2024-01-01",
+        "resolutionTo": "2026-12-31"
+      },
+      "minMarketDurationDays": 7,
+      "excludeAmbiguousResolution": true
+    },
+    "temporalSplit": {
+      "heldoutLastPctByResolutionDate": 0.3
+    },
+    "integrity": {
+      "safetyMarginDays": 30,
+      "retrieval": "none",
+      "canary": {
+        "enabled": true,
+        "canaryCountPerModel": 10,
+        "minLagDays": 60,
+        "maxLagDays": 365,
+        "brierSuspiciousThreshold": 0.02,
+        "minEligibleHeldoutQuestions": 100
+      },
+      "maxForecastFailedRate": 0.1,
+      "maxIngestRejectRate": 0.2
+    },
+    "universe": {
+      "mode": "keyset_full",
+      "ingestAsOf": "2026-07-13",
+      "documentedTruncation": false
+    },
+    "runSampling": {
+      "enabled": true,
+      "seed": 20260713,
+      "targetQuestions": 500,
+      "requireModelIntersection": true,
+      "strata": {
+        "resolutionQuarter": {
+          "enabled": true,
+          "proportional": true
+        },
+        "category": {
+          "enabled": true,
+          "proportional": true,
+          "unknownBucket": "OTHER"
+        }
+      },
+      "minHeldoutQuestionsAfterSplit": 100
+    },
+    "ensemble": {
+      "enabled": false,
+      "modelsN": 1,
+      "promptVariantsM": 1,
+      "trimPct": 0.1
+    },
+    "verdict": {
+      "matchSkillAbs": 0.05,
+      "bootstrap": {
+        "iterations": 2000,
+        "seed": 1337,
+        "ci": 0.95
+      }
+    }
+  }
+}

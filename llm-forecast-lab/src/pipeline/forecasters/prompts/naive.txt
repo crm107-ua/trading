@@ -1,0 +1,21 @@
+You are forecasting a binary question as of the timestamp shown. You must not use information after that timestamp.
+Return ONLY JSON with keys:
+  p (number 0..1),
+  key_factors (string[]),
+  base_rate_considered (string),
+  confidence_note (string).
+
+Question:
+{{QUESTION_TEXT}}
+
+Description:
+{{DESCRIPTION}}
+
+Market snapshot:
+  timestamp: {{SNAPSHOT_TS}}
+  market_mid: {{MARKET_MID}}
+
+Calibration instructions:
+- Start from a base rate / reference class.
+- Consider strongest YES and NO arguments.
+- Avoid round numbers unless strongly justified.
