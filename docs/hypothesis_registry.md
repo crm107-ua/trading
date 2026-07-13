@@ -2,13 +2,15 @@
 
 **Regla:** el contador `#` **nunca se resetea**. Cada fila es un intento registrado **antes** de ejecutar la prueba. Si un resultado pasa un criterio, el reporte debe citar el número de intento acumulado (p. ej. «pasa siendo el intento #12»). A más intentos acumulados, más escrutinio y más exigencia de out-of-sample antes de creerlo — corrección informal por multiplicidad.
 
-**Leyenda de resultado:** `DESCARTADA` | `VIVA (research)` | `VIVA (implementar)` | `INCONCLUSO` | `PENDIENTE` | `MUERTA` | `SOBREAJUSTADA`
+**Leyenda de resultado:** `DESCARTADA` | `VIVA (research)` | `VIVA (implementar)` | `INCONCLUSO` | `PENDIENTE` | `MUERTA` | `SOBREAJUSTADA` | `SCREEN_INVÁLIDO` | `NO_EVALUABLE`
 
-**Estado del proyecto (2026-07-13):** **EN PAUSA — CERRADO CON RESPUESTA.** 8/8 intentos principales cerrados sin go-live + sesión de ideación en papel (5 familias, 0 supervivientes). Ver [`docs/IDEATION_SESSION_20260713.md`](IDEATION_SESSION_20260713.md).
+**Estado del proyecto (2026-07-13):** Binance **CERRADO CON RESPUESTA** (#1–#14). Polymarket **VIVA (research)** — #15 `NO_EVALUABLE`; **#16 pre-reg congelado** (maker post-only). Ver [`polymarket/docs/PREREG_16_POLY_MAKER_STALE.md`](../polymarket/docs/PREREG_16_POLY_MAKER_STALE.md).
 
 > *La pausa no es fatiga sino espacio de búsqueda agotado bajo las restricciones actuales (10k, Binance retail, sin cola). Cualquier reapertura que relaje una restricción es proyecto nuevo, no iteración.*
 
-**Respuesta del capítulo:** no hay edge retail-accesible bajo estas restricciones — demostrado por protocolo propio (8 validaciones + 5 muertes en papel).
+**Respuesta Binance (#1–#14):** no hay edge retail-accesible en spot/perp Binance ~10k USDT — demostrado por protocolo (8 validaciones cerradas + 5 muertes en papel pre-registry).
+
+**Polymarket (#15):** **sin evaluar** — screen inválido por coste de datos; **no** extender la conclusión de Binance a prediction markets (fees, participantes y resolución distintos).
 
 **Taxonomía de muerte:** **A** sin edge/fricción · **B** sobreajuste · **C** edge real no rentable (#14).
 
@@ -37,6 +39,38 @@
 | 13-F | **Diagnóstico (no intento nuevo):** estrés slippage, secuencia, capacidad, día rebalanceo m35 | Zip m35 + `simulate_freqtrade_fidelity` + bootstrap trades | F1 parrilla slippage fija; F2 bootstrap 10k bloques mensuales; F3 stake/vol; F4 siete días reportados sin elegir | Caracterización — no altera params/universo/día | **Ver** `stress_13f_20260713.json` — half-edge slippage ~0.56%/lado; bootstrap DD p90 −46%; capacidad ~30k USDT umbral impacto; lunes en banda inferior F4 | 2026-07-13 |
 | 10-V | **Validación full control #10 (m35):** XSecMomentum E2, stop −0.35, hyperopt semillas + WF 15×100 épocas | 16 pares 1d, `screen_xsec.json`, split IS/OOS + WF | `calibration_protocol.md` — divergencia ≤0.25, WFE ≥0.5, veredicto vinculante | **SOBREAJUSTADA** — `run_id=20260712_191406`; div **0.30**; WFE **0.20**; motivos: inestabilidad semillas + WFE bajo; baseline OOS defaults (Sharpe 0.40, +47%) **>** semillas hyperopt OOS; **no vivo para go-live**; dry-run = epílogo operativo | 2026-07-13 |
 | 14 | **Funding Rate Carry (perpetuos):** cobrar funding pagado por longs apalancados retail — **delta-neutral** spot+perp | Whitelist 4 pares (BTC, ETH, BNB, SOL), funding ≥4 años | Simulador dual-leg `research/funding_carry_lab.py` — screen único (`run_id=20260713_screen`) | Pre-reg `docs/PREREG_14_FUNDING_CARRY.md`; params 12%/3/6%/21d congelados — **cerca del umbral = muerte** | **MUERTA (D-3)** — screen: carry neto **+1 695** > fricción **926** (D-1 no); PnL neto **+567 USDT** (+7,6% cuenta, CAGR **1,3%**); **ETH 63,5%** PnL neto (>40%); **sin WF** | 2026-07-13 |
+| 15 | **Polymarket stale-quote:** fair value Up desde spot BTC vs strike; entrar si `net_edge > 2¢` tras taker+slippage — **una pata FAK** | BTC Up/Down 5m activos (Gamma search) | Screen único pre-reg: sim `polymarket/research/poly_lab/` + replay depth WS (**no ejecutado** con datos suficientes) | Pre-reg `polymarket/docs/PREREG_15_POLY_STALE_QUOTE.md`; σ=0.55, min_edge=2¢ congelados | **SCREEN_INVÁLIDO / NO_EVALUABLE** — sin depth WS ≥30d; runs intermedios invalidados — ver `SCREEN_15_INVALIDATION.md`; hipótesis **no juzgada** | 2026-07-13 |
+| 16 | **Polymarket maker stale-quote:** publicar bid/ask anclados a fair value; cancel/replace cuando spot se mueve ≥25 USD — **post-only GTC** | BTC Up/Down 5m; token Up solo | Fase A: grabación ≥30d WS · Fase B: paper maker ≥14d · Fase C: screen único `sim_maker_quote.py` | Pre-reg `polymarket/docs/PREREG_16_POLY_MAKER_STALE.md`; half_spread=1.5¢, σ=0.55, adverse>55%=muerte | **PENDIENTE** — pre-reg congelado 2026-07-13; **no** datos ni screen hasta fase A completa | 2026-07-13 |
+
+---
+
+## Cierre #15 — screen inválido (2026-07-13)
+
+**Veredicto vinculante único:** `SCREEN_INVÁLIDO` / `NO_EVALUABLE` — la hipótesis **no fue juzgada** contra el mercado.
+
+| | Detalle |
+|---|---------|
+| **Problema de higiene** | Varios runs intermedios con MUERTA (D-4/D-5) y PnL distintos; solo uno puede ser vinculante |
+| **Problema de diseño** | Generador synthetic v1: `resolved_up = coin flip` independiente del spot → D-5 mide el generador, no la hipótesis |
+| **Datos faltantes** | Depth WS ≥30 días (Fase 0); solo mid-history + muestras cortas |
+| **Decisión** | No abrir #16; rama Polymarket en **PAUSA** junto con Binance |
+| **Documentación** | [`polymarket/docs/SCREEN_15_INVALIDATION.md`](../polymarket/docs/SCREEN_15_INVALIDATION.md) |
+| **Artefacto** | `polymarket/research/output/poly_15/20260713_screen/report.json` |
+
+**Runs invalidados (no registry):** (1) D-4 por denominador de fill_rate; (2–3) contabilidad multi-fill por ventana; (4) coin-flip resolución + synthetic no informativo.
+
+**#16:** mecanismo distinto (maker vs taker #15) — ver fila #16 y `PREREG_16_POLY_MAKER_STALE.md`. #15 no implica muerte de #16.
+
+---
+
+## Pre-registro #16 — maker post-only (2026-07-13)
+
+| | Detalle |
+|---|---------|
+| **Mecanismo** | Publicar quotes fair±spread; ganar spread maker; riesgo = adverse selection |
+| **Distinto de #15** | Lado opuesto del trade; 0% fee; no es iteración |
+| **Fases** | A: grabación 30d → B: paper 14d → C: screen único |
+| **Estado** | **PENDIENTE** — pre-reg congelado; sin screen |
 
 ---
 

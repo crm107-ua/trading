@@ -37,6 +37,10 @@ user_data/validation_reports/**
 # Research local PC2 (datadir 1d descargado aparte de PC1)
 research/data_local/
 
+# Polymarket lab local data
+polymarket/data_local/
+!polymarket/data_local/.gitkeep
+
 # Python
 
 # Python

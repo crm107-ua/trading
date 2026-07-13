@@ -1,0 +1,69 @@
+{
+  "verdict": "EXPLORATORY",
+  "verdict_binding": false,
+  "warning": "No usar para registry. Requiere >=30d fase A + paper 14d para #16.",
+  "data_root": "polymarket\\data_local\\smoke_test",
+  "panel": {
+    "btc_rows": 9970,
+    "clob_rows": 2202,
+    "aligned_ticks": 2151,
+    "windows": 2,
+    "duration_hours": 0.067
+  },
+  "maker_16_exploratory": {
+    "fills": 2,
+    "adverse_rate": 0.0,
+    "spread_captured_usdc": 53.9,
+    "adverse_cost_usdc": 0.0,
+    "inventory_pnl_usdc": -100.0,
+    "net_pnl_usdc": -46.1,
+    "p2_ratio": 5390.0,
+    "death_p1_would_fire": false,
+    "death_p2_would_fire": false,
+    "extrapolation": {
+      "duration_hours": 0.067,
+      "windows_observed": 2,
+      "windows_per_day_extrap": 715.9,
+      "pnl_observed_usdc": -46.1,
+      "pnl_per_day_extrap_usdc": -16501.32,
+      "pnl_per_year_extrap_usdc": -6027107.41,
+      "return_on_10k_annual_pct": -60271.07
+    }
+  },
+  "taker_15_exploratory": {
+    "opportunities": 6,
+    "windows_with_edge": 1,
+    "edge_sum_usdc": 46.0,
+    "friction_sum_usdc": 15.56,
+    "hypothetical_pnl_usdc": 8.52,
+    "stale_mid_vs_fair_avg": 0.4831,
+    "market_spread_avg": 0.8091,
+    "extrapolation": {
+      "duration_hours": 0.067,
+      "windows_observed": 2,
+      "windows_per_day_extrap": 715.9,
+      "pnl_observed_usdc": 8.52,
+      "pnl_per_day_extrap_usdc": 3050.42,
+      "pnl_per_year_extrap_usdc": 1114165.06,
+      "return_on_10k_annual_pct": 11141.65
+    }
+  },
+  "windows_detail": [
+    {
+      "market_id": "2896912",
+      "question": "Bitcoin Up or Down - July 13, 12:55PM-1:00PM ET",
+      "strike": 62264.78,
+      "spot_end": 62276.0,
+      "resolved_up": 1,
+      "clob_updates": 1056
+    },
+    {
+      "market_id": "2896919",
+      "question": "Bitcoin Up or Down - July 13, 1:00PM-1:05PM ET",
+      "strike": 62276.0,
+      "spot_end": 62338.02,
+      "resolved_up": 1,
+      "clob_updates": 1146
+    }
+  ]
+}

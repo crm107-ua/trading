@@ -1,0 +1,12 @@
+{
+  "mode": "paper",
+  "initial_capital_usdc": 10000.0,
+  "max_usd_per_window": 500.0,
+  "max_inventory_skew": 0.25,
+  "kelly_fraction": 0.15,
+  "kill_switch_feed_stale_ms": 5000,
+  "min_net_edge": 0.02,
+  "safety_buffer": 0.005,
+  "maker_fee": 0.0,
+  "taker_fee": 0.02
+}

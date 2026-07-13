@@ -88,14 +88,38 @@ Si no se cumple → no se abre fila nueva en el registry.
 
 ---
 
-## Pregunta respondida (para no reabrir por olvido)
+## Pregunta respondida — solo Binance (para no reabrir por olvido)
 
-> ¿Puede un retail con ~10k, fees estándar y sin flujo privilegiado explotar edge sistemático en crypto spot/perp con este protocolo?
+> ¿Puede un retail con ~10k, fees estándar y sin flujo privilegiado explotar edge sistemático en **crypto spot/perp Binance** con este protocolo?
 
-**Respuesta del lab:** no se encontró candidato desplegable. Los edges observados en research (#6, #7, #13) no sobreviven validación full honesta o validación de escala (#14); los screens masivos (#1–#5) no mostraron bruto positivo.
+**Respuesta del lab (Binance):** no se encontró candidato desplegable. Los edges observados en research (#6, #7, #13) no sobreviven validación full honesta o validación de escala (#14); los screens masivos (#1–#5) no mostraron bruto positivo.
 
 Eso es un **resultado**, no un fracaso del método.
 
+**No cubre Polymarket:** #15 quedó `SCREEN_INVÁLIDO` — mercado distinto, hipótesis **no juzgada**. La afirmación honesta es binaria: Binance respondido; Polymarket sin evaluar por coste de datos, no por evidencia de ausencia de edge.
+
 ---
 
-*Documento de cierre de ciclo. El contador `#` del registry no se resetea; la reapertura sería intento #15+.*
+## Rama Polymarket (#15–#16)
+
+| Intento | Estado |
+|---------|--------|
+| **#15** taker FAK | `SCREEN_INVÁLIDO` — no evaluable |
+| **#16** maker post-only | **PENDIENTE** — pre-reg [`PREREG_16_POLY_MAKER_STALE.md`](../polymarket/docs/PREREG_16_POLY_MAKER_STALE.md) |
+
+**#16 reapertura condicionada:** cumple mecanismo nuevo (maker vs taker). Siguiente paso operativo = **fase A** (30 días grabación WS + BTC), no screen.
+
+| Hecho | Detalle |
+|-------|---------|
+| Fase 0 | Reutilizado — APIs OK |
+| #15 | Cerrado sin juzgar hipótesis |
+| #16 | Pre-reg congelado; paper/screen bloqueados hasta datos |
+| Presupuesto #16 | ≤6 h/sem, cierre **2026-09-30** |
+
+**Entry point:** [`polymarket/README.md`](../polymarket/README.md)
+
+Freqtrade y validación Binance **permanecen cerrados**; el contador `#` continúa en el mismo registry.
+
+---
+
+*Documento de cierre de ciclo. Binance + Polymarket en pausa; contador `#` no se resetea.*

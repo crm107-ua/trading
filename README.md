@@ -559,6 +559,8 @@ Los tests de integración deben invocar las herramientas **igual que** `backtest
 | [docs/REGIME_SWITCHER.md](docs/REGIME_SWITCHER.md) | Dispatch por enter_tag |
 | [docs/GRID_DCA.md](docs/GRID_DCA.md) | Presupuesto DCA, capas, régimen |
 | [docs/HYPEROPT_PARALLEL_BISECT.md](docs/HYPEROPT_PARALLEL_BISECT.md) | Bisect `-j 2` y pickle |
+| [polymarket/README.md](polymarket/README.md) | **Rama Polymarket Lab** (#15) — prediction markets, separado de Freqtrade |
+| [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | Cierre Binance + nota rama Polymarket |
 
 ---
 

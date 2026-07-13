@@ -1,0 +1,93 @@
+{
+  "tipo": "SIMULACION_GANANCIAS_EUR",
+  "verdict_binding": false,
+  "moneda": "EUR",
+  "tipo_cambio_usdc_eur": 0.92,
+  "generado_utc": "2026-07-13T17:09:07.438703+00:00",
+  "advertencia": "Proyecciones exploratorias. Escenarios agresivos superan límites pre-reg y asumen más riesgo de adverse selection e inventario. No es promesa de rentabilidad.",
+  "datos_empiricos": {
+    "status": "ok",
+    "data_root": "C:\\Users\\carom\\Desktop\\trading\\polymarket\\data_local\\smoke_test",
+    "duration_hours": 0,
+    "windows": 1,
+    "fills_observed": 0,
+    "fills_per_day_observed": 0,
+    "net_pnl_observed_eur": 0,
+    "pct_bid_competitive": 0.0,
+    "pct_wide_spread": 0.0,
+    "note": "Muestra corta — usar solo como sanity check, no extrapolar"
+  },
+  "escenarios": [
+    {
+      "tier": "conservador",
+      "label": "Conservador (pre-reg #16)",
+      "capital_eur": 10000,
+      "quote_shares": 100,
+      "fills_per_day": 15,
+      "gross_day_eur": 90,
+      "adverse_cost_day_eur": 31,
+      "inventory_bleed_day_eur": 25,
+      "net_day_eur": 34,
+      "net_month_eur": 1005,
+      "net_year_eur": 12228,
+      "roi_year_pct": 122.3,
+      "worst_month_eur": 402,
+      "blowup_risk": "Bajo — parámetros cercanos al pre-reg"
+    },
+    {
+      "tier": "moderado",
+      "label": "Moderado",
+      "capital_eur": 20000,
+      "quote_shares": 250,
+      "fills_per_day": 35,
+      "gross_day_eur": 315,
+      "adverse_cost_day_eur": 132,
+      "inventory_bleed_day_eur": 80,
+      "net_day_eur": 103,
+      "net_month_eur": 3081,
+      "net_year_eur": 37486,
+      "roi_year_pct": 187.4,
+      "worst_month_eur": 1232,
+      "blowup_risk": "Medio — más tamaño y fills diarios"
+    },
+    {
+      "tier": "agresivo",
+      "label": "Agresivo",
+      "capital_eur": 35000,
+      "quote_shares": 500,
+      "fills_per_day": 65,
+      "gross_day_eur": 780,
+      "adverse_cost_day_eur": 390,
+      "inventory_bleed_day_eur": 200,
+      "net_day_eur": 190,
+      "net_month_eur": 5700,
+      "net_year_eur": 69350,
+      "roi_year_pct": 198.1,
+      "worst_month_eur": 2280,
+      "blowup_risk": "Alto — drawdown 25-35% posible en mal mes"
+    },
+    {
+      "tier": "muy_agresivo",
+      "label": "Muy agresivo",
+      "capital_eur": 60000,
+      "quote_shares": 900,
+      "fills_per_day": 110,
+      "gross_day_eur": 1650,
+      "adverse_cost_day_eur": 908,
+      "inventory_bleed_day_eur": 450,
+      "net_day_eur": 292,
+      "net_month_eur": 8775,
+      "net_year_eur": 106762,
+      "roi_year_pct": 177.9,
+      "worst_month_eur": 3510,
+      "blowup_risk": "Muy alto — pérdida >50% del capital posible"
+    }
+  ],
+  "resumen_ejecutivo": {
+    "conservador_anual_eur": 12228,
+    "moderado_anual_eur": 37486,
+    "agresivo_anual_eur": 69350,
+    "muy_agresivo_anual_eur": 106762,
+    "recomendacion": "Para cifras creíbles con protocolo: fase A 30d + paper 14d. Si buscas más euros, el trade-off es adverse selection e inventario."
+  }
+}

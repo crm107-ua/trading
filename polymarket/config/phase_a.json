@@ -1,0 +1,19 @@
+{
+  "hypothesis": 16,
+  "prereg": "polymarket/docs/PREREG_16_POLY_MAKER_STALE.md",
+  "scope": "btc_updown_5m_only",
+  "include_15m": false,
+  "top_book_levels": 10,
+  "hourly_rotation": true,
+  "compression": "gzip",
+  "line_format": "jsonl",
+  "clock": "time.time_ns() on single host, NTP required",
+  "stale_alert_minutes": 10,
+  "discovery_poll_seconds": 30,
+  "pre_subscribe_lead_seconds": 45,
+  "ws_reconnect_backoff_max_seconds": 60,
+  "phase_a_warmup_seconds": 1800,
+  "phase_a_uptime_threshold": 0.95,
+  "phase_a_min_wall_clock_days": 30,
+  "dataset_id": "phase_a_16"
+}

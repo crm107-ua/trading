@@ -1,0 +1,38 @@
+{
+  "hypothesis": 15,
+  "run_id": "20260713_screen",
+  "prereg": "polymarket/docs/PREREG_15_POLY_STALE_QUOTE.md",
+  "invalidation_doc": "polymarket/docs/SCREEN_15_INVALIDATION.md",
+  "verdict": "SCREEN_INVALIDO",
+  "verdict_binding": true,
+  "hypothesis_judged": false,
+  "market_verdict": null,
+  "death_codes": [],
+  "invalidated_runs": [
+    {
+      "order": 1,
+      "reported": "MUERTA (D-4)",
+      "bug": "order_count inclu\u00eda todos los ticks"
+    },
+    {
+      "order": 2,
+      "reported": "MUERTA (D-5), PnL ~-9097",
+      "bug": "m\u00faltiples fills por ventana"
+    },
+    {
+      "order": 3,
+      "reported": "MUERTA (D-5), PnL ~-5713",
+      "bug": "fix parcial contabilidad"
+    },
+    {
+      "order": 4,
+      "reported": "MUERTA (D-5), PnL ~-5628",
+      "bug": "resolved_up coin flip independiente del spot"
+    }
+  ],
+  "reason": "Sin depth WS >=30d; synthetic no informativo; runs intermedios invalidados",
+  "required_for_honest_screen": "polymarket/data_local/ clob_recorder >=30d + replay",
+  "branch_status": "PAUSA",
+  "open_hypothesis_16": false,
+  "note": "\u00danico veredicto vinculante. No re-ejecutar sin datos reales."
+}
