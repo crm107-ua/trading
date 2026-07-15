@@ -1,0 +1,128 @@
+{
+  "runId": "20260715_122254",
+  "verdict": "EVAL_INVALID",
+  "reason": "insufficient_heldout",
+  "metrics": {
+    "heldoutQuestionsN": 3,
+    "brier": 0.25,
+    "brierMarket": 0.25,
+    "skill": 0,
+    "brierDiff": {
+      "mean": 0,
+      "ci95": {
+        "lo": 0,
+        "hi": 0
+      }
+    },
+    "ece": 0.5,
+    "forecastFailedRate": 0,
+    "ingestRejectRate": 0,
+    "incompleteHorizonQuestions": 0,
+    "brierByHorizon": {
+      "24": {
+        "brier": 0.25,
+        "brierMarket": 0.25,
+        "skill": 0,
+        "forecastRowsN": 3
+      },
+      "72": {
+        "brier": 0.25,
+        "brierMarket": 0.25,
+        "skill": 0,
+        "forecastRowsN": 3
+      },
+      "168": {
+        "brier": 0.25,
+        "brierMarket": 0.25,
+        "skill": 0,
+        "forecastRowsN": 3
+      }
+    },
+    "calibration": [
+      {
+        "bin": 0,
+        "n": 0,
+        "avgP": 0,
+        "freqY": 0
+      },
+      {
+        "bin": 1,
+        "n": 0,
+        "avgP": 0,
+        "freqY": 0
+      },
+      {
+        "bin": 2,
+        "n": 0,
+        "avgP": 0,
+        "freqY": 0
+      },
+      {
+        "bin": 3,
+        "n": 0,
+        "avgP": 0,
+        "freqY": 0
+      },
+      {
+        "bin": 4,
+        "n": 0,
+        "avgP": 0,
+        "freqY": 0
+      },
+      {
+        "bin": 5,
+        "n": 9,
+        "avgP": 0.5,
+        "freqY": 1
+      },
+      {
+        "bin": 6,
+        "n": 0,
+        "avgP": 0,
+        "freqY": 0
+      },
+      {
+        "bin": 7,
+        "n": 0,
+        "avgP": 0,
+        "freqY": 0
+      },
+      {
+        "bin": 8,
+        "n": 0,
+        "avgP": 0,
+        "freqY": 0
+      },
+      {
+        "bin": 9,
+        "n": 0,
+        "avgP": 0,
+        "freqY": 0
+      }
+    ]
+  },
+  "integrity": {
+    "hardIntegrityFailure": false,
+    "auditRequired": true,
+    "auditTriggers": [
+      "canary_brier_low",
+      "canary_insufficient_n"
+    ],
+    "leakageSuspected": true,
+    "canaryBrierByModel": {
+      "meta/llama-3.3-70b-instruct": 0
+    },
+    "canaryScoredN": 1,
+    "temporalCanary": {
+      "heldInQ1Skill": 0,
+      "heldInQ1QuestionsN": 0,
+      "heldoutSkill": 0,
+      "triggered": false
+    },
+    "configHash": "dc216f6ccabdeaf7523651074390627b8daf5f4c31fc3c1f72bc014d52c0c15a",
+    "mixedModels": false,
+    "pipelineModelIds": [
+      "meta/llama-3.3-70b-instruct"
+    ]
+  }
+}

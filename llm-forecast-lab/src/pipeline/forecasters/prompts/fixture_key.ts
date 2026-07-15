@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { hashPrompt } from "../../cache.js";
 
-export function promptHashForNaive(args: {
+export function promptHashForNim(args: {
   questionId: string;
   questionText: string;
   description: string | null;
@@ -20,4 +20,3 @@ export function promptHashForNaive(args: {
     .replaceAll("{{MARKET_MID}}", String(args.marketMid));
   return hashPrompt(filled);
 }
-

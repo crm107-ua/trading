@@ -1,16 +1,16 @@
 {
   "providers": {
-    "openai": {
+    "nvidia": {
       "type": "openai_compatible",
-      "baseUrl": "https://api.openai.com/v1",
-      "authEnv": "OPENAI_API_KEY"
+      "baseUrl": "https://integrate.api.nvidia.com/v1",
+      "authEnv": "NVIDIA_API_KEY"
     }
   },
   "models": [
     {
-      "id": "gpt-4.1-mini",
-      "provider": "openai",
-      "trainingCutoff": "2024-06-01"
+      "id": "meta/llama-3.3-70b-instruct",
+      "provider": "nvidia",
+      "trainingCutoff": "2023-12-01"
     }
   ]
 }

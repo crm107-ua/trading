@@ -1,6 +1,11 @@
 import { describe, expect, test } from "vitest";
 import type { EvalFrozen } from "../../src/config.js";
-import { marketDurationDays, passesDuration, passesSelectionFilters } from "../../src/ingest/filters.js";
+import {
+  computeUniverseComposition,
+  marketDurationDays,
+  passesDuration,
+  passesSelectionFilters
+} from "../../src/ingest/filters.js";
 import type { GammaMarket } from "../../src/ingest/gamma.js";
 
 const evalFrozenStub = {
@@ -30,6 +35,31 @@ describe("market duration filter", () => {
     expect(marketDurationDays(m)).toBeLessThan(1);
     expect(passesDuration(m, evalFrozenStub)).toBe(false);
     expect(passesSelectionFilters(m, evalFrozenStub)).toBe(false);
+  });
+
+  test("duration stats use post-duration population only", () => {
+    const short: GammaMarket = {
+      id: "s",
+      question: "Short",
+      outcomes: '["Yes","No"]',
+      startDate: "2024-06-01T18:00:00Z",
+      endDate: "2024-06-01T18:05:00Z",
+      liquidityNum: 5000,
+      outcomePrices: '["1","0"]'
+    };
+    const long: GammaMarket = {
+      id: "l",
+      question: "Long",
+      outcomes: '["Yes","No"]',
+      startDate: "2024-01-01T00:00:00Z",
+      endDate: "2024-03-01T00:00:00Z",
+      liquidityNum: 5000,
+      outcomePrices: '["0","1"]'
+    };
+    const comp = computeUniverseComposition([short, long], evalFrozenStub);
+    expect(comp.afterDuration).toBe(1);
+    expect(comp.durationDays.p50).toBeGreaterThanOrEqual(7);
+    expect(comp.durationDays.min).toBeGreaterThanOrEqual(7);
   });
 
   test("keeps multi-week political market", () => {

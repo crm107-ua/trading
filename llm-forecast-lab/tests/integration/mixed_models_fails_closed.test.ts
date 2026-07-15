@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { openDb } from "../../src/db.js";
+import { DEFAULT_NIM_MODEL, DEFAULT_NIM_PROVIDER } from "../../src/defaults.js";
 import { generateReport } from "../../src/eval/report.js";
 
 describe("mixed_models guard", () => {
@@ -7,7 +8,7 @@ describe("mixed_models guard", () => {
     const db = openDb("fixtures");
     db.prepare("delete from forecasts").run();
     for (const [qid, mid, fid] of [
-      ["m_q1", "gpt-4.1-mini", "m_f1"],
+      ["m_q1", DEFAULT_NIM_MODEL, "m_f1"],
       ["m_q2", "other-model", "m_f2"]
     ] as const) {
       db.prepare(
@@ -17,8 +18,8 @@ describe("mixed_models guard", () => {
       db.prepare(
         `insert into forecasts (id, question_id, pipeline, model_id, provider, horizon_hours, forecast_ts,
           prompt_hash, cache_key, retrieval, p, forecast_failed, created_at)
-         values (@fid, @qid, 'naive', @mid, 'openai', 24, '2025-12-31T00:00:00.000Z', 'h', 'c', 'none', 0.5, 0, '2026-01-01')`
-      ).run({ fid, qid, mid });
+         values (@fid, @qid, 'naive', @mid, @provider, 24, '2025-12-31T00:00:00.000Z', 'h', 'c', 'none', 0.5, 0, '2026-01-01')`
+      ).run({ fid, qid, mid, provider: DEFAULT_NIM_PROVIDER });
     }
     const rep = generateReport(db, { pipeline: "naive", mode: "fixtures" });
     expect(rep.verdict).toBe("EVAL_INVALID");

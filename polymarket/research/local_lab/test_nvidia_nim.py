@@ -16,6 +16,10 @@ from __future__ import annotations
 import json
 import time
 
+from polymarket.src.ai.env_loader import load_repo_dotenv
+
+load_repo_dotenv()
+
 from polymarket.src.ai.nvidia_client import (
     cache_models,
     pick_fast_models,

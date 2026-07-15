@@ -48,8 +48,65 @@ Precios CLOB (`prices-history`) solo para la muestra seleccionada; cache en `dat
 - **Pipeline decomposed**: placeholder — no incluir en planes de run hasta implementación.
 - **Duración mínima del mercado (2026-07-13, pre-ingest live):** `minMarketDurationDays: 7` — excluye ventanas efímeras (BTC 5m, hourly) que pasarían filtros binario/liquidez pero degeneran el eval en ruido ~0.50.
 - **Keyset incremental (2026-07-13):** cada página persiste en `gamma_markets_raw` + cursor en `meta`; reanudación real tras 429 o crash.
-- **v1 un solo modelo:** `gpt-4.1-mini` en `models.json`. Sin fallback entre modelos; 429 → retry mismo modelo → `forecast_failed`. Guard `mixed_models` en report.
-- **NIM:** fuera de v1 (v1.1 como modelos de primera clase con cutoff propio).
+- **v1 un solo modelo:** `meta/llama-3.3-70b-instruct` vía NVIDIA NIM (`NVIDIA_API_KEY` en `.env`, API gratuita). Sin fallback entre modelos; 429 → retry mismo modelo → `forecast_failed`. Guard `mixed_models` en report.
+- **Cutoff documentado:** `trainingCutoff: 2023-12-01` — pretraining knowledge cutoff diciembre 2023 ([Meta Llama 3.3 model card](https://github.com/meta-llama/llama-models/blob/main/models/llama3_3/MODEL_CARD.md); verificado en [NVIDIA NIM catalog](https://docs.api.nvidia.com/nim/reference/meta-llama-3_3-70b-instruct)).
+- **Re-freeze 2026-07-15 (mediodía):** N canarios 25; tripwires de auditoría separados de `EVAL_INVALID` duro.
+- **Pipeline:** `naive` (prompt en `src/pipeline/forecasters/prompts/naive.txt`). **Provider:** NVIDIA (`--provider nvidia`). **Model:** `meta/llama-3.3-70b-instruct`. No confundir pipeline (estrategia de prompt) con provider.
+- **Forecast batch:** ~1.500 llamadas; ~20 s/llamada en 70B → **8–12 h** en serie (+ rate limits). Run desatendido nocturno; cache en disco + purga live al reiniciar.
+
+## Ajustes post-primeros-resultados (2026-07-15, tras abort de run)
+
+### Fix de parsing — fences markdown (2026-07-15)
+
+- **Qué pasó:** el primer run live devolvió `forecast_failed` al 100% con exit 0 silencioso (`forecasts: 0` en DB tras join sin snapshots; luego, con snapshots, fallo de `JSON.parse` porque `meta/llama-3.3-70b-instruct` envolvía el JSON en fences markdown `` ``` ``).
+- **Fix:** `parseForecastOutput()` en `src/pipeline/schema.ts` — extrae JSON de fences o del primer bloque `{…}` antes de validar con `ForecastOutputSchema`.
+- **Neutralidad al contenido:** el parser no altera *qué* probabilidad dice el modelo; solo la extrae. Las respuestas cacheadas en disco son intactas.
+- **Run relanzado:** purga live de filas `naive` stale + mismo comando `forecast` — reanudación vía cache (`promptHash`); solo paga API lo pendiente.
+- **Repair prompt insuficiente:** el diseño original reenviaba un repair si el schema fallaba, pero el repair también podía volver con fences; el parser directo cubre el caso que el repair no resolvía de forma fiable.
+- **Prompt endurecido (mismo día):** `naive.txt` pide JSON puro sin markdown — reduce fences en llamadas nuevas; no invalida cache previa.
+
+### Timeout cliente LLM (2026-07-15)
+
+- `LLM_TIMEOUT_MS = 180_000` (3 min) por llamada en `src/pipeline/client.ts` (`fetchWithTimeout` + `AbortController`).
+- Tras timeout: retry mismo modelo (hasta 8 intentos, backoff 2s×intento); si agota → `forecast_failed` en esa fila, el batch continúa.
+- Sin timeout una llamada colgada bloquea el run entero — este guard evita descubrirlo a las 3 AM.
+
+### Fix ingest CLOB — historial vacío (2026-07-15, pre-forecast)
+
+- `prices-history` con `interval=1d` devolvía `history: []` para toda la muestra; `horizonSnapshotRejects: 1500` → 0 snapshots.
+- **Fix:** `clob_prices.ts` usa `startTs`/`endTs` en chunks de 13 días; caches vacíos `[]` se tratan como miss.
+- **Rehidratación:** 1471 snapshots, 481/500 preguntas con 3 horizontes completos (19 incompletas excluidas enteras del scoring).
+
+### Stats de duración en cascada (2026-07-15)
+
+- `durationDays.p50` en `ingest-cascade` se calculaba sobre binarios pre-filtro (mediana ~3,7 d con filtro `≥7d` activo).
+- **Fix:** stats sobre población `afterDuration`; campo `population: "afterDuration"` en el reporte de cascada. Verificación: 0 preguntas elegibles con `duration_days < 7`.
+
+
+Con `trainingCutoff: 2023-12-01` y universo principal `resolutionFrom: 2024-01-01`, la ventana de canarios \([cutoff-maxLag, cutoff-minLag]\) ≈ **2022-12-01 … 2023-10-02** queda **vacía** en el ingest principal. El detector de leakage quedaría ciego justo donde más importa (post-training puede extender conocimiento más allá del cutoff nominal).
+
+**Fix congelado (pre-resultados legal):**
+
+1. **`ingest-canaries`** — pull keyset suplementario `2022-12-01`–`2023-10-31`, **`targetCount: 25`**. Preguntas `canary_only=1`: excluidas de muestra y veredicto; incluidas en forecast/score solo para integridad.
+2. **Canario temporal (held-in Q1 2024)** — tripwire si skill en preguntas resueltas `2024-01-01`–`2024-03-31` (held-in) > `0.15`. El held-out pobre es **esperado** pre-run (`BELOW_MARKET`); **no** forma parte del disparo.
+
+Gate (`ingest-cascade`) exige `canarySupplementOk` (≥25 canarios) antes de `readyForForecast`.
+
+### Semántica de lectura — tripwires vs veredicto
+
+**Orden obligatorio al abrir `report.json`:** `integrity` primero → luego `verdict` → luego `metrics.skill`. Sin interpretación adicional.
+
+| Señal | Tipo | Acción |
+|-------|------|--------|
+| `integrity.auditRequired: true` | **Tripwire** | Revisión manual de los items listados en `auditTriggers` **antes de publicar**. No invalida el veredicto de skill. |
+| `canary_brier_low` | Tripwire | Auditar manualmente las N canarios (favoritas fáciles vs leakage real). |
+| `canary_insufficient_n` | Tripwire | Completar supplement o auditar por qué faltan. |
+| `temporal_q1_skill_high` | Tripwire | Auditar Q1 2024 held-in (~40–50 preguntas); firma posible de post-cutoff parcial. |
+| `integrity.hardIntegrityFailure: true` | **Hard** | `EVAL_INVALID` — muestra eval contaminada (cutoff/eligibility). |
+
+**N=25 canarios:** el canario con N fijo es un **tripwire de auditoría, no un test estadístico**. Su disparo obliga a revisión manual de los 25 items; **no** es invalidación irrevocable automática ni absolución automática si no dispara. Con N pequeño, Brier bajo puede ser azar (favoritas a 0.9) o alto por preguntas raras — ruidoso en ambas direcciones.
+
+**No disparar ≠ limpio:** ausencia de tripwire no certifica ausencia de leakage; solo que no hubo señal en estos umbrales ruidosos.
 
 ## Auditoría en `report.json`
 
@@ -63,8 +120,13 @@ Cada report incluye `selection`: universo (modo, páginas, intersección), seed,
 
 **Campos de métricas en report:** Brier agregado, `brierByHorizon`, bins de calibración + ECE, canarios, contadores de integridad (`mixedModels`, `forecastFailedRate`, …).
 
-## Expectativas pre-run (2026-07-13, antes del primer naive live)
+## Expectativas pre-run (2026-07-15, antes del primer naive live)
 
-**Veredicto esperado:** `BELOW_MARKET` o `MATCHES_MARKET` — el mercado agrega información que el LLM naive no replica; no esperamos `BEATS_MARKET` en v1.
+**Veredicto esperado:** `BELOW_MARKET` o `MATCHES_MARKET` — el mercado agrega información que el forecaster NIM no replica; no esperamos `BEATS_MARKET` en v1.
 
 **Por horizonte:** peor calibración/Brier vs mercado en T−24h; gap menor en T−7d (el mid de mercado lleva menos señal con más antelación). Si el resultado desafía esto, la primera hipótesis es bug o leakage, no genialidad del modelo.
+
+## v1.1 candidatos (no antes del veredicto v1)
+
+- **`run_id` en `forecasts`/`scores`:** hoy la purga live es por `pipeline` (un solo run naive coexistiendo). Si v1.1 compara pipelines o re-runs en paralelo, añadir `run_id` — no antes.
+- Purga + cache LLM: re-lanzar `forecast --mode live` tras interrupción reutiliza respuestas cacheadas (`model` + `promptHash`); solo paga API lo pendiente.

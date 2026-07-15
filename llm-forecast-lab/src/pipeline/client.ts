@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { loadEvalFrozen, loadModelsConfig } from "../config.js";
-import { hashPrompt, readCache, writeCache } from "./cache.js";
+import { hashPrompt, safeModelSlug, readCache, writeCache } from "./cache.js";
 
 export type NoNetworkMode = "allow" | "deny";
 
@@ -20,6 +20,14 @@ export type LlmResponse = {
 
 function isRetryableStatus(status: number): boolean {
   return status === 429 || status === 403 || status === 500 || status === 502 || status === 503 || status === 504;
+}
+
+const LLM_TIMEOUT_MS = 180_000;
+
+function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
+  return fetch(url, { ...init, signal: ac.signal }).finally(() => clearTimeout(timer));
 }
 
 function sleep(ms: number): Promise<void> {
@@ -53,7 +61,7 @@ export class LlmClient {
       "golden",
       "fixtures",
       "responses",
-      `${req.model}__naive_${this.fixtureQuestionIdFromPrompt(req.prompt) ?? "UNKNOWN"}.json`
+      `${safeModelSlug(req.model)}__naive_${this.fixtureQuestionIdFromPrompt(req.prompt) ?? "UNKNOWN"}.json`
     );
     if (fs.existsSync(fixture)) {
       const text = fs.readFileSync(fixture, "utf-8");
@@ -86,39 +94,53 @@ export class LlmClient {
 
     let lastErr: Error | null = null;
     for (let attempt = 0; attempt < 8; attempt++) {
-      const res = await fetch(`${provider.baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(body)
-      });
-      if (!res.ok) {
-        const errText = await res.text();
-        lastErr = new Error(`LLM call failed: ${res.status} ${errText}`);
-        if (isRetryableStatus(res.status) && attempt < 7) {
+      try {
+        const res = await fetchWithTimeout(
+          `${provider.baseUrl}/chat/completions`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(body)
+          },
+          LLM_TIMEOUT_MS
+        );
+        if (!res.ok) {
+          const errText = await res.text();
+          lastErr = new Error(`LLM call failed: ${res.status} ${errText}`);
+          if (isRetryableStatus(res.status) && attempt < 7) {
+            await sleep(2000 * (attempt + 1));
+            continue;
+          }
+          throw lastErr;
+        }
+
+        const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+        const text = String(json?.choices?.[0]?.message?.content ?? "");
+
+        writeCache({
+          model: req.model,
+          promptHash,
+          createdAt: new Date().toISOString(),
+          responseText: text,
+          providerMeta: {
+            provider: req.provider,
+            baseUrl: provider.baseUrl,
+            responseHash: crypto.createHash("sha256").update(JSON.stringify(json)).digest("hex")
+          }
+        });
+        return { text, cacheHit: false };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        lastErr = new Error(msg.includes("abort") ? `LLM call timed out after ${LLM_TIMEOUT_MS}ms` : msg);
+        if (attempt < 7) {
           await sleep(2000 * (attempt + 1));
           continue;
         }
         throw lastErr;
       }
-
-      const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-      const text = String(json?.choices?.[0]?.message?.content ?? "");
-
-      writeCache({
-        model: req.model,
-        promptHash,
-        createdAt: new Date().toISOString(),
-        responseText: text,
-        providerMeta: {
-          provider: req.provider,
-          baseUrl: provider.baseUrl,
-          responseHash: crypto.createHash("sha256").update(JSON.stringify(json)).digest("hex")
-        }
-      });
-      return { text, cacheHit: false };
     }
     throw lastErr ?? new Error("LLM call failed after retries");
   }

@@ -49,16 +49,29 @@ También: `python -m polymarket.src.bot --mode paper-maker --minutes 30`
 
 ---
 
-## NVIDIA NIM (opcional)
+## NVIDIA NIM (obligatorio para paper)
 
-Si defines `NVIDIA_API_KEY`, el paper-maker local consultará NVIDIA NIM para decidir la **acción** (`quote`/`hold`).
-Si falla o excede latencia, cae a `hold` (fallback seguro).
+El paper-maker **requiere** `NVIDIA_API_KEY` en `trading/.env` (scope Public API endpoints).  
+NIM decide la **acción** (`quote` / `hold` / `cancel_replace`); no cambia spread ni tamaño (pre-reg #16).
+
+Capas:
+
+1. **Reglas deterministas** — book ausente, feed stale, inventario lleno, ventana cerrando → `hold` sin llamar API.
+2. **NVIDIA NIM** — modelo por defecto `nvidia/nemotron-mini-4b-instruct` (`NVIDIA_NIM_MODEL` opcional).
+3. **Umbral de confianza** — `NVIDIA_NIM_CONFIDENCE_MIN` (default 0.55); por debajo → `hold`.
+
+Cada sesión escribe `decisions.jsonl` con acción, razón, latencia y cache hit.
 
 Test de conectividad/latencia:
 
 ```powershell
-$env:NVIDIA_API_KEY = "nvapi-..."
 python -m polymarket.research.local_lab.test_nvidia_nim
+```
+
+Paper demo $100:
+
+```powershell
+python -m polymarket.research.local_lab.run_local_lab --paper --strategy maker_16 --minutes 30 --config polymarket/config/maker_demo_100.json
 ```
 
 Docs: `docs/NVIDIA_NIM.md`.

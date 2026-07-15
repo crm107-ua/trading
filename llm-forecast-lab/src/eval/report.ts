@@ -7,6 +7,7 @@ import type { CalibrationBin } from "./calibration.js";
 import { calibrationBins, ece } from "./calibration.js";
 import { bootstrapMeanDiffCi } from "./bootstrap.js";
 import { canarySetForModel, isEligibleForModel } from "../integrity/leakage.js";
+import { horizonCompleteQuestionIds } from "./horizon_completeness.js";
 
 export type Verdict = "BEATS_MARKET" | "MATCHES_MARKET" | "BELOW_MARKET" | "EVAL_INVALID";
 
@@ -23,6 +24,7 @@ export type Report = {
     ece: number;
     forecastFailedRate: number;
     ingestRejectRate: number;
+    incompleteHorizonQuestions?: number;
     cacheHitRate?: number;
     brierByHorizon?: Record<
       string,
@@ -58,8 +60,21 @@ export type Report = {
     composition?: Record<string, unknown>;
   };
   integrity: {
+    /** Hard failure: eval sample contaminated (cutoff/eligibility). Forces EVAL_INVALID. */
+    hardIntegrityFailure: boolean;
+    /** Tripwire: manual audit required before publish. Does NOT override skill verdict. */
+    auditRequired: boolean;
+    auditTriggers: string[];
+    /** @deprecated alias — true if auditRequired || hardIntegrityFailure */
     leakageSuspected: boolean;
     canaryBrierByModel: Record<string, number>;
+    canaryScoredN?: number;
+    temporalCanary?: {
+      heldInQ1Skill: number;
+      heldInQ1QuestionsN: number;
+      heldoutSkill: number;
+      triggered: boolean;
+    };
     configHash: string;
     mixedModels?: boolean;
     pipelineModelIds?: string[];
@@ -79,6 +94,17 @@ export function generateReport(db: Database.Database, args: { pipeline: string; 
   const modelsCfg = loadModelsConfig("./config");
   const runId = runIdNow();
   const horizons = new Set(evalFrozen.protocol.horizonsHoursBeforeResolution);
+  const horizonsList = evalFrozen.protocol.horizonsHoursBeforeResolution;
+
+  const sampleQIdsEarly = (
+    db.prepare("select question_id from run_questions").all() as Array<{ question_id: string }>
+  ).map((r) => r.question_id);
+  const { incomplete: incompleteHorizonQuestionIds } = horizonCompleteQuestionIds(
+    db,
+    sampleQIdsEarly,
+    horizonsList
+  );
+  const incompleteHorizonQuestions = incompleteHorizonQuestionIds.length;
 
   // ingest reject rate: from horizonSnapshotRejects in meta if present (fixtures use it).
   const meta = Object.fromEntries(
@@ -99,7 +125,7 @@ export function generateReport(db: Database.Database, args: { pipeline: string; 
     .prepare(
       `
       select f.question_id, f.horizon_hours, f.p, f.forecast_failed, f.model_id, q.resolution_date, q.resolved_outcome,
-             s.brier
+             q.canary_only, s.brier
       from forecasts f
       join questions q on q.id = f.question_id
       left join scores s on s.forecast_id = f.id
@@ -115,8 +141,21 @@ export function generateReport(db: Database.Database, args: { pipeline: string; 
     model_id: string;
     resolution_date: string;
     resolved_outcome: 0 | 1;
+    canary_only: 0 | 1;
     brier: number | null;
   }>;
+
+  const sampleQIds = new Set(
+    (
+      db.prepare("select question_id from run_questions").all() as Array<{ question_id: string }>
+    ).map((r) => r.question_id)
+  );
+  const hasSample = sampleQIds.size > 0;
+  const evalRows = rows.filter((r) => {
+    if (r.canary_only) return false;
+    if (hasSample) return sampleQIds.has(r.question_id);
+    return true;
+  });
 
   const baseline = marketBaselineRows(db);
   const baselineKey = new Map<string, { p: number; y: 0 | 1 }>();
@@ -141,7 +180,7 @@ export function generateReport(db: Database.Database, args: { pipeline: string; 
       }>;
     }
   >();
-  for (const r of rows) {
+  for (const r of evalRows) {
     const cur = byQ.get(r.question_id);
     if (!cur) {
       byQ.set(r.question_id, {
@@ -231,6 +270,9 @@ export function generateReport(db: Database.Database, args: { pipeline: string; 
     for (const qid of heldoutQIds) {
       const q = byQ.get(qid);
       if (!q) continue;
+      const rset = q.rows.filter((x) => horizons.has(x.horizon_hours));
+      const haveAll = horizonsList.every((hh) => rset.some((x) => x.horizon_hours === hh));
+      if (!haveAll) continue;
       const r = q.rows.find((x) => x.horizon_hours === h);
       if (!r || r.forecast_failed || r.p === null || r.brier === null) continue;
       const base = baselineKey.get(`${r.question_id}:${r.horizon_hours}`);
@@ -248,10 +290,18 @@ export function generateReport(db: Database.Database, args: { pipeline: string; 
     };
   }
 
-  // Leakage canary check: compute Brier on canaries.
-  const allResDates = rows.map((r) => ({ id: r.question_id, resolutionDateIso: r.resolution_date }));
+  // Leakage canary check: compute Brier on canaries (canary_only supplement + cutoff window).
+  const allResDates = (
+    db.prepare("select id, resolution_date from questions").all() as Array<{
+      id: string;
+      resolution_date: string;
+    }>
+  ).map((q) => ({ id: q.id, resolutionDateIso: q.resolution_date }));
+
   const canaryBrierByModel: Record<string, number> = {};
-  let leakageSuspected = false;
+  let canaryScoredN = 0;
+  const auditTriggers: string[] = [];
+  let hardIntegrityFailure = false;
   if (evalFrozen.protocol.integrity.canary.enabled) {
     for (const m of modelsCfg.models) {
       const canaryIds = canarySetForModel({
@@ -261,21 +311,79 @@ export function generateReport(db: Database.Database, args: { pipeline: string; 
         minLagDays: evalFrozen.protocol.integrity.canary.minLagDays,
         maxLagDays: evalFrozen.protocol.integrity.canary.maxLagDays
       });
-      const canaryRows = rows.filter((r) => r.model_id === m.id && canaryIds.includes(r.question_id));
+      const canaryRows = rows.filter(
+        (r) =>
+          r.model_id === m.id &&
+          r.canary_only === 1 &&
+          canaryIds.includes(r.question_id)
+      );
       const scored = canaryRows.filter((r) => r.brier !== null).map((r) => r.brier as number);
+      canaryScoredN = Math.max(canaryScoredN, scored.length);
       const mean = scored.length === 0 ? 1 : scored.reduce((s, x) => s + x, 0) / scored.length;
       canaryBrierByModel[m.id] = mean;
-      // suspiciously near 0 on canaries while eligibility exists
-      if (mean < evalFrozen.protocol.integrity.canary.brierSuspiciousThreshold) leakageSuspected = true;
+      if (mean < evalFrozen.protocol.integrity.canary.brierSuspiciousThreshold) {
+        auditTriggers.push("canary_brier_low");
+      }
+      const sup = evalFrozen.protocol.integrity.canarySupplement;
+      if (sup.enabled && scored.length < sup.targetCount) {
+        auditTriggers.push("canary_insufficient_n");
+      }
     }
   }
 
-  // Integrity: eligibility check is applied at forecast time in v2; v1 reports only.
-  // Still: if any heldout forecast has resolution before cutoff+margin, invalid.
-  for (const r of rows) {
+  // Temporal tripwire: held-in Q1 2024 skill only (held-out poor is expected pre-run; not in trigger).
+  let temporalCanary: Report["integrity"]["temporalCanary"];
+  const tc = evalFrozen.protocol.integrity.temporalCanary;
+  if (tc.enabled) {
+    const heldInFrom = Date.parse(`${tc.heldInFrom}T00:00:00.000Z`);
+    const heldInTo = Date.parse(`${tc.heldInTo}T23:59:59.999Z`);
+    const trainQIds = qIdsSorted.filter((qid) => !heldoutQIds.has(qid));
+    const aTrain: number[] = [];
+    const bTrain: number[] = [];
+    for (const qid of trainQIds) {
+      const q = byQ.get(qid);
+      if (!q) continue;
+      const resTs = Date.parse(q.resolution_date);
+      if (!Number.isFinite(resTs) || resTs < heldInFrom || resTs > heldInTo) continue;
+      const rset = q.rows.filter((x) => horizons.has(x.horizon_hours));
+      const haveAll = evalFrozen.protocol.horizonsHoursBeforeResolution.every((h) =>
+        rset.some((x) => x.horizon_hours === h)
+      );
+      if (!haveAll) continue;
+      let sumA = 0;
+      let sumB = 0;
+      let n = 0;
+      for (const r of rset) {
+        if (r.forecast_failed || r.p === null || r.brier === null) continue;
+        const base = baselineKey.get(`${r.question_id}:${r.horizon_hours}`);
+        if (!base) continue;
+        sumA += r.brier;
+        sumB += (base.p - base.y) * (base.p - base.y);
+        n += 1;
+      }
+      if (n === 0) continue;
+      aTrain.push(sumA / n);
+      bTrain.push(sumB / n);
+    }
+    const meanAT = aTrain.length === 0 ? 0 : aTrain.reduce((s, x) => s + x, 0) / aTrain.length;
+    const meanBT = bTrain.length === 0 ? 0 : bTrain.reduce((s, x) => s + x, 0) / bTrain.length;
+    const heldInQ1Skill = meanBT === 0 ? 0 : 1 - meanAT / meanBT;
+    const triggered = aTrain.length > 0 && heldInQ1Skill > tc.skillSuspiciousThreshold;
+    temporalCanary = {
+      heldInQ1Skill,
+      heldInQ1QuestionsN: aTrain.length,
+      heldoutSkill: skill,
+      triggered
+    };
+    if (triggered) auditTriggers.push("temporal_q1_skill_high");
+  }
+
+  // Hard integrity: ineligible resolution in eval sample (not canary-only).
+  for (const r of evalRows) {
     const model = modelsCfg.models.find((m) => m.id === r.model_id);
     if (!model) {
-      leakageSuspected = true; // fail-closed: unknown model has unknown cutoff
+      hardIntegrityFailure = true;
+      auditTriggers.push("unknown_model_in_eval");
       break;
     }
     const el = isEligibleForModel({
@@ -284,10 +392,16 @@ export function generateReport(db: Database.Database, args: { pipeline: string; 
       safetyMarginDays: evalFrozen.protocol.integrity.safetyMarginDays
     });
     if (!el.eligible) {
-      leakageSuspected = true;
+      hardIntegrityFailure = true;
+      auditTriggers.push("eval_sample_before_cutoff");
       break;
     }
   }
+
+  const auditRequired = auditTriggers.some((t) =>
+    ["canary_brier_low", "canary_insufficient_n", "temporal_q1_skill_high"].includes(t)
+  );
+  const leakageSuspected = auditRequired || hardIntegrityFailure;
 
   // Verdict logic
   const pipelineModelIds = new Set(
@@ -306,9 +420,9 @@ export function generateReport(db: Database.Database, args: { pipeline: string; 
   if (mixedModels) {
     verdict = "EVAL_INVALID";
     reason = "mixed_models";
-  } else if (leakageSuspected) {
+  } else if (hardIntegrityFailure) {
     verdict = "EVAL_INVALID";
-    reason = "leakage_suspected";
+    reason = "integrity_hard_failure";
   } else if (evalFrozen.protocol.integrity.maxForecastFailedRate < forecastFailedRate) {
     verdict = "EVAL_INVALID";
     reason = "forecast_failed_rate_too_high";
@@ -335,6 +449,7 @@ export function generateReport(db: Database.Database, args: { pipeline: string; 
       ece: eceVal,
       forecastFailedRate,
       ingestRejectRate,
+      incompleteHorizonQuestions,
       brierByHorizon,
       calibration: bins
     };
@@ -386,8 +501,13 @@ export function generateReport(db: Database.Database, args: { pipeline: string; 
     reason,
     metrics,
     integrity: {
+      hardIntegrityFailure,
+      auditRequired,
+      auditTriggers,
       leakageSuspected,
       canaryBrierByModel,
+      canaryScoredN,
+      ...(temporalCanary ? { temporalCanary } : {}),
       configHash: evalFrozen.freezeHash,
       mixedModels,
       pipelineModelIds: [...pipelineModelIds]
@@ -399,7 +519,11 @@ export function generateReport(db: Database.Database, args: { pipeline: string; 
   const outDir = path.join(process.cwd(), "output", report.runId);
   fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(path.join(outDir, "report.json"), JSON.stringify(report, null, 2) + "\n", "utf-8");
-  fs.writeFileSync(path.join(outDir, "report.md"), `# Report\n\nVerdict: **${report.verdict}**\n`, "utf-8");
+  fs.writeFileSync(
+    path.join(outDir, "report.md"),
+    `# Report\n\n## Integrity (read first)\n\n- auditRequired: **${auditRequired}**\n- auditTriggers: ${auditTriggers.length ? auditTriggers.join(", ") : "none"}\n- hardIntegrityFailure: **${hardIntegrityFailure}**\n\n## Verdict\n\n**${report.verdict}**${reason ? ` (${reason})` : ""}\n`,
+    "utf-8"
+  );
 
   return report;
 }

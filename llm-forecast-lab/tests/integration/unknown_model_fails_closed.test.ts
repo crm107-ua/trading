@@ -24,7 +24,7 @@ describe("unknown model id fails closed", () => {
         forecast_failed, raw_response_json, created_at
       )
       values (
-        'u_f', 'u_q', 'naive', 'MODEL_NOT_IN_CONFIG', 'openai', 24, '2025-12-31T00:00:00.000Z',
+        'u_f', 'u_q', 'naive', 'MODEL_NOT_IN_CONFIG', 'nvidia', 24, '2025-12-31T00:00:00.000Z',
         'h', 'k', 'none',
         0.9, '[]', 'x', 'x',
         0, '{}', '2026-01-01T00:00:00.000Z'
@@ -35,7 +35,7 @@ describe("unknown model id fails closed", () => {
 
     const rep = generateReport(db, { pipeline: "naive", mode: "fixtures" });
     expect(rep.verdict).toBe("EVAL_INVALID");
-    expect(rep.reason).toBe("leakage_suspected");
+    expect(rep.reason).toBe("integrity_hard_failure");
   });
 });
 

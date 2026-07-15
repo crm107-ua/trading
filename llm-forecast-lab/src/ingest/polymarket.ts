@@ -5,7 +5,7 @@ import {
   fetchMarketsViaKeysetIncremental,
   loadGammaMarketsFromDb
 } from "./gamma_keyset_ingest.js";
-import { computeUniverseComposition, passesSelectionFilters } from "./filters.js";
+import { computeUniverseComposition, passesCanaryCandidateFilters, passesSelectionFilters } from "./filters.js";
 import { fetchPriceHistoryCached } from "./clob_prices.js";
 import type { IngestReject, Question } from "./types.js";
 import { QuestionSchema } from "./types.js";
@@ -30,6 +30,7 @@ export async function hydratePricesForQuestionIds(args: {
   db: Database.Database;
   evalFrozen: EvalFrozen;
   questionIds: string[];
+  canaryWindow?: { from: string; to: string };
 }): Promise<LiveIngestReport> {
   const rejects: IngestReject[] = [];
   const questions: Question[] = [];
@@ -48,7 +49,9 @@ export async function hydratePricesForQuestionIds(args: {
       rejects.push({ reason: "missing_gamma_cache", id });
       continue;
     }
-    if (!passesSelectionFilters(m, args.evalFrozen)) continue;
+    if (args.canaryWindow) {
+      if (!passesCanaryCandidateFilters(m, args.evalFrozen, args.canaryWindow.from, args.canaryWindow.to)) continue;
+    } else if (!passesSelectionFilters(m, args.evalFrozen)) continue;
     const yn = resolvedYesNoFromOutcomePrices(m);
     if (!yn) {
       rejects.push({ reason: "unresolved_or_ambiguous_outcome", id: m.id });
@@ -61,7 +64,10 @@ export async function hydratePricesForQuestionIds(args: {
     }
     let priceHistory: { ts: string; mid: number }[] = [];
     try {
-      const { points, cacheHit } = await fetchPriceHistoryCached(tokenId);
+      const { points, cacheHit } = await fetchPriceHistoryCached(tokenId, {
+        startIso: String(m.startDate ?? m.createdAt ?? m.endDate),
+        endIso: String(m.endDate)
+      });
       priceHistory = points;
       if (cacheHit) clobCacheHits += 1;
       else clobFetches += 1;
@@ -176,11 +182,22 @@ export async function ingestResolvedPolymarketLive(args: {
       from,
       to,
       ...(args.gammaBaseUrl ? { gammaBaseUrl: args.gammaBaseUrl } : {}),
-      pagePauseMs: 500,
+      pagePauseMs: 1000,
       onPage: (info) => {
         if (info.page % 10 === 0) {
           const tag = info.resumed ? "resumed" : "fresh";
-          process.stderr.write(`gamma keyset page ${info.page} unique=${info.total} (${tag})\n`);
+          const pct = info.progress?.keysetPct ?? "?";
+          const chunk = info.progress?.activeChunk ?? "?";
+          const months = info.progress
+            ? `${info.progress.chunksDone}/${info.progress.chunksTotal}`
+            : "?/?";
+          const chunkPg = info.progress?.activeChunkPages;
+          const chunkEst = info.progress?.activeChunkPagesEst;
+          const chunkProg =
+            chunkPg != null && chunkEst != null ? ` ${chunkPg}/${chunkEst}p` : "";
+          process.stderr.write(
+            `gamma keyset page ${info.page} unique=${info.total} keyset=${pct}% [${months} months, chunk ${chunk}${chunkProg}] (${tag})\n`
+          );
         }
       }
     });

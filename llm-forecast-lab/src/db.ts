@@ -41,7 +41,8 @@ function migrate(db: Database.Database): void {
       resolution_date text not null,
       resolved_outcome integer not null check (resolved_outcome in (0,1)),
       ambiguous_resolution integer not null check (ambiguous_resolution in (0,1)),
-      liquidity_proxy real not null default 0
+      liquidity_proxy real not null default 0,
+      canary_only integer not null default 0 check (canary_only in (0,1))
     );
 
     create table if not exists market_snapshots (
@@ -92,5 +93,9 @@ function migrate(db: Database.Database): void {
       sort_key real not null
     );
   `);
+  const qCols = db.pragma("table_info(questions)") as Array<{ name: string }>;
+  if (!qCols.some((c) => c.name === "canary_only")) {
+    db.exec("alter table questions add column canary_only integer not null default 0");
+  }
 }
 

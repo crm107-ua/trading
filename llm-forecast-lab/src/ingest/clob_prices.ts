@@ -4,6 +4,8 @@ import { z } from "zod";
 import type { PricePoint } from "./types.js";
 
 const CLOB_BASE_URL = "https://clob.polymarket.com";
+const CHUNK_SECONDS = 13 * 24 * 3600;
+const FIDELITY_MINUTES = 720;
 
 const ClobHistoryResponse = z.object({
   history: z
@@ -45,16 +47,28 @@ export function writeClobCache(tokenId: string, points: PricePoint[]): void {
   fs.writeFileSync(clobCachePath(tokenId), JSON.stringify(points, null, 2) + "\n", "utf-8");
 }
 
-export async function fetchPriceHistoryCached(tokenId: string): Promise<{
-  points: PricePoint[];
-  cacheHit: boolean;
-}> {
-  const cached = readClobCache(tokenId);
-  if (cached) return { points: cached, cacheHit: true };
+function parseIsoSeconds(iso: string | undefined): number | null {
+  if (!iso) return null;
+  const ms = Date.parse(iso);
+  return Number.isFinite(ms) ? Math.floor(ms / 1000) : null;
+}
 
+function mergeHistory(chunks: PricePoint[][]): PricePoint[] {
+  const byTs = new Map<string, PricePoint>();
+  for (const chunk of chunks) {
+    for (const p of chunk) byTs.set(p.ts, p);
+  }
+  return [...byTs.values()].sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
+}
+
+async function fetchHistoryChunk(
+  tokenId: string,
+  startTs: number,
+  endTs: number
+): Promise<PricePoint[]> {
   const url =
     `${CLOB_BASE_URL}/prices-history?market=${encodeURIComponent(tokenId)}` +
-    `&interval=1d&fidelity=60`;
+    `&startTs=${startTs}&endTs=${endTs}&fidelity=${FIDELITY_MINUTES}`;
 
   for (let attempt = 0; attempt < 8; attempt++) {
     const res = await fetch(url);
@@ -64,12 +78,36 @@ export async function fetchPriceHistoryCached(tokenId: string): Promise<{
     }
     if (!res.ok) throw new Error(`CLOB fetch failed: ${res.status} ${await res.text()}`);
     const body = ClobHistoryResponse.parse(await res.json());
-    const points: PricePoint[] = (body.history ?? []).map((h) => ({
+    return (body.history ?? []).map((h) => ({
       ts: new Date(h.t * 1000).toISOString(),
       mid: h.p
     }));
-    writeClobCache(tokenId, points);
-    return { points, cacheHit: false };
   }
   throw new Error(`CLOB rate-limited after retries: ${tokenId}`);
+}
+
+export async function fetchPriceHistoryCached(
+  tokenId: string,
+  opts?: { startIso?: string; endIso?: string; force?: boolean }
+): Promise<{
+  points: PricePoint[];
+  cacheHit: boolean;
+}> {
+  const cached = opts?.force ? null : readClobCache(tokenId);
+  if (cached && cached.length > 0) return { points: cached, cacheHit: true };
+
+  const endTs = parseIsoSeconds(opts?.endIso) ?? Math.floor(Date.now() / 1000);
+  const startTs = parseIsoSeconds(opts?.startIso) ?? endTs - 30 * 24 * 3600;
+  if (endTs <= startTs) return { points: [], cacheHit: false };
+
+  const chunks: PricePoint[][] = [];
+  for (let cur = startTs; cur < endTs; cur += CHUNK_SECONDS) {
+    const chunkEnd = Math.min(cur + CHUNK_SECONDS, endTs);
+    chunks.push(await fetchHistoryChunk(tokenId, cur, chunkEnd));
+    await sleep(150);
+  }
+
+  const points = mergeHistory(chunks);
+  writeClobCache(tokenId, points);
+  return { points, cacheHit: false };
 }

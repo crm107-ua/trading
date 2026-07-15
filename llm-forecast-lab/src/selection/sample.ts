@@ -201,7 +201,7 @@ export function applyRunSampling(
 ): SampleReport {
   const rows = db
     .prepare(
-      `select id, category, resolution_date, liquidity_proxy from questions order by resolution_date asc`
+      `select id, category, resolution_date, liquidity_proxy from questions where canary_only = 0 order by resolution_date asc`
     )
     .all() as QuestionRow[];
 

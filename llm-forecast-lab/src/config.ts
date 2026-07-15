@@ -53,6 +53,19 @@ export const EvalFrozenSchema = z.object({
         brierSuspiciousThreshold: z.number().min(0).max(1),
         minEligibleHeldoutQuestions: z.number().int().nonnegative()
       }),
+      canarySupplement: z.object({
+        enabled: z.boolean(),
+        resolutionFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        resolutionTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        targetCount: z.number().int().positive()
+      }),
+      temporalCanary: z.object({
+        enabled: z.boolean(),
+        heldInFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        heldInTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        skillSuspiciousThreshold: z.number(),
+        heldoutSkillPoorThreshold: z.number()
+      }),
       maxForecastFailedRate: z.number().min(0).max(1),
       maxIngestRejectRate: z.number().min(0).max(1)
     }),

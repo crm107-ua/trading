@@ -17,7 +17,35 @@ import sys
 import time
 from pathlib import Path
 
+from polymarket.src.ai.env_loader import load_repo_dotenv, require_nvidia_api_key
+
+load_repo_dotenv()
+require_nvidia_api_key()
+
+from polymarket.research.local_lab.paper_maker import MAKER_CFG, run_paper_session
+
 ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = ROOT.parent
+
+
+def resolve_config_path(raw: str) -> Path:
+    """Resolve maker JSON from trading/ or polymarket/ cwd (Windows-safe)."""
+    p = Path(raw)
+    if p.is_absolute():
+        return p
+    norm = p.as_posix().lstrip("./")
+    candidates = [
+        REPO_ROOT / norm,
+        ROOT / norm,
+        ROOT / "config" / p.name,
+        REPO_ROOT / "polymarket" / "config" / p.name,
+    ]
+    if norm.startswith("polymarket/"):
+        candidates.insert(0, REPO_ROOT / norm)
+    for c in candidates:
+        if c.is_file():
+            return c
+    raise FileNotFoundError(f"Config no encontrado: {raw} (probadas: {[str(c) for c in candidates[:3]]})")
 
 
 def _start_recording() -> tuple[subprocess.Popen, subprocess.Popen]:
@@ -59,10 +87,10 @@ async def main_async(args: argparse.Namespace) -> int:
             await asyncio.sleep(5)
 
         if args.paper:
-            from polymarket.research.local_lab.paper_maker import run_paper_session
-
             print(f"Paper session strategy={args.strategy} minutes={args.minutes}")
-            report = await run_paper_session(args.strategy, args.minutes)
+            cfg_path = resolve_config_path(args.config) if args.config else None
+            print(f"Config: {cfg_path or MAKER_CFG}", flush=True)
+            report = await run_paper_session(args.strategy, args.minutes, config_path=cfg_path)
             print(json.dumps(report, indent=2, ensure_ascii=False))
             if report.get("fills", 0) == 0:
                 print("WARN: 0 fills — normal en sesiones cortas; alargar o probar otra estrategia")
@@ -81,6 +109,12 @@ def main() -> None:
     p.add_argument("--paper", action="store_true", help="Paper maker virtual")
     p.add_argument("--strategy", default="maker_16", choices=["maker_16", "wide_spread_probe", "tight_mid_fade"])
     p.add_argument("--minutes", type=float, default=30.0)
+    p.add_argument(
+        "--config",
+        type=str,
+        default="",
+        help="Ruta a JSON de maker (ej. polymarket/config/maker_demo_100.json)",
+    )
     args = p.parse_args()
     if not args.record and not args.paper:
         p.error("Indica --record y/o --paper")

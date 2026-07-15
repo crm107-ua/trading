@@ -28,7 +28,10 @@ from polymarket.research.local_lab.strategies import STRATEGIES, QuoteIntent
 from polymarket.src.data.book_utils import best_bid_ask
 from polymarket.src.pricing.fair_value import estimate_fair_values
 from polymarket.src.signals.features import build_market_features
-from polymarket.src.ai.decision_engine import decide_quote_action
+from polymarket.src.ai.decision_engine import Decision, decide_quote_action
+from polymarket.src.ai.env_loader import load_repo_dotenv
+
+load_repo_dotenv()
 
 ROOT = Path(__file__).resolve().parents[2]
 MAKER_CFG = ROOT / "config" / "maker.json"
@@ -69,7 +72,12 @@ class PaperSession:
     window_end_ns: int | None = None
     spot_history: list[tuple[int, float]] = field(default_factory=list)
     nim_decisions_used: int = 0
+    nim_rule_holds: int = 0
+    nim_cache_hits: int = 0
     last_nim_latency_ms: int | None = None
+    _decision_count: int = 0
+    _last_progress_log: float = 0.0
+    _session_start_mono: float = 0.0
 
     def _strategy_fn(self):
         fn = STRATEGIES[self.strategy_id]
@@ -177,8 +185,25 @@ class PaperSession:
             "feed_ts_ms": int(time.time() * 1000),
         }
 
+    def _log_progress(self, minutes: float, decision: Decision) -> None:
+        now = time.monotonic()
+        if now - self._last_progress_log < 10.0 and self._decision_count % 5 != 0:
+            return
+        self._last_progress_log = now
+        elapsed_min = (now - self._session_start_mono) / 60.0
+        pct = min(99.9, round(100.0 * elapsed_min / minutes, 1)) if minutes > 0 else 0.0
+        print(
+            f"paper {pct}% [{elapsed_min:.1f}/{minutes:.1f} min] "
+            f"decisions={self._decision_count} quotes={self.quotes_logged} fills={len(self.fills)} "
+            f"last={decision.action} ({decision.source})",
+            flush=True,
+        )
+
     async def run(self, minutes: float = 30.0) -> dict[str, Any]:
         self.out_dir.mkdir(parents=True, exist_ok=True)
+        self._session_start_mono = time.monotonic()
+        print(f"Paper OUT: {self.out_dir}", flush=True)
+        print(f"Progreso cada ~10s. O en otra terminal: python scripts/trading_progress.py --watch 10", flush=True)
         fills_path = self.out_dir / "fills.jsonl"
         end_at = time.monotonic() + minutes * 60
         poll_s = 2.0
@@ -238,7 +263,11 @@ class PaperSession:
             if quote is None:
                 await asyncio.sleep(poll_s)
                 continue
-            # Optional NVIDIA decision gating (lab-only). Never changes frozen quote params.
+
+            now_ms = int(time.time() * 1000)
+            feed_ts_ms = int(state.get("feed_ts_ms", now_ms))
+            feed_age_ms = now_ms - feed_ts_ms
+
             snap = {
                 "spot": state["spot"],
                 "strike": self.strike or state["spot"],
@@ -249,17 +278,49 @@ class PaperSession:
                 "last_quote_spot": self.last_quote_spot,
                 "requote_spot_move_usd": requote_move,
                 "inventory_shares": self.inventory_shares,
+                "max_inventory_usdc": float(self.cfg["max_inventory_usdc"]),
+                "kill_switch_feed_stale_ms": float(self.cfg["kill_switch_feed_stale_ms"]),
+                "feed_age_ms": feed_age_ms,
                 "quote_bid": quote.bid,
                 "quote_ask": quote.ask,
                 "quote_size": quote.size_shares,
             }
             decision, nim = decide_quote_action(snapshot=snap, latency_budget_ms=750)
+            self._decision_count += 1
+            self._log_progress(minutes, decision)
             if nim is not None:
                 self.nim_decisions_used += 1
                 self.last_nim_latency_ms = nim.latency_ms
+                if nim.cache_hit:
+                    self.nim_cache_hits += 1
+            elif decision.source == "rule":
+                self.nim_rule_holds += 1
+
+            decisions_path = self.out_dir / "decisions.jsonl"
+            with decisions_path.open("a", encoding="utf-8") as dh:
+                dh.write(
+                    json.dumps(
+                        {
+                            "ts_ms": now_ms,
+                            "market_id": self.current_market_id,
+                            "action": decision.action,
+                            "reason": decision.reason,
+                            "confidence": decision.confidence,
+                            "source": decision.source,
+                            "nim_model": nim.model if nim else None,
+                            "nim_latency_ms": nim.latency_ms if nim else None,
+                            "nim_cache_hit": nim.cache_hit if nim else False,
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+
             if decision.action == "hold":
                 await asyncio.sleep(poll_s)
                 continue
+            if decision.action == "cancel_replace":
+                self.last_quote_spot = state["spot"]
             self.quotes_logged += 1
             self._check_fill(state["last_trade"], quote, fair, state["spot"])
             await asyncio.sleep(poll_s)
@@ -279,12 +340,18 @@ class PaperSession:
         report = {
             "verdict": "LOCAL_PAPER_ONLY",
             "verdict_binding": False,
+            "demo_capital_usdc": float(self.cfg.get("initial_capital_usdc", 0)),
+            "demo_label": self.cfg.get("demo_label"),
             "strategy_id": self.strategy_id,
             "duration_minutes": minutes,
+            "session_dir": str(self.out_dir),
             "fills": len(self.fills),
             "quotes_logged": self.quotes_logged,
             "nim_decisions_used": self.nim_decisions_used,
+            "nim_rule_holds": self.nim_rule_holds,
+            "nim_cache_hits": self.nim_cache_hits,
             "nim_last_latency_ms": self.last_nim_latency_ms,
+            "nim_required": True,
             "spread_captured_usdc": round(self.spread_total, 2),
             "adverse_cost_usdc": round(self.adverse_total, 2),
             "bankroll_end_usdc": round(self.bankroll, 2),
@@ -299,18 +366,23 @@ class PaperSession:
         return report
 
 
-def load_maker_cfg() -> dict[str, Any]:
-    return json.loads(MAKER_CFG.read_text(encoding="utf-8"))
+def load_maker_cfg(config_path: Path | None = None) -> dict[str, Any]:
+    path = config_path or MAKER_CFG
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 async def run_paper_session(
     strategy_id: str = "maker_16",
     minutes: float = 30.0,
     session_id: str | None = None,
+    config_path: Path | None = None,
 ) -> dict[str, Any]:
+    from polymarket.src.ai.env_loader import require_nvidia_api_key
+
+    require_nvidia_api_key()
     if strategy_id not in STRATEGIES:
         raise ValueError(f"Unknown strategy: {strategy_id}. Choose from {list(STRATEGIES)}")
-    cfg = load_maker_cfg()
+    cfg = load_maker_cfg(config_path)
     sid = session_id or datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     out = OUT_BASE / strategy_id / f"session_{sid}"
     session = PaperSession(

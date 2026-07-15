@@ -1,0 +1,7 @@
+{
+  "p": 0.34,
+  "key_factors": ["Market mid high but contrarian base rate", "Generic uncertainty"],
+  "base_rate_considered": "Examples: reversion towards 50% unless strong evidence",
+  "confidence_note": "Low; fixture-only"
+}
+

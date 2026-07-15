@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import time
@@ -9,7 +10,10 @@ from typing import Any
 
 import httpx
 
+from polymarket.src.ai.env_loader import load_repo_dotenv, repo_root
+
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
+DEFAULT_NIM_MODEL = "nvidia/nemotron-mini-4b-instruct"
 
 
 class NvidiaNimError(RuntimeError):
@@ -28,15 +32,19 @@ class NimResponse:
     content: str
     latency_ms: int
     raw: dict[str, Any]
+    cache_hit: bool = False
 
 
 def _default_cache_path() -> Path:
-    # Keep cache out of git-tracked source by default.
-    root = Path(__file__).resolve().parents[2]
-    return root / "data_local" / "nvidia_models_cache.json"
+    return repo_root() / "polymarket" / "data_local" / "nvidia_models_cache.json"
+
+
+def _decision_cache_dir() -> Path:
+    return repo_root() / "polymarket" / "data_local" / "nim_decision_cache"
 
 
 def _bearer_key() -> str:
+    load_repo_dotenv()
     k = os.environ.get("NVIDIA_API_KEY", "").strip()
     if not k:
         raise NvidiaNimError("Missing NVIDIA_API_KEY in environment")
@@ -45,6 +53,11 @@ def _bearer_key() -> str:
 
 def _headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {_bearer_key()}", "Content-Type": "application/json"}
+
+
+def primary_model_id() -> str:
+    load_repo_dotenv()
+    return os.environ.get("NVIDIA_NIM_MODEL", DEFAULT_NIM_MODEL).strip() or DEFAULT_NIM_MODEL
 
 
 def list_models(*, timeout_s: float = 10.0) -> list[NimModel]:
@@ -87,27 +100,80 @@ def cache_models(
 
 
 def pick_fast_models(model_ids: list[str]) -> list[str]:
-    """
-    Heuristic fast roster: prefer small instruct models.
-    We don't assume exact catalog; we filter by common size hints.
-    """
-    preferred = []
+    primary = primary_model_id()
+    roster: list[str] = []
+    if primary in model_ids:
+        roster.append(primary)
+    # Prefer NVIDIA instruct models when primary absent from catalog.
+    if primary not in model_ids:
+        for mid in model_ids:
+            ml = mid.lower()
+            if mid.startswith("nvidia/") and "instruct" in ml and mid not in roster:
+                roster.append(mid)
     for mid in model_ids:
+        if mid in roster:
+            continue
         m = mid.lower()
         if any(x in m for x in ["1b", "3b", "4b", "7b", "8b"]) and "instruct" in m:
-            preferred.append(mid)
-    # Fallback: any instruct model
-    if not preferred:
-        preferred = [mid for mid in model_ids if "instruct" in mid.lower()]
-    # Stable order: smaller first if possible
+            roster.append(mid)
+    if not roster:
+        roster = [mid for mid in model_ids if "instruct" in mid.lower()]
+    if primary not in roster and primary:
+        roster.insert(0, primary)
+
     def key(x: str) -> tuple[int, str]:
+        if x == primary:
+            return (0, x)
         xl = x.lower()
-        for size, rank in [("1b", 1), ("3b", 2), ("4b", 3), ("7b", 4), ("8b", 5)]:
+        if xl.startswith("nvidia/"):
+            return (1, xl)
+        for size, rank in [("1b", 2), ("3b", 3), ("4b", 4), ("7b", 5), ("8b", 6)]:
             if size in xl:
                 return (rank, xl)
         return (99, xl)
 
-    return sorted(preferred, key=key)[:6]
+    return sorted(roster, key=key)[:6]
+
+
+def _cache_key(model: str, messages: list[dict[str, str]]) -> str:
+    blob = json.dumps({"model": model, "messages": messages}, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def read_decision_cache(model: str, messages: list[dict[str, str]]) -> NimResponse | None:
+    path = _decision_cache_dir() / f"{_cache_key(model, messages)}.json"
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return NimResponse(
+            model=str(data["model"]),
+            content=str(data["content"]),
+            latency_ms=int(data.get("latency_ms", 0)),
+            raw=data.get("raw") or {},
+            cache_hit=True,
+        )
+    except Exception:
+        return None
+
+
+def write_decision_cache(resp: NimResponse, messages: list[dict[str, str]]) -> None:
+    d = _decision_cache_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    path = d / f"{_cache_key(resp.model, messages)}.json"
+    path.write_text(
+        json.dumps(
+            {
+                "model": resp.model,
+                "content": resp.content,
+                "latency_ms": resp.latency_ms,
+                "raw": resp.raw,
+                "ts": time.time(),
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
 
 
 def chat_completion(
@@ -117,7 +183,13 @@ def chat_completion(
     timeout_ms: int = 1200,
     temperature: float = 0.0,
     max_tokens: int = 256,
+    use_cache: bool = True,
 ) -> NimResponse:
+    if use_cache:
+        cached = read_decision_cache(model, messages)
+        if cached is not None:
+            return cached
+
     t0 = time.perf_counter()
     payload = {
         "model": model,
@@ -137,7 +209,10 @@ def chat_completion(
         content = data["choices"][0]["message"]["content"]
     except Exception as exc:  # noqa: BLE001
         raise NvidiaNimError(f"Unexpected response shape: {data}") from exc
-    return NimResponse(model=model, content=str(content), latency_ms=latency_ms, raw=data)
+    resp = NimResponse(model=model, content=str(content), latency_ms=latency_ms, raw=data)
+    if use_cache:
+        write_decision_cache(resp, messages)
+    return resp
 
 
 def robust_chat_completion(
@@ -147,9 +222,10 @@ def robust_chat_completion(
     temperature: float = 0.0,
     max_tokens: int = 256,
     preferred_models: list[str] | None = None,
+    use_cache: bool = True,
 ) -> NimResponse:
     """
-    Try multiple models sequentially (fast roster), with 1 retry on transient errors.
+    Primary model first (NVIDIA_NIM_MODEL), then fast roster fallback on transient errors only.
     """
     if preferred_models is None:
         cache = cache_models()
@@ -160,7 +236,7 @@ def robust_chat_completion(
 
     last_err: Exception | None = None
     for mid in preferred_models:
-        for attempt in range(2):
+        for attempt in range(3):
             try:
                 return chat_completion(
                     model=mid,
@@ -168,14 +244,13 @@ def robust_chat_completion(
                     timeout_ms=timeout_ms,
                     temperature=temperature,
                     max_tokens=max_tokens,
+                    use_cache=use_cache,
                 )
             except NvidiaNimError as e:
                 last_err = e
-                # quick backoff
-                time.sleep(0.2 * (attempt + 1))
+                time.sleep(0.35 * (attempt + 1))
                 continue
             except Exception as e:  # noqa: BLE001
                 last_err = e
                 break
     raise NvidiaNimError(f"All models failed: {last_err}")
-

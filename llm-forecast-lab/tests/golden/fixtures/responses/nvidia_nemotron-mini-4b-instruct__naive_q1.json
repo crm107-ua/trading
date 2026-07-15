@@ -1,0 +1,7 @@
+{
+  "p": 0.61,
+  "key_factors": ["Base rate moderate", "No clear disconfirming evidence in prompt"],
+  "base_rate_considered": "Similar event types often ~55-65% in generic examples",
+  "confidence_note": "Medium; fixture-only"
+}
+

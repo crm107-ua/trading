@@ -15,6 +15,10 @@ export type CachedResponse = {
   providerMeta?: Record<string, unknown>;
 };
 
+export function safeModelSlug(model: string): string {
+  return model.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
 export function hashPrompt(text: string): string {
   return crypto.createHash("sha256").update(text).digest("hex");
 }
@@ -24,7 +28,7 @@ export function cacheDir(): string {
 }
 
 export function cachePath(key: CacheKey): string {
-  const safeModel = key.model.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const safeModel = safeModelSlug(key.model);
   return path.join(cacheDir(), `${safeModel}__${key.promptHash}.json`);
 }
 

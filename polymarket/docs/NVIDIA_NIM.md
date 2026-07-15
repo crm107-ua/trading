@@ -1,42 +1,60 @@
-# NVIDIA NIM (build.nvidia.com) — integración local/paper
+# NVIDIA NIM — motor de decisiones (Polymarket)
 
-## Qué es
+## Qué hace
 
-NVIDIA Build expone modelos (NIM) vía un endpoint **OpenAI-compatible** para prototipado.
+NVIDIA Build (`integrate.api.nvidia.com`) alimenta el **motor de decisiones** del paper maker:
 
-## Endpoint y auth
+- **No predice** resultados de mercados (eso es `llm-forecast-lab`, línea activa de eval).
+- **Sí decide** si publicar cotización, refrescar o pausar (`quote` / `cancel_replace` / `hold`).
 
-- **Base URL**: `https://integrate.api.nvidia.com/v1`
-- **API key**: `NVIDIA_API_KEY` (suele empezar por `nvapi-...`)
-- **Header**: `Authorization: Bearer $NVIDIA_API_KEY`
+## Configuración
 
-Endpoints usados:
+En `trading/.env`:
 
-- `GET /models`
-- `POST /chat/completions`
+```env
+NVIDIA_API_KEY=nvapi-...
+# opcionales:
+NVIDIA_NIM_MODEL=nvidia/nemotron-mini-4b-instruct
+NVIDIA_NIM_CONFIDENCE_MIN=0.55
+```
+
+La key debe tener scope **Public API endpoints** en [build.nvidia.com](https://build.nvidia.com).
+
+## Arquitectura
+
+```
+paper_maker.py
+    └── decision_engine.py
+            ├── rule_guard()     ← seguridad determinista (sin API)
+            └── nvidia_client.py ← chat/completions + cache local
+```
+
+- **Cache de decisiones:** `polymarket/data_local/nim_decision_cache/` (mismo snapshot → misma respuesta).
+- **Cache de catálogo:** `polymarket/data_local/nvidia_models_cache.json`.
 
 ## Errores comunes
 
-- **403 Forbidden**: la key se creó sin el scope de **Public API Endpoints**. Solución: crear una key nueva en `build.nvidia.com` con ese permiso.
-- **429 Too Many Requests**: rate limit; aplicar backoff + fallback a otro modelo.
+| Error | Causa | Fix |
+|-------|-------|-----|
+| 403 Forbidden | Key sin scope Public API | Nueva key en build.nvidia.com |
+| 429 Too Many Requests | Rate limit | Backoff automático; cache reduce llamadas |
+| `NVIDIA_API_KEY missing` | `.env` no cargado | Key en `trading/.env`; paper carga automático |
 
-## Uso en este repo (congelado)
-
-Esta integración es **solo lab/paper**:
-
-- Decide **acción** (`quote`/`hold`/`cancel_replace`) con guardas y fallback.
-- **No** cambia los parámetros congelados del pre-reg #16 (spread/sigma/tamaño) ni genera proyecciones de PnL.
-
-Archivos:
-
-- `polymarket/src/ai/nvidia_client.py`
-- `polymarket/src/ai/decision_engine.py`
-- `polymarket/research/local_lab/test_nvidia_nim.py`
-
-Ejecutar el test:
+## Comandos
 
 ```powershell
-$env:NVIDIA_API_KEY = "nvapi-..."
+cd C:\Users\carom\Desktop\trading
+
+# Smoke test API
 python -m polymarket.research.local_lab.test_nvidia_nim
+
+# Paper 30 min (requiere NIM)
+python -m polymarket.research.local_lab.run_local_lab --paper --strategy maker_16 --minutes 30
 ```
 
+## Salida de sesión
+
+- `report.json` — fills, adverse_rate, `nim_decisions_used`, `nim_rule_holds`, `nim_cache_hits`
+- `decisions.jsonl` — traza de cada decisión NIM/regla
+
+**No proyectar PnL.** El lab solo puede matar ideas; ver `LOCAL_LAB.md`.

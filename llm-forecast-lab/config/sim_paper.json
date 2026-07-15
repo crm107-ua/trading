@@ -1,0 +1,14 @@
+{
+  "verdictBinding": false,
+  "hypothesis": "forecast_mid_taker_exploratory",
+  "sizeShares": 100,
+  "minNetEdge": 0.02,
+  "takerFee": 0.02,
+  "safetyBuffer": 0.005,
+  "slippagePer100Shares": 0.003,
+  "horizonsHours": [24, 72, 168],
+  "maxTradesPerQuestion": 1,
+  "preferHorizonHours": 168,
+  "initialCapitalUsdc": 10000,
+  "requireCompleteHorizons": true
+}

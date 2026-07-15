@@ -3,7 +3,7 @@ import path from "node:path";
 import type Database from "better-sqlite3";
 import { hashPrompt } from "../cache.js";
 import { LlmClient } from "../client.js";
-import { ForecastOutputSchema } from "../schema.js";
+import { parseForecastOutput } from "../schema.js";
 import { loadModelsConfig } from "../../config.js";
 import { loadEvalFrozen } from "../../config.js";
 import { isEligibleForModel } from "../../integrity/leakage.js";
@@ -28,7 +28,15 @@ export async function runNaiveForecast(args: {
   provider: string;
   pipeline: "naive";
   mode: "fixtures" | "live";
-}): Promise<{ forecasts: number; failed: number; cacheHitRate: number }> {
+}): Promise<{ forecasts: number; failed: number; cacheHitRate: number; purgedForecasts?: number }> {
+  let purgedForecasts = 0;
+  if (args.mode === "live") {
+    purgedForecasts = purgePipelineForecasts(args.db, args.pipeline);
+    if (purgedForecasts > 0) {
+      process.stderr.write(`forecast: purged ${purgedForecasts} stale ${args.pipeline} rows (live clean slate)\n`);
+    }
+  }
+
   const tpl = readPromptTemplate();
   const cfg = loadModelsConfig("./config");
   const evalFrozen = loadEvalFrozen("./config");
@@ -44,15 +52,16 @@ export async function runNaiveForecast(args: {
       hasSample
         ? `
       select q.id as question_id, q.question_text, q.description, q.resolution_date, q.resolved_outcome,
-             ms.horizon_hours, ms.snapshot_ts, ms.market_mid
+             q.canary_only, ms.horizon_hours, ms.snapshot_ts, ms.market_mid
       from questions q
-      join run_questions rq on rq.question_id = q.id
       join market_snapshots ms on ms.question_id = q.id
+      where q.canary_only = 1
+         or q.id in (select question_id from run_questions)
       order by q.resolution_date asc
     `
         : `
       select q.id as question_id, q.question_text, q.description, q.resolution_date, q.resolved_outcome,
-             ms.horizon_hours, ms.snapshot_ts, ms.market_mid
+             q.canary_only, ms.horizon_hours, ms.snapshot_ts, ms.market_mid
       from questions q
       join market_snapshots ms on ms.question_id = q.id
       order by q.resolution_date asc
@@ -64,12 +73,14 @@ export async function runNaiveForecast(args: {
     description: string | null;
     resolution_date: string;
     resolved_outcome: 0 | 1;
+    canary_only: 0 | 1;
     horizon_hours: number;
     snapshot_ts: string;
     market_mid: number;
   }>;
 
   const eligibleRows = rows.filter((r) => {
+    if (r.canary_only) return true;
     const el = isEligibleForModel({
       resolutionDateIso: r.resolution_date,
       modelTrainingCutoff: model.trainingCutoff,
@@ -126,9 +137,8 @@ export async function runNaiveForecast(args: {
       if (res.cacheHit) cacheHits += 1;
       rawResp = JSON.stringify({ text: res.text });
 
-      // parse: one retry repair if needed
-      const parsed1 = ForecastOutputSchema.safeParse(JSON.parse(res.text));
-      let parsed = parsed1.success ? parsed1.data : null;
+      const parsed1 = parseForecastOutput(res.text);
+      let parsed = parsed1;
       if (!parsed) {
         const repairPrompt =
           "Your previous answer did not match the required JSON schema. " +
@@ -143,8 +153,7 @@ export async function runNaiveForecast(args: {
         });
         if (rep.cacheHit) cacheHits += 1;
         rawResp = JSON.stringify({ text: res.text, repair: rep.text });
-        const parsed2 = ForecastOutputSchema.safeParse(JSON.parse(rep.text));
-        if (parsed2.success) parsed = parsed2.data;
+        parsed = parseForecastOutput(rep.text);
       }
 
       if (!parsed) throw new Error("forecast_parse_failed");
@@ -185,7 +194,14 @@ export async function runNaiveForecast(args: {
   return {
     forecasts: total,
     failed,
-    cacheHitRate: total === 0 ? 0 : cacheHits / total
+    cacheHitRate: total === 0 ? 0 : cacheHits / total,
+    ...(args.mode === "live" ? { purgedForecasts } : {})
   };
 }
 
+/** Live eval has no run_id column — purge pipeline rows so partial runs cannot linger. */
+export function purgePipelineForecasts(db: Database.Database, pipeline: string): number {
+  const row = db.prepare("select count(*) as n from forecasts where pipeline = ?").get(pipeline) as { n: number };
+  db.prepare("delete from forecasts where pipeline = ?").run(pipeline);
+  return row.n;
+}

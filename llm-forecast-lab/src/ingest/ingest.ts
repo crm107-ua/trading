@@ -42,7 +42,7 @@ export type IngestReport = {
     afterDispute: number;
     afterAllSelection: number;
     byCategory: Record<string, number>;
-    durationDays: { p50: number; p90: number; max: number };
+    durationDays: { p50: number; p90: number; max: number; min: number };
   };
   clob?: { fetches: number; cacheHits: number };
 };

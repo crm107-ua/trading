@@ -1,9 +1,12 @@
 You are forecasting a binary question as of the timestamp shown. You must not use information after that timestamp.
-Return ONLY JSON with keys:
-  p (number 0..1),
-  key_factors (string[]),
-  base_rate_considered (string),
-  confidence_note (string).
+
+Output format (strict):
+- Return a single JSON object only.
+- No markdown, no code fences, no prose before or after JSON.
+- Keys exactly: p, key_factors, base_rate_considered, confidence_note.
+
+Example shape:
+{"p":0.42,"key_factors":["..."],"base_rate_considered":"...","confidence_note":"..."}
 
 Question:
 {{QUESTION_TEXT}}

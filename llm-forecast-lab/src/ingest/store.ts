@@ -11,10 +11,15 @@ export function stableId(input: string): string {
   return crypto.createHash("sha256").update(input).digest("hex").slice(0, 24);
 }
 
-export function upsertQuestions(db: Database.Database, questions: Question[]): IngestStats {
+export function upsertQuestions(
+  db: Database.Database,
+  questions: Question[],
+  opts?: { canaryOnly?: boolean }
+): IngestStats {
+  const canaryOnly = opts?.canaryOnly ? 1 : 0;
   const insQ = db.prepare(`
-    insert into questions (id, source, question_text, description, category, resolution_date, resolved_outcome, ambiguous_resolution, liquidity_proxy)
-    values (@id, @source, @question_text, @description, @category, @resolution_date, @resolved_outcome, @ambiguous_resolution, @liquidity_proxy)
+    insert into questions (id, source, question_text, description, category, resolution_date, resolved_outcome, ambiguous_resolution, liquidity_proxy, canary_only)
+    values (@id, @source, @question_text, @description, @category, @resolution_date, @resolved_outcome, @ambiguous_resolution, @liquidity_proxy, @canary_only)
     on conflict(id) do update set
       question_text=excluded.question_text,
       description=excluded.description,
@@ -22,7 +27,8 @@ export function upsertQuestions(db: Database.Database, questions: Question[]): I
       resolution_date=excluded.resolution_date,
       resolved_outcome=excluded.resolved_outcome,
       ambiguous_resolution=excluded.ambiguous_resolution,
-      liquidity_proxy=excluded.liquidity_proxy
+      liquidity_proxy=excluded.liquidity_proxy,
+      canary_only=excluded.canary_only
   `);
 
   const tx = db.transaction((rows: Question[]) => {
@@ -36,7 +42,8 @@ export function upsertQuestions(db: Database.Database, questions: Question[]): I
         resolution_date: q.resolution.resolutionDate,
         resolved_outcome: q.resolution.resolvedOutcome === "YES" ? 1 : 0,
         ambiguous_resolution: q.ambiguousResolution ? 1 : 0,
-        liquidity_proxy: q.liquidityProxy
+        liquidity_proxy: q.liquidityProxy,
+        canary_only: canaryOnly
       });
     }
   });

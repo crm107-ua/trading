@@ -131,7 +131,7 @@ export type ViabilityReport = {
   heldoutEstimateByModel: Record<string, number>;
   costEstimates: {
     horizons: number;
-    naiveCalls: number;
+    nimCalls: number;
     decomposedCalls: number;
     ensembleCalls: number;
     totalCalls: number;
@@ -193,7 +193,7 @@ export async function runViabilityCheck(): Promise<ViabilityReport> {
   }
 
   const maxEligibleForecasts = Math.max(...Object.values(eligibleForecastsByModel), 0);
-  const naiveCalls = maxEligibleForecasts;
+  const nimCalls = maxEligibleForecasts;
   const decomposedCalls = maxEligibleForecasts * 3;
   const ensembleCalls =
     maxEligibleForecasts * 3 * evalFrozen.protocol.ensemble.modelsN * evalFrozen.protocol.ensemble.promptVariantsM;
@@ -222,10 +222,10 @@ export async function runViabilityCheck(): Promise<ViabilityReport> {
     heldoutEstimateByModel,
     costEstimates: {
       horizons: horizons.length,
-      naiveCalls,
+      nimCalls,
       decomposedCalls,
       ensembleCalls,
-      totalCalls: naiveCalls + decomposedCalls + ensembleCalls
+      totalCalls: nimCalls + decomposedCalls + ensembleCalls
     },
     notes
   };

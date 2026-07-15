@@ -1,0 +1,19 @@
+{
+  "mode": "paper-maker",
+  "hypothesis": 16,
+  "prereg": "polymarket/docs/PREREG_16_POLY_MAKER_STALE.md",
+  "demo_label": "capital_100_usdc_scaled",
+  "initial_capital_usdc": 100.0,
+  "sigma_annual": 0.55,
+  "half_spread": 0.015,
+  "safety_buffer": 0.005,
+  "maker_fee": 0.0,
+  "quote_size_shares": 5,
+  "requote_spot_move_usd": 25,
+  "max_notional_per_side_usdc": 4,
+  "max_inventory_usdc": 8,
+  "kill_switch_feed_stale_ms": 2000,
+  "adverse_selection_window_ms": 500,
+  "adverse_selection_spot_move_usd": 10,
+  "max_open_orders_per_market": 2
+}

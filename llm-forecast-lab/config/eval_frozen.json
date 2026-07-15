@@ -1,7 +1,7 @@
 {
   "frozen": true,
-  "frozenAt": "2026-07-13T23:15:00.000Z",
-  "freezeHash": "ebb00002c9a9ffdafb66a8254beee278e3d8d7fc4289a8d83965aa92da33c5cf",
+  "frozenAt": "2026-07-15T12:00:00.000Z",
+  "freezeHash": "dc216f6ccabdeaf7523651074390627b8daf5f4c31fc3c1f72bc014d52c0c15a",
   "protocol": {
     "horizonsHoursBeforeResolution": [
       24,
@@ -27,11 +27,24 @@
       "retrieval": "none",
       "canary": {
         "enabled": true,
-        "canaryCountPerModel": 10,
+        "canaryCountPerModel": 25,
         "minLagDays": 60,
         "maxLagDays": 365,
         "brierSuspiciousThreshold": 0.02,
         "minEligibleHeldoutQuestions": 100
+      },
+      "canarySupplement": {
+        "enabled": true,
+        "resolutionFrom": "2022-12-01",
+        "resolutionTo": "2023-10-31",
+        "targetCount": 25
+      },
+      "temporalCanary": {
+        "enabled": true,
+        "heldInFrom": "2024-01-01",
+        "heldInTo": "2024-03-31",
+        "skillSuspiciousThreshold": 0.15,
+        "heldoutSkillPoorThreshold": -0.05
       },
       "maxForecastFailedRate": 0.1,
       "maxIngestRejectRate": 0.2

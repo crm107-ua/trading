@@ -24,6 +24,25 @@ export function passesDuration(m: GammaMarket, evalFrozen: EvalFrozen): boolean 
   return dur >= minDays;
 }
 
+export function passesCanaryCandidateFilters(
+  m: GammaMarket,
+  evalFrozen: EvalFrozen,
+  resolutionFrom: string,
+  resolutionTo: string
+): boolean {
+  if (!isBinaryYesNoOutcomes(m.outcomes) || !m.endDate) return false;
+  if (Boolean(m.isDisputed ?? m.isResolutionDisputed ?? m.hasDispute ?? false)) return false;
+  const resTs = Date.parse(String(m.endDate));
+  const from = Date.parse(resolutionFrom);
+  const to = Date.parse(`${resolutionTo}T23:59:59.999Z`);
+  if (!Number.isFinite(resTs) || resTs < from || resTs > to) return false;
+  const dur = marketDurationDays(m);
+  if (dur === null || dur < evalFrozen.protocol.selection.minMarketDurationDays) return false;
+  const liq = Number(m.liquidityNum ?? m.volumeNum ?? 0);
+  if (liq < evalFrozen.protocol.selection.minLiquidityProxy) return false;
+  return true;
+}
+
 export function passesSelectionFilters(m: GammaMarket, evalFrozen: EvalFrozen): boolean {
   if (!isBinaryYesNoOutcomes(m.outcomes) || !m.endDate) return false;
   if (Boolean(m.isDisputed ?? m.isResolutionDisputed ?? m.hasDispute ?? false)) return false;
@@ -48,7 +67,7 @@ export type UniverseComposition = {
   afterDispute: number;
   afterAllSelection: number;
   byCategory: Record<string, number>;
-  durationDays: { p50: number; p90: number; max: number };
+  durationDays: { p50: number; p90: number; max: number; min: number };
 };
 
 export function computeUniverseComposition(
@@ -68,10 +87,10 @@ export function computeUniverseComposition(
     if (passesDateRange(m, evalFrozen)) afterDateRange += 1;
     if (!isBinaryYesNoOutcomes(m.outcomes) || !m.endDate) continue;
     afterBinaryYesNo += 1;
-    const dur = marketDurationDays(m);
-    if (dur !== null) durations.push(dur);
     if (!passesDuration(m, evalFrozen)) continue;
     afterDuration += 1;
+    const dur = marketDurationDays(m);
+    if (dur !== null) durations.push(dur);
     if (Number(m.liquidityNum ?? m.volumeNum ?? 0) < evalFrozen.protocol.selection.minLiquidityProxy) continue;
     afterLiquidity += 1;
     if (Boolean(m.isDisputed ?? m.isResolutionDisputed ?? m.hasDispute ?? false)) continue;
@@ -98,6 +117,7 @@ export function computeUniverseComposition(
     durationDays: {
       p50: pct(0.5),
       p90: pct(0.9),
+      min: durations.length === 0 ? 0 : durations[0] ?? 0,
       max: durations.length === 0 ? 0 : durations[durations.length - 1] ?? 0
     }
   };
