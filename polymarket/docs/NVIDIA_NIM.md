@@ -29,8 +29,8 @@ paper_maker.py
             └── nvidia_client.py ← chat/completions + cache local
 ```
 
-- **Cache de decisiones:** `polymarket/data_local/nim_decision_cache/` (mismo snapshot → misma respuesta).
-- **Cache de catálogo:** `polymarket/data_local/nvidia_models_cache.json`.
+- **Modo rápido (default):** `NVIDIA_NIM_MODE=fast` — si las reglas de seguridad pasan, **cotiza al instante** sin llamar API (~0 ms). NIM solo en modo `full`.
+- **Modelo (modo full):** `meta/llama-3.2-1b-instruct` por defecto (`NVIDIA_NIM_MODEL` opcional).
 
 ## Errores comunes
 

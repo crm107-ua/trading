@@ -14,6 +14,16 @@ ActionType = Literal["quote", "cancel_replace", "hold"]
 DecisionSource = Literal["rule", "nim", "nim_low_confidence"]
 
 
+def _nim_mode() -> str:
+    load_repo_dotenv()
+    return os.environ.get("NVIDIA_NIM_MODE", "fast").strip().lower()
+
+
+def fast_path_enabled() -> bool:
+    """fast = reglas cotizan al instante (0 ms API); full = siempre NIM."""
+    return _nim_mode() != "full"
+
+
 @dataclass(frozen=True)
 class Decision:
     action: ActionType
@@ -72,7 +82,7 @@ def rule_guard(snapshot: dict[str, Any]) -> Decision | None:
     if time_rem < 12:
         return Decision("hold", "rule_window_closing", 1.0, "rule")
 
-    inv_usd = abs(float(snapshot.get("inventory_shares", 0)) * float(snapshot.get("spot", 1)))
+    inv_usd = abs(float(snapshot.get("inventory_shares", 0)) * float(snapshot.get("mark_price", 0.5)))
     max_inv = float(snapshot.get("max_inventory_usdc", 1e9))
     if inv_usd >= max_inv * 0.98:
         return Decision("hold", "rule_inventory_cap", 1.0, "rule")
@@ -115,8 +125,10 @@ def _build_nim_messages(snapshot: dict[str, Any]) -> list[dict[str, str]]:
                 "You are a risk-averse Polymarket market-maker decision engine.\n"
                 "Output ONLY JSON: {\"action\":\"quote|cancel_replace|hold\",\"confidence\":0..1,\"reason\":\"...\"}\n"
                 "Never change prices — only choose whether to post, refresh, or pause.\n"
-                "Prefer HOLD when uncertain. QUOTE when fair is stable and spread is worth capturing.\n"
-                "CANCEL_REPLACE when spot moved materially vs last quote anchor."
+                "If safety rules already passed and spread is worth capturing, action MUST be \"quote\".\n"
+                "Use HOLD only when feed is dubious, spread is too tight, or spot is unstable.\n"
+                "CANCEL_REPLACE when spot moved materially vs last quote anchor.\n"
+                "action and reason must agree (do not say worth capturing with action hold)."
             ),
         },
         {
@@ -126,10 +138,19 @@ def _build_nim_messages(snapshot: dict[str, Any]) -> list[dict[str, str]]:
     ]
 
 
+def _coerce_action(action: str, reason: str, conf: float, conf_min: float) -> ActionType:
+    """Align action with reason when model output is internally inconsistent."""
+    rl = reason.lower()
+    if action == "hold" and conf >= conf_min:
+        if any(p in rl for p in ("worth capturing", "post quote", "stable spread", "should quote")):
+            return "quote"
+    return action  # type: ignore[return-value]
+
+
 def decide_quote_action(
     *,
     snapshot: dict[str, Any],
-    latency_budget_ms: int = 750,
+    latency_budget_ms: int = 3000,
     preferred_models: list[str] | None = None,
     use_cache: bool = True,
 ) -> tuple[Decision, NimResponse | None]:
@@ -140,12 +161,18 @@ def decide_quote_action(
     if guarded is not None:
         return guarded, None
 
+    if fast_path_enabled():
+        spread = _market_spread_cents(snapshot)
+        min_cents = float(snapshot.get("fast_path_min_spread_cents", 1.0))
+        if spread is not None and spread >= min_cents:
+            return Decision("quote", "rule_fast_path", 1.0, "rule"), None
+
     messages = _build_nim_messages(snapshot)
     conf_min = _confidence_min()
     try:
         resp = robust_chat_completion(
             messages=messages,
-            timeout_ms=min(max(latency_budget_ms, 250), 1500),
+            timeout_ms=min(max(latency_budget_ms, 500), 4000),
             temperature=0.0,
             max_tokens=160,
             preferred_models=preferred_models or [primary_model_id()],
@@ -164,6 +191,7 @@ def decide_quote_action(
         conf = 0.5
     conf = max(0.0, min(1.0, conf))
     reason = str(data.get("reason") or "nim_decision").strip()[:200]
+    action = _coerce_action(str(action), reason, conf, conf_min)
 
     if action != "hold" and conf < conf_min:
         return Decision("hold", f"nim_low_confidence:{reason}", conf, "nim_low_confidence"), resp

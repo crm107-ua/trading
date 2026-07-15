@@ -13,7 +13,7 @@ import httpx
 from polymarket.src.ai.env_loader import load_repo_dotenv, repo_root
 
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
-DEFAULT_NIM_MODEL = "nvidia/nemotron-mini-4b-instruct"
+DEFAULT_NIM_MODEL = "meta/llama-3.2-1b-instruct"
 
 
 class NvidiaNimError(RuntimeError):
@@ -104,7 +104,7 @@ def _is_chat_decision_model(model_id: str) -> bool:
     ml = model_id.lower()
     if any(x in ml for x in ("riva", "translate", "vision", "embed", "rerank", "guard")):
         return False
-    if any(x in ml for x in ("51b", "70b", "80b", "405b", "90b", "253b")):
+    if any(x in ml for x in ("51b", "70b", "80b", "34b", "405b", "90b", "253b")):
         return False
     return "instruct" in ml or ml.startswith("meta/llama-3")
 

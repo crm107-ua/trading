@@ -16,6 +16,7 @@ def _base_snapshot(**overrides) -> dict:
         "last_quote_spot": 94990.0,
         "requote_spot_move_usd": 25.0,
         "inventory_shares": 0.0,
+        "mark_price": 0.50,
         "max_inventory_usdc": 300.0,
         "kill_switch_feed_stale_ms": 2000.0,
         "feed_age_ms": 100.0,
@@ -51,6 +52,39 @@ def test_rule_window_closing():
     d = rule_guard(_base_snapshot(time_remaining_s=5.0))
     assert d is not None
     assert d.action == "hold"
+
+
+def test_rule_inventory_uses_mark_not_btc_spot():
+    # 5 shares * BTC spot 65000 would wrongly trip; mark 0.5 → 2.5 USDC under cap 8
+    d = rule_guard(
+        _base_snapshot(
+            inventory_shares=5.0,
+            spot=65000.0,
+            last_quote_spot=65000.0,
+            mark_price=0.5,
+            max_inventory_usdc=8.0,
+        )
+    )
+    assert d is None
+    d2 = rule_guard(_base_snapshot(inventory_shares=20.0, spot=65000.0, mark_price=0.5, max_inventory_usdc=8.0))
+    assert d2 is not None
+    assert d2.reason == "rule_inventory_cap"
+
+
+def test_coerce_hold_to_quote_when_reason_says_capturing():
+    from polymarket.src.ai.decision_engine import _coerce_action
+
+    assert _coerce_action("hold", "spread is worth capturing", 0.8, 0.55) == "quote"
+    assert _coerce_action("hold", "uncertain book", 0.8, 0.55) == "hold"
+
+
+def test_fast_path_quotes_without_nim():
+    snap = _base_snapshot()
+    decision, nim = decide_quote_action(snapshot=snap, use_cache=False)
+    assert decision.action == "quote"
+    assert decision.reason == "rule_fast_path"
+    assert decision.source == "rule"
+    assert nim is None
 
 
 def test_decide_uses_rules_without_network(monkeypatch):

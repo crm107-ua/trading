@@ -33,10 +33,12 @@ def wide_spread_only(
     fair_up: float,
     best_bid: float | None,
     best_ask: float | None,
+    spot: float,
+    strike: float,
     cfg: dict[str, Any],
-    min_spread: float = 0.05,
 ) -> QuoteIntent | None:
     """Probe #17-local: quote solo si el libro retail está muy ancho."""
+    min_spread = float(cfg.get("min_market_spread", 0.04))
     if best_bid is None or best_ask is None:
         return None
     if best_ask - best_bid < min_spread:

@@ -91,6 +91,9 @@ class PaperSession:
     def _resolve_window(self, resolved_up: int) -> float:
         if abs(self.inventory_shares) < 1e-9:
             return 0.0
+        mode = str(self.cfg.get("paper_resolution", "binary")).lower()
+        if mode == "mid":
+            return 0.0
         payout = self.inventory_shares * resolved_up
         pnl = payout - self.cost_basis
         self.bankroll += payout
@@ -98,20 +101,47 @@ class PaperSession:
         self.cost_basis = 0.0
         return pnl
 
-    def _check_fill(self, last_trade: float | None, quote: QuoteIntent, fair: float, spot: float) -> None:
-        if last_trade is None:
+    def _flatten_inventory_mid(self, mark: float) -> float:
+        """Mark-to-mid exit — maker no debería llevar inventario a resolución binaria."""
+        if abs(self.inventory_shares) < 1e-9:
+            return 0.0
+        mark = max(0.01, min(0.99, mark))
+        notional = self.inventory_shares * mark
+        pnl = notional - self.cost_basis
+        self.bankroll += notional
+        self.inventory_shares = 0.0
+        self.cost_basis = 0.0
+        return pnl
+
+    def _check_fill(self, last_trade: float | None, quote: QuoteIntent, fair: float, spot: float, best_bid: float | None = None, best_ask: float | None = None) -> None:
+        if last_trade is None and best_bid is None:
             return
-        if self.last_trade_seen is not None and abs(last_trade - self.last_trade_seen) < 1e-9:
-            return
-        self.last_trade_seen = last_trade
+        trade_px = last_trade
+        if trade_px is not None:
+            if self.last_trade_seen is not None and abs(trade_px - self.last_trade_seen) < 1e-9:
+                # same last trade — still allow book-cross fills once per poll via price level
+                trade_px = None
+            else:
+                self.last_trade_seen = trade_px
         side = None
         price = None
-        if abs(last_trade - quote.bid) <= 0.02:
+        if trade_px is not None:
+            if abs(trade_px - quote.bid) <= 0.03:
+                side, price = "bid", quote.bid
+            elif abs(trade_px - quote.ask) <= 0.03:
+                side, price = "ask", quote.ask
+        # Book-cross: market takes our resting quote
+        if side is None and best_ask is not None and best_ask <= quote.bid + 1e-9:
             side, price = "bid", quote.bid
-        elif abs(last_trade - quote.ask) <= 0.02:
+        if side is None and best_bid is not None and best_bid >= quote.ask - 1e-9:
             side, price = "ask", quote.ask
         if side is None:
             return
+        # Dedup identical fill side+price within poll loop using last_trade_seen flag for book
+        fill_key = f"{side}:{price:.4f}:{self.current_market_id}"
+        if getattr(self, "_last_fill_key", None) == fill_key and trade_px is None:
+            return
+        self._last_fill_key = fill_key
         notional = price * quote.size_shares
         if notional > float(self.cfg["max_notional_per_side_usdc"]):
             return
@@ -206,7 +236,7 @@ class PaperSession:
         print(f"Progreso cada ~10s. O en otra terminal: python scripts/trading_progress.py --watch 10", flush=True)
         fills_path = self.out_dir / "fills.jsonl"
         end_at = time.monotonic() + minutes * 60
-        poll_s = 2.0
+        poll_s = 1.0
         requote_move = float(self.cfg["requote_spot_move_usd"])
         prev_market: str | None = None
 
@@ -223,8 +253,12 @@ class PaperSession:
                 if prev_market and self.strike is not None and self.window_end_ns:
                     state = await self._fetch_state(target.token_id_up)
                     if state:
-                        resolved = int(state["spot"] > self.strike)
-                        self._resolve_window(resolved)
+                        bb, ba = state["best_bid"], state["best_ask"]
+                        if str(self.cfg.get("paper_resolution", "binary")).lower() == "mid" and bb is not None and ba is not None:
+                            self._flatten_inventory_mid((bb + ba) / 2)
+                        else:
+                            resolved = int(state["spot"] > self.strike)
+                            self._resolve_window(resolved)
                 prev_market = target.market_id
                 self.current_market_id = target.market_id
                 self.current_question = target.question
@@ -247,6 +281,15 @@ class PaperSession:
 
             we_ns = self.window_end_ns or time.time_ns()
             time_rem = max((we_ns - time.time_ns()) / 1e9, 1.0)
+            flatten_s = float(self.cfg.get("flatten_before_window_s", 0))
+            if (
+                flatten_s > 0
+                and time_rem <= flatten_s
+                and abs(self.inventory_shares) > 1e-9
+                and state["best_bid"] is not None
+                and state["best_ask"] is not None
+            ):
+                self._flatten_inventory_mid((state["best_bid"] + state["best_ask"]) / 2)
             feats = build_market_features(
                 {
                     "spot": state["spot"],
@@ -278,14 +321,20 @@ class PaperSession:
                 "last_quote_spot": self.last_quote_spot,
                 "requote_spot_move_usd": requote_move,
                 "inventory_shares": self.inventory_shares,
+                "mark_price": (
+                    (state["best_bid"] + state["best_ask"]) / 2
+                    if state["best_bid"] is not None and state["best_ask"] is not None
+                    else fair
+                ),
                 "max_inventory_usdc": float(self.cfg["max_inventory_usdc"]),
                 "kill_switch_feed_stale_ms": float(self.cfg["kill_switch_feed_stale_ms"]),
                 "feed_age_ms": feed_age_ms,
                 "quote_bid": quote.bid,
                 "quote_ask": quote.ask,
                 "quote_size": quote.size_shares,
+                "fast_path_min_spread_cents": float(self.cfg.get("fast_path_min_spread_cents", 1.0)),
             }
-            decision, nim = decide_quote_action(snapshot=snap, latency_budget_ms=750)
+            decision, nim = decide_quote_action(snapshot=snap, latency_budget_ms=3000)
             self._decision_count += 1
             self._log_progress(minutes, decision)
             if nim is not None:
@@ -322,7 +371,14 @@ class PaperSession:
             if decision.action == "cancel_replace":
                 self.last_quote_spot = state["spot"]
             self.quotes_logged += 1
-            self._check_fill(state["last_trade"], quote, fair, state["spot"])
+            self._check_fill(
+                state["last_trade"],
+                quote,
+                fair,
+                state["spot"],
+                best_bid=state["best_bid"],
+                best_ask=state["best_ask"],
+            )
             await asyncio.sleep(poll_s)
 
         # Resolve open inventory at session end
@@ -333,7 +389,14 @@ class PaperSession:
             if target:
                 state = await self._fetch_state(target.token_id_up)
                 if state:
-                    self._resolve_window(int(state["spot"] > self.strike))
+                    if (
+                        str(self.cfg.get("paper_resolution", "binary")).lower() == "mid"
+                        and state["best_bid"] is not None
+                        and state["best_ask"] is not None
+                    ):
+                        self._flatten_inventory_mid((state["best_bid"] + state["best_ask"]) / 2)
+                    else:
+                        self._resolve_window(int(state["spot"] > self.strike))
 
         adverse_rate = sum(1 for f in self.fills if f.adverse) / max(len(self.fills), 1)
         net = self.bankroll - float(self.cfg["initial_capital_usdc"])
