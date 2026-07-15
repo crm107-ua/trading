@@ -25,6 +25,7 @@ from polymarket.src.ai.nvidia_client import (
     pick_fast_models,
     robust_chat_completion,
 )
+from polymarket.src.ai.decision_engine import _extract_json
 
 
 def main() -> None:
@@ -40,19 +41,25 @@ def main() -> None:
             "Return ONLY JSON: {\"ok\":true,\"note\":\"nim_smoke\"}."
         ),
     }
-    resp = robust_chat_completion(messages=[prompt], preferred_models=roster, timeout_ms=1200, max_tokens=32)
+    resp = robust_chat_completion(messages=[prompt], preferred_models=roster, timeout_ms=3000, max_tokens=48)
+    parsed = _extract_json(resp.content) or {}
+    ok = parsed.get("ok") is True
     print(
         json.dumps(
             {
                 "model": resp.model,
                 "latency_ms": resp.latency_ms,
                 "content": resp.content,
+                "json_ok": ok,
+                "parsed": parsed,
                 "elapsed_ms_total": int((time.perf_counter() - t0) * 1000),
             },
             indent=2,
             ensure_ascii=False,
         )
     )
+    if not ok:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

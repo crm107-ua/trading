@@ -99,26 +99,37 @@ def cache_models(
     return payload
 
 
+def _is_chat_decision_model(model_id: str) -> bool:
+    """Exclude translation/vision/embed models from maker decision roster."""
+    ml = model_id.lower()
+    if any(x in ml for x in ("riva", "translate", "vision", "embed", "rerank", "guard")):
+        return False
+    if any(x in ml for x in ("51b", "70b", "80b", "405b", "90b", "253b")):
+        return False
+    return "instruct" in ml or ml.startswith("meta/llama-3")
+
+
 def pick_fast_models(model_ids: list[str]) -> list[str]:
     primary = primary_model_id()
+    eligible = [mid for mid in model_ids if _is_chat_decision_model(mid)]
     roster: list[str] = []
-    if primary in model_ids:
+    if primary in eligible:
         roster.append(primary)
     # Prefer NVIDIA instruct models when primary absent from catalog.
-    if primary not in model_ids:
-        for mid in model_ids:
+    if primary not in eligible:
+        for mid in eligible:
             ml = mid.lower()
             if mid.startswith("nvidia/") and "instruct" in ml and mid not in roster:
                 roster.append(mid)
-    for mid in model_ids:
+    for mid in eligible:
         if mid in roster:
             continue
         m = mid.lower()
         if any(x in m for x in ["1b", "3b", "4b", "7b", "8b"]) and "instruct" in m:
             roster.append(mid)
     if not roster:
-        roster = [mid for mid in model_ids if "instruct" in mid.lower()]
-    if primary not in roster and primary:
+        roster = [mid for mid in eligible if "instruct" in mid.lower()]
+    if primary not in roster and primary and _is_chat_decision_model(primary):
         roster.insert(0, primary)
 
     def key(x: str) -> tuple[int, str]:
