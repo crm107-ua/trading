@@ -1,7 +1,7 @@
 # Espacio de conclusiones (pre-resultados)
 
 **Fecha:** 2026-07-15  
-**Estado:** cerrado por adelantado — antes de ver el veredicto v1  
+**Estado:** **CERRADO ANTICIPADO (2026-07-15)** — ver `docs/CLOSURE.md`; #17 `ABORTADO` en registry  
 **Protocolo:** `config/eval_frozen.json`, `docs/PROTOCOL.md`
 
 Este documento es la tercera pieza del ritual del día D:

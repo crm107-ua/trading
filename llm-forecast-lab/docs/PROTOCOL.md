@@ -52,7 +52,7 @@ Precios CLOB (`prices-history`) solo para la muestra seleccionada; cache en `dat
 - **Cutoff documentado:** `trainingCutoff: 2023-12-01` — pretraining knowledge cutoff diciembre 2023 ([Meta Llama 3.3 model card](https://github.com/meta-llama/llama-models/blob/main/models/llama3_3/MODEL_CARD.md); verificado en [NVIDIA NIM catalog](https://docs.api.nvidia.com/nim/reference/meta-llama-3_3-70b-instruct)).
 - **Re-freeze 2026-07-15 (mediodía):** N canarios 25; tripwires de auditoría separados de `EVAL_INVALID` duro.
 - **Pipeline:** `naive` (prompt en `src/pipeline/forecasters/prompts/naive.txt`). **Provider:** NVIDIA (`--provider nvidia`). **Model:** `meta/llama-3.3-70b-instruct`. No confundir pipeline (estrategia de prompt) con provider.
-- **Forecast batch:** ~1.500 llamadas; ~20 s/llamada en 70B → **8–12 h** en serie (+ rate limits). Run desatendido nocturno; cache en disco + purga live al reiniciar.
+- **Forecast batch:** ~1.500 llamadas; ~20 s/llamada en 70B → **8–12 h** en serie (+ rate limits). Run desatendido nocturno. **Resume por defecto** (sin purga): filas en `forecasts` + cache `data/responses/`; relanzar salta existentes. Purga solo con `--fresh`.
 
 ## Ajustes post-primeros-resultados (2026-07-15, tras abort de run)
 
@@ -61,7 +61,7 @@ Precios CLOB (`prices-history`) solo para la muestra seleccionada; cache en `dat
 - **Qué pasó:** el primer run live devolvió `forecast_failed` al 100% con exit 0 silencioso (`forecasts: 0` en DB tras join sin snapshots; luego, con snapshots, fallo de `JSON.parse` porque `meta/llama-3.3-70b-instruct` envolvía el JSON en fences markdown `` ``` ``).
 - **Fix:** `parseForecastOutput()` en `src/pipeline/schema.ts` — extrae JSON de fences o del primer bloque `{…}` antes de validar con `ForecastOutputSchema`.
 - **Neutralidad al contenido:** el parser no altera *qué* probabilidad dice el modelo; solo la extrae. Las respuestas cacheadas en disco son intactas.
-- **Run relanzado:** purga live de filas `naive` stale + mismo comando `forecast` — reanudación vía cache (`promptHash`); solo paga API lo pendiente.
+- **Run relanzado (histórico):** purga live + mismo comando — reanudación vía cache. **Desde 2026-07-15 tarde:** resume sin purga; `--fresh` solo si quieres empezar de cero.
 - **Repair prompt insuficiente:** el diseño original reenviaba un repair si el schema fallaba, pero el repair también podía volver con fences; el parser directo cubre el caso que el repair no resolvía de forma fiable.
 - **Prompt endurecido (mismo día):** `naive.txt` — **solo instrucciones de formato** (JSON puro, sin fences); bloque *Calibration instructions* sin cambios. Ver diff en git (`naive.txt`). Cambio de `promptHash` → las entradas cacheadas del prompt viejo **no** se reutilizan; el relanzamiento con purga exige miss + nueva llamada por pregunta. Run actual: un solo promptHash en `forecasts.prompt_hash` (sin mezcla viejo/nuevo).
 - **sim-paper / sim-grid:** código existe (`sim-paper`, `sim-paper-grid` CLI) pero **fuera del bundle día D** — misma cuarentena conceptual que `sim_ganancias_eur.py`; exploración post-verdict con pre-reg propio (book, fricción real), no mid-only en el bundle del veredicto.
@@ -127,7 +127,25 @@ Cada report incluye `selection`: universo (modo, páginas, intersección), seed,
 
 **Por horizonte:** peor calibración/Brier vs mercado en T−24h; gap menor en T−7d (el mid de mercado lleva menos señal con más antelación). Si el resultado desafía esto, la primera hipótesis es bug o leakage, no genialidad del modelo.
 
+## Persistencia forecast (apagar PC)
+
+**Estado = `data/lab.sqlite` + `data/responses/`** (cache LLM). No hace falta copiar nada extra si esos archivos quedan en disco.
+
+Antes de apagar (opcional, snapshot legible):
+
+```powershell
+.\scripts\save_forecast_state.ps1
+```
+
+Tras reiniciar:
+
+```powershell
+.\scripts\resume_forecast.ps1
+```
+
+O manual: `node dist/cli.js forecast-status` y el mismo `forecast` **sin** `--fresh`.
+
 ## v1.1 candidatos (no antes del veredicto v1)
 
-- **`run_id` en `forecasts`/`scores`:** hoy la purga live es por `pipeline` (un solo run naive coexistiendo). Si v1.1 compara pipelines o re-runs en paralelo, añadir `run_id` — no antes.
-- Purga + cache LLM: re-lanzar `forecast --mode live` tras interrupción reutiliza respuestas cacheadas (`model` + `promptHash`); solo paga API lo pendiente.
+- **`run_id` en `forecasts`/`scores`:** hoy resume es por `pipeline` + `model_id` (un solo run naive coexistiendo). Si v1.1 compara pipelines o re-runs en paralelo, añadir `run_id` — no antes.
+- Resume + cache LLM: re-lanzar `forecast --mode live` tras interrupción salta filas existentes y reutiliza respuestas cacheadas (`model` + `promptHash`); solo paga API lo pendiente. `--fresh` borra filas `naive` en DB (no borra cache).

@@ -1,0 +1,13 @@
+{
+  "savedAt": "2026-07-15T16:40:22.415Z",
+  "pipeline": "naive",
+  "modelId": "meta/llama-3.3-70b-instruct",
+  "expected": 1471,
+  "total": 375,
+  "ok": 375,
+  "failed": 0,
+  "skippedExisting": 0,
+  "pct": 25.5,
+  "lastCreatedAt": "2026-07-15T16:39:04.441Z",
+  "resumeCommand": "node dist/cli.js forecast --pipeline naive --mode live --model meta/llama-3.3-70b-instruct --provider nvidia"
+}

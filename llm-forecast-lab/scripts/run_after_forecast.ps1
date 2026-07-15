@@ -12,8 +12,8 @@ $env:NODE_OPTIONS = "--max-old-space-size=16384"
 $total = node --input-type=module -e "import { openDb } from './dist/db.js'; console.log(openDb('live').prepare('select count(*) n from forecasts').get().n)"
 $expected = 1471
 if ([int]$total -lt $expected) {
-  Write-Host "Forecast incompleto: $total / $expected. Espera a que termine o reanuda con:"
-  Write-Host "  node dist/cli.js forecast --pipeline naive --mode live --model meta/llama-3.3-70b-instruct --provider nvidia"
+  Write-Host "Forecast incompleto: $total / $expected. Reanuda con:"
+  Write-Host "  .\scripts\resume_forecast.ps1"
   exit 1
 }
 

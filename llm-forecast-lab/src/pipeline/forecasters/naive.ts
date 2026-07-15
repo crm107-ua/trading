@@ -7,6 +7,7 @@ import { parseForecastOutput } from "../schema.js";
 import { loadModelsConfig } from "../../config.js";
 import { loadEvalFrozen } from "../../config.js";
 import { isEligibleForModel } from "../../integrity/leakage.js";
+import { persistForecastRunMeta } from "../forecast_progress.js";
 
 function readPromptTemplate(): string {
   const p = path.join(process.cwd(), "src", "pipeline", "forecasters", "prompts", "naive.txt");
@@ -28,12 +29,20 @@ export async function runNaiveForecast(args: {
   provider: string;
   pipeline: "naive";
   mode: "fixtures" | "live";
-}): Promise<{ forecasts: number; failed: number; cacheHitRate: number; purgedForecasts?: number }> {
+  /** Live only: delete pipeline rows before run. Default false — resume skips existing. */
+  fresh?: boolean;
+}): Promise<{
+  forecasts: number;
+  failed: number;
+  cacheHitRate: number;
+  skippedExisting?: number;
+  purgedForecasts?: number;
+}> {
   let purgedForecasts = 0;
-  if (args.mode === "live") {
+  if (args.mode === "live" && args.fresh) {
     purgedForecasts = purgePipelineForecasts(args.db, args.pipeline);
     if (purgedForecasts > 0) {
-      process.stderr.write(`forecast: purged ${purgedForecasts} stale ${args.pipeline} rows (live clean slate)\n`);
+      process.stderr.write(`forecast: purged ${purgedForecasts} stale ${args.pipeline} rows (live --fresh)\n`);
     }
   }
 
@@ -108,8 +117,23 @@ export async function runNaiveForecast(args: {
   let ok = 0;
   let failed = 0;
   let cacheHits = 0;
+  let skippedExisting = 0;
+
+  const existingIds = new Set(
+    (
+      args.db
+        .prepare("select id from forecasts where pipeline = @pipeline and model_id = @model_id")
+        .all({ pipeline: args.pipeline, model_id: args.modelId }) as Array<{ id: string }>
+    ).map((r) => r.id)
+  );
 
   for (const r of eligibleRows) {
+    const id = `${r.question_id}:${r.horizon_hours}:${args.pipeline}:${args.modelId}`;
+    if (existingIds.has(id)) {
+      skippedExisting += 1;
+      continue;
+    }
+
     const prompt = fillTemplate(tpl, {
       QUESTION_TEXT: r.question_text,
       DESCRIPTION: r.description ?? "",
@@ -166,7 +190,6 @@ export async function runNaiveForecast(args: {
       forecastFailed = 1;
     }
 
-    const id = `${r.question_id}:${r.horizon_hours}:${args.pipeline}:${args.modelId}`;
     ins.run({
       id,
       question_id: r.question_id,
@@ -188,18 +211,32 @@ export async function runNaiveForecast(args: {
     });
     if (forecastFailed) failed += 1;
     else ok += 1;
+    existingIds.add(id);
   }
 
   const total = ok + failed;
-  return {
+  const result = {
     forecasts: total,
     failed,
     cacheHitRate: total === 0 ? 0 : cacheHits / total,
+    skippedExisting,
     ...(args.mode === "live" ? { purgedForecasts } : {})
   };
+
+  if (args.mode === "live") {
+    persistForecastRunMeta(args.db, {
+      pipeline: args.pipeline,
+      modelId: args.modelId,
+      skippedExisting,
+      purgedForecasts,
+      fresh: Boolean(args.fresh)
+    });
+  }
+
+  return result;
 }
 
-/** Live eval has no run_id column — purge pipeline rows so partial runs cannot linger. */
+/** Live eval: delete all pipeline rows (--fresh only). */
 export function purgePipelineForecasts(db: Database.Database, pipeline: string): number {
   const row = db.prepare("select count(*) as n from forecasts where pipeline = ?").get(pipeline) as { n: number };
   db.prepare("delete from forecasts where pipeline = ?").run(pipeline);

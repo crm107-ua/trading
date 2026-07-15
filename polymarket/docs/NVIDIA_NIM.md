@@ -4,7 +4,7 @@
 
 NVIDIA Build (`integrate.api.nvidia.com`) alimenta el **motor de decisiones** del paper maker:
 
-- **No predice** resultados de mercados (eso es `llm-forecast-lab`, línea activa de eval).
+- **No predice** resultados de mercados — eval LLM naive (#17) **abortado** 2026-07-15; ver `llm-forecast-lab/docs/CLOSURE.md`.
 - **Sí decide** si publicar cotización, refrescar o pausar (`quote` / `cancel_replace` / `hold`).
 
 ## Configuración

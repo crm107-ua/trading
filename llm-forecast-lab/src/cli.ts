@@ -12,6 +12,7 @@ import { runViabilityCheck } from "./ingest/viability.js";
 import { LlmClient } from "./pipeline/client.js";
 import { DEFAULT_NIM_MODEL, DEFAULT_NIM_PROVIDER, DEFAULT_PIPELINE } from "./defaults.js";
 import { runNaiveForecast } from "./pipeline/forecasters/naive.js";
+import { writeForecastCheckpoint } from "./pipeline/forecast_progress.js";
 import { canarySupplementStatus, ingestCanarySupplement } from "./ingest/canary_ingest.js";
 import { computeSampleReport, intersectionEligibleQuestions } from "./selection/sample.js";
 import { scoreForecasts } from "./eval/score_run.js";
@@ -248,6 +249,7 @@ program
   .requiredOption("--mode <mode>", "fixtures|live")
   .option("--model <model>", "model id", DEFAULT_NIM_MODEL)
   .option("--provider <provider>", "provider name", DEFAULT_NIM_PROVIDER)
+  .option("--fresh", "live only: purge pipeline forecasts before run (default: resume, skip existing)")
   .option("--no-network", "deny network; require cache/fixtures", false)
   .action(async (opts) => {
     const mode = opts.mode === "live" ? "live" : "fixtures";
@@ -260,12 +262,27 @@ program
       modelId: opts.model,
       provider: opts.provider,
       pipeline: "naive",
-      mode
+      mode,
+      fresh: Boolean(opts.fresh)
     });
     db.prepare("insert into meta(k,v) values('cache_hit_rate',@v) on conflict(k) do update set v=excluded.v").run({
       v: String(rep.cacheHitRate)
     });
     console.log(JSON.stringify(rep, null, 2));
+  });
+
+program
+  .command("forecast-status")
+  .description("Checkpoint forecast progress (DB + output/forecast_state.json). Safe before shutdown.")
+  .option("--pipeline <pipeline>", "pipeline name", DEFAULT_PIPELINE)
+  .option("--model <model>", "model id", DEFAULT_NIM_MODEL)
+  .action((opts) => {
+    const db = openDb("live");
+    const progress = writeForecastCheckpoint(db, {
+      pipeline: opts.pipeline,
+      modelId: opts.model
+    });
+    console.log(JSON.stringify(progress, null, 2));
   });
 
 program
