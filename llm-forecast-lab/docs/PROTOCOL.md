@@ -63,7 +63,8 @@ Precios CLOB (`prices-history`) solo para la muestra seleccionada; cache en `dat
 - **Neutralidad al contenido:** el parser no altera *qué* probabilidad dice el modelo; solo la extrae. Las respuestas cacheadas en disco son intactas.
 - **Run relanzado:** purga live de filas `naive` stale + mismo comando `forecast` — reanudación vía cache (`promptHash`); solo paga API lo pendiente.
 - **Repair prompt insuficiente:** el diseño original reenviaba un repair si el schema fallaba, pero el repair también podía volver con fences; el parser directo cubre el caso que el repair no resolvía de forma fiable.
-- **Prompt endurecido (mismo día):** `naive.txt` pide JSON puro sin markdown — reduce fences en llamadas nuevas; no invalida cache previa.
+- **Prompt endurecido (mismo día):** `naive.txt` — **solo instrucciones de formato** (JSON puro, sin fences); bloque *Calibration instructions* sin cambios. Ver diff en git (`naive.txt`). Cambio de `promptHash` → las entradas cacheadas del prompt viejo **no** se reutilizan; el relanzamiento con purga exige miss + nueva llamada por pregunta. Run actual: un solo promptHash en `forecasts.prompt_hash` (sin mezcla viejo/nuevo).
+- **sim-paper / sim-grid:** código existe (`sim-paper`, `sim-paper-grid` CLI) pero **fuera del bundle día D** — misma cuarentena conceptual que `sim_ganancias_eur.py`; exploración post-verdict con pre-reg propio (book, fricción real), no mid-only en el bundle del veredicto.
 
 ### Timeout cliente LLM (2026-07-15)
 
