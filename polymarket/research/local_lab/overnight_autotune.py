@@ -25,6 +25,7 @@ from pathlib import Path
 from polymarket.research.local_lab.batch_paper_eval import run_batch
 from polymarket.src.ai.env_loader import load_repo_dotenv, require_nvidia_api_key
 from polymarket.src.notify.mailer import send_email
+from polymarket.src.notify.trial_email import build_simple_banner_email, build_trial_email
 
 load_repo_dotenv()
 
@@ -225,30 +226,16 @@ def _write_trial_report(trial_dir: Path, row: dict, cfg: dict, summary: dict) ->
     return md
 
 
-def _email_trial(row: dict, cfg: dict, run_id: str, trial_dir: Path) -> dict:
-    subject = (
-        f"[poly-overnight] T{row['trial']} {row.get('method')} "
-        f"WR={100*float(row.get('wr') or 0):.0f}% total={float(row.get('total') or 0):+.1f}€ "
-        f"{'HIT' if row.get('hit') else 'cont'}"
+def _email_trial(
+    row: dict, cfg: dict, run_id: str, trial_dir: Path, summary: dict | None = None
+) -> dict:
+    subject, body, html = build_trial_email(
+        row=row,
+        cfg=cfg,
+        run_id=run_id,
+        trial_dir=str(trial_dir),
+        summary=summary,
     )
-    body = (
-        f"Run: {run_id}\n"
-        f"Trial: {row.get('trial')} label={row.get('label')}\n"
-        f"Method: {row.get('method')}\n"
-        f"Batch: {row.get('sessions')} x {row.get('minutes')} min\n"
-        f"WR: {100*float(row.get('wr') or 0):.1f}%  wins={row.get('wins')} losses={row.get('losses')} "
-        f"traded={row.get('traded')}\n"
-        f"PnL total: {float(row.get('total') or 0):+.2f} EUR | avg {float(row.get('avg') or 0):+.2f}\n"
-        f"Saldo: {100 + float(row.get('total') or 0):.2f} EUR\n"
-        f"worst/best: {row.get('worst')} / {row.get('best_sess')}\n"
-        f"nets: {row.get('nets')}\n"
-        f"params: size={cfg.get('quote_size_shares')} mult={cfg.get('max_size_mult')} "
-        f"edge={cfg.get('min_edge')} max_loss={cfg.get('max_loss_usdc')} "
-        f"lock={cfg.get('lock_profit_usdc')}\n"
-        f"HIT={row.get('hit')}\n"
-        f"Informe: {trial_dir}\n"
-    )
-    html = f"<pre>{body}</pre>"
     return send_email(subject=subject, body_text=body, body_html=html)
 
 
@@ -280,9 +267,22 @@ async def main() -> int:
     (run_dir / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
     print(json.dumps(meta, indent=2), flush=True)
 
+    start_body = (
+        f"Overnight autotune started.\n"
+        f"run_dir={run_dir}\n"
+        f"max_trials={MAX_TRIALS}\n"
+        f"HIT targets: WR>={HIT_WR} avg>={HIT_AVG}€ total>={HIT_TOTAL}€ "
+        f"losses<={HIT_MAX_LOSSES} traded>={HIT_MIN_TRADED}\n"
+        f"Cada trial te llegará un email mobile con saldo, wins/losses y params.\n"
+    )
+    _, start_html = build_simple_banner_email(
+        title=f"START {run_id}",
+        body=start_body,
+    )
     send_email(
-        subject=f"[poly-overnight] START {run_id}",
-        body_text=f"Overnight autotune started.\nrun_dir={run_dir}\nmax_trials={MAX_TRIALS}\n",
+        subject=f"[poly] START overnight {run_id}",
+        body_text=start_body,
+        body_html=start_html,
     )
 
     seeds = _seed_configs()
@@ -373,8 +373,8 @@ async def main() -> int:
             flush=True,
         )
 
-        mail_r = _email_trial(row, cfg_disk, run_id, trial_dir)
-        print(f"mail: {mail_r}", flush=True)
+        mail_r = _email_trial(row, cfg_disk, run_id, trial_dir, summary=summary)
+        print(f"mail: {{'ok': {mail_r.get('ok')}, 'to': {mail_r.get('to')!r}}}", flush=True)
 
         sc = _score(row)
         freeze = CFG_DIR / "maker_demo_100_usd_overnight_best.json"
@@ -390,9 +390,16 @@ async def main() -> int:
             )
 
         if row["hit"]:
+            hit_body = (
+                f"TARGET HIT en trial {i}.\n"
+                f"total={total:+.2f} EUR  WR={100*(row['wr'] or 0):.1f}%\n"
+                f"best_cfg={freeze}\n\n{json.dumps(row, indent=2)}\n"
+            )
+            _, hit_html = build_simple_banner_email(title="TARGET HIT", body=hit_body)
             send_email(
-                subject=f"[poly-overnight] *** TARGET HIT *** T{i} total={total:+.1f}€",
-                body_text=f"HIT reached.\n{json.dumps(row, indent=2)}\nbest_cfg={freeze}\n",
+                subject=f"[poly] *** HIT *** T{i} total={total:+.1f}€",
+                body_text=hit_body,
+                body_html=hit_html,
             )
             print("\n*** OVERNIGHT TARGET HIT ***", flush=True)
             return 0
@@ -408,9 +415,12 @@ async def main() -> int:
         "best": best["row"] if best else None,
     }
     (run_dir / "final.json").write_text(json.dumps(fin, indent=2), encoding="utf-8")
+    fin_body = json.dumps(fin, indent=2) + "\n"
+    _, fin_html = build_simple_banner_email(title=f"FIN {run_id}", body=fin_body)
     send_email(
-        subject=f"[poly-overnight] FIN {run_id} trials={len(history)}",
-        body_text=json.dumps(fin, indent=2) + "\n",
+        subject=f"[poly] FIN overnight {run_id} trials={len(history)}",
+        body_text=fin_body,
+        body_html=fin_html,
     )
     print(json.dumps(fin, indent=2), flush=True)
     return 0 if best and best["row"].get("hit") else 1
