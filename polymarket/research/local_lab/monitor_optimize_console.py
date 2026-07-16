@@ -174,10 +174,11 @@ def _live_session_fallback(minutes: float = 4.5) -> tuple[str, float] | None:
     return None
 
 
-def render(log: Path) -> str:
+def render(log: Path, *, capital: float = 100.0) -> str:
     text = _read_text(log)
     lines: list[str] = []
     alive = _proc_alive()
+    base = float(capital)
     trials = list(TRIAL_RE.finditer(text))
     trial_n, trial_max, label = 1, 1, "hito_exact"
     if trials:
@@ -205,9 +206,27 @@ def render(log: Path) -> str:
     elif papers:
         minutes_each = float(papers[-1].group(3))
 
-    # Detect label from Paper OUT / demo if no OPT header
-    if "maker_demo_100_usd_margin_best" in text or "margin_max_v3" in text:
+    # Detect config from log name / path mentions
+    log_name = log.name.lower()
+    cfg_tag = "unknown"
+    if "v7" in log_name or "lock" in log_name or "margin_v7" in text:
+        label = "margin_v7_lock"
+        cfg_tag = "v7_lock"
+    elif "v6" in log_name or "10m" in log_name or "margin_v6" in text:
+        label = "margin_v6_10m"
+        cfg_tag = "v6_10m"
+    elif "v5" in log_name or "asymmetric" in log_name or "margin_v5" in text:
+        label = "margin_v5_asymmetric"
+        cfg_tag = "v5_asymmetric"
+    elif "v4" in log_name or "cut_tail" in log_name or "margin_v4" in text:
+        label = "margin_v4_cut_tail"
+        cfg_tag = "v4_cut_tail"
+    elif "maker_demo_100_usd_margin_best" in text or "margin_max_v3" in text or "hito_exact" in log_name:
         label = "margin_max_v3_exact"
+        cfg_tag = "hito_exact"
+    elif "profit" in log_name:
+        label = "profit_dna"
+        cfg_tag = "profit"
 
     sess_done = len(nets)
     sess_frac = 0.0
@@ -235,27 +254,55 @@ def render(log: Path) -> str:
     wins = sum(1 for n in nets if n > 0)
     losses = sum(1 for n in nets if n < 0)
     total = sum(nets)
+    saldo = base + total
     avg = total / len(nets) if nets else 0.0
-    wr = wins / len(nets) if nets else 0.0
+    traded = wins + losses
+    wr = wins / traded if traded else 0.0
 
     enc = "utf-16" if log.is_file() and log.read_bytes()[:2] in (b"\xff\xfe", b"\xfe\xff") else "utf-8"
     mtime = time.strftime("%H:%M:%S", time.localtime(log.stat().st_mtime)) if log.is_file() else "?"
     size_kb = (log.stat().st_size / 1024.0) if log.is_file() else 0.0
 
     lines.append("=" * 58)
-    lines.append("  MONITOR optimize_oos_t1 | paper 100 EUR | tiempo real")
+    lines.append(f"  MONITOR paper | base {base:.0f} EUR | tiempo real")
     lines.append("=" * 58)
     lines.append(f"log: {log.name}   proceso: {'VIVO' if alive else 'PARADO'}")
     lines.append(f"log_enc={enc}  size={size_kb:.1f}KB  mtime={mtime}")
     lines.append(f"trial: {trial_n}/{trial_max}  label: {label}")
-    lines.append(f"batch: {sess_total} x {minutes_each:g} min | config hito margin_max_v3")
+    lines.append(f"batch: {sess_total} x {minutes_each:g} min | config {cfg_tag}")
     if size_m:
         lines.append(
             f"params: size={size_m.group(1)} mult={size_m.group(2)} edge={size_m.group(3)} "
             f"max_loss={size_m.group(4)} kill={size_m.group(5)}"
         )
-    else:
+    elif cfg_tag == "v7_lock":
+        lines.append(
+            "params: size=30 cap=36 | lock +1.5EUR | no pyramid | max_loss=2.5 | "
+            "mid 0.35-0.65 | 10min | streak_stop=2"
+        )
+    elif cfg_tag == "v6_10m":
+        lines.append(
+            "params: size=42 mult=2.2 cap=55 | max_loss=3.5 kill=7 | "
+            "10min | mid 0.28-0.72 | streak_stop=2 | NIM"
+        )
+    elif cfg_tag == "v5_asymmetric":
+        lines.append(
+            "params: size=48 mult=2.6 cap=70 TP alto | max_loss=5 kill=9 | "
+            "let winners run | streak_stop=2 | NIM"
+        )
+    elif cfg_tag == "v4_cut_tail":
+        lines.append(
+            "params: size=32 mult=2.0 edge=0.032 max_loss=3.5 kill=6.0 | "
+            "streak_stop=2 | NIM exit | mid 0.24-0.76"
+        )
+    elif cfg_tag == "hito_exact":
         lines.append("params: size=42 mult=3.0 edge=0.03 max_loss=6.0 (hito exact)")
+    else:
+        lines.append("params: (ver config del log)")
+    lines.append("")
+    lines.append(
+        f"SALDO  {saldo:.2f} EUR   = base {base:.0f}  +  PnL {total:+.2f}"
+    )
     lines.append("")
     lines.append(f"GLOBAL  [{_bar(g_pct)}] {g_pct:5.1f}%   ETA ~{eta_g:.0f} min")
     lines.append(f"BATCH   [{_bar(t_pct)}] {t_pct:5.1f}%   ETA ~{eta_t:.0f} min")
@@ -263,17 +310,20 @@ def render(log: Path) -> str:
     lines.append("")
     lines.append("-- Ganancias (batch) --")
     if nets:
+        running = base
         for i, n in enumerate(nets, 1):
+            running += n
             tag = "WIN " if n > 0 else ("LOSS" if n < 0 else "FLAT")
-            lines.append(f"  S{i}: {tag}  {n:+.2f} EUR")
+            lines.append(f"  S{i}: {tag}  {n:+.2f} EUR  -> saldo {running:.2f}")
         lines.append(
-            f"  TOTAL {total:+.2f} EUR   avg {avg:+.2f} EUR   WR {100*wr:.0f}%  ({wins}W/{losses}L)"
+            f"  PnL {total:+.2f} EUR   avg {avg:+.2f} EUR   WR {100*wr:.0f}%  ({wins}W/{losses}L)"
         )
+        lines.append(f"  SALDO TOTAL  {saldo:.2f} EUR  ({base:.0f} base + ganado/perdido)")
         lines.append("  grafico nets:")
         for row in _spark(nets):
             lines.append(f"    {row}")
     else:
-        lines.append("  (sin sesiones cerradas aun)")
+        lines.append(f"  (sin sesiones cerradas aun)  SALDO = {base:.2f} EUR")
     if wr_hits:
         last = wr_hits[-1]
         lines.append("")
@@ -281,9 +331,26 @@ def render(log: Path) -> str:
             f"ultimo trial cerrado: WR={last.group(1)}% avg={last.group(2)} total={last.group(3)}"
         )
     lines.append("")
-    lines.append(
-        "targets: replay hito/OOS-T1 | WR ref 50-75% | avg ref +15 | size=42 | sin filtro mid"
-    )
+    if cfg_tag == "v7_lock":
+        lines.append(
+            "targets: LOCK wins early | no pyramid losers | WR>=50% | stop 2 losses"
+        )
+    elif cfg_tag == "v6_10m":
+        lines.append(
+            "targets: 10min fills | mas EUR | WR>=50% | max_loss 3.5 | stop 2 losses"
+        )
+    elif cfg_tag == "v5_asymmetric":
+        lines.append(
+            "targets: mas EUR/win | WR>=50% | winners run | stop 2 losses | riesgo↑"
+        )
+    elif cfg_tag == "v4_cut_tail":
+        lines.append(
+            "targets: WR>=50% | cola corta | stop tras 2 losses seguidas | NIM assist"
+        )
+    else:
+        lines.append(
+            "targets: replay hito/OOS-T1 | WR ref 50-75% | avg ref +15"
+        )
     lines.append(f"actualizado: {time.strftime('%H:%M:%S')}")
     return "\n".join(lines)
 
@@ -292,6 +359,12 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--log", default=None, help="nombre o path del log (default: mas reciente)")
     ap.add_argument("--watch", type=float, default=2.0, help="segundos entre refrescos (0=una vez)")
+    ap.add_argument(
+        "--capital",
+        type=float,
+        default=100.0,
+        help="capital base paper en EUR (default 100); SALDO = capital + suma nets",
+    )
     args = ap.parse_args()
     log = _pick_log(args.log)
     try:
@@ -300,16 +373,16 @@ def main() -> int:
         pass
     os.system("")
     if args.watch <= 0:
-        print(render(log))
+        print(render(log, capital=args.capital))
         return 0
     prev = ""
     try:
         # Sin borrar pantalla: no parpadea. Solo imprime cuando cambia algo.
-        print(render(log))
+        print(render(log, capital=args.capital))
         print("\n--- sin parpadeo; Ctrl+C para salir ---\n")
         while True:
             time.sleep(max(args.watch, 3.0))
-            cur = render(log)
+            cur = render(log, capital=args.capital)
             if cur == prev:
                 continue
             prev = cur

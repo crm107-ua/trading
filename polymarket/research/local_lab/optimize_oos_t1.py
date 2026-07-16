@@ -58,7 +58,25 @@ def _t1_frozen() -> dict:
 
 
 def _t1_opt() -> dict:
-    """Exact hito margin_max_v3 / OOS T1 DNA (la que hizo +$126)."""
+    """v5 asimétrico: size↑ + TP alto (más €) + corte de rojos/rachas."""
+    p = CFG_DIR / "maker_demo_100_usd_margin_v5_asymmetric.json"
+    if not p.exists():
+        p = CFG_DIR / "maker_demo_100_usd_margin_v4_cut_tail.json"
+    if p.exists():
+        cfg = json.loads(p.read_text(encoding="utf-8"))
+        cfg.update(
+            {
+                "paper_touch_fill_every_n": 0,
+                "paper_pnl_mode": "",
+                "flatten_after_fill": False,
+                "mean_reversion_exit": False,
+                "exit_hazard_per_s": 0,
+                "fair_fade_exit": True,
+                "initial_capital_usdc": 100.0,
+                "currency_label": "EUR",
+            }
+        )
+        return cfg
     return _t1_frozen()
 
 

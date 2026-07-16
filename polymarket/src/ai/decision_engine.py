@@ -262,10 +262,10 @@ def _build_exit_messages(snapshot: dict[str, Any]) -> list[dict[str, str]]:
                 "You manage an open Polymarket maker inventory to MAXIMIZE session PnL.\n"
                 "Output ONLY JSON: "
                 '{"action":"hold|flatten","confidence":0..1,"reason":"..."}\n'
-                "HOLD = let take-profit / fair edge continue working.\n"
-                "FLATTEN = exit now at mid (cut loser early OR lock a win if edge faded).\n"
-                "Prefer FLATTEN if unrealized is red and fair no longer favors the position.\n"
-                "Prefer HOLD if unrealized is green/flat and fair still supports the side."
+                "Bias: LOCK WINS EARLY. Do not let green turn red.\n"
+                "If unrealized_pnl_usdc >= 1 → FLATTEN (bank it).\n"
+                "If unrealized_pnl_usdc < 0 → FLATTEN unless fair strongly favors hold.\n"
+                "HOLD only if flat/tiny green and fair clearly supports the side."
             ),
         },
         {
@@ -276,7 +276,7 @@ def _build_exit_messages(snapshot: dict[str, Any]) -> list[dict[str, str]]:
 
 
 def _rule_profit_exit(snapshot: dict[str, Any]) -> Decision | None:
-    """Corta perdedores rápido / bloquea hold tóxico sin esperar al LLM."""
+    """Lock verdes pronto; cortar rojos; NUNCA 'dejar correr' tras ver PnL+ (v6 falló así)."""
     inv = float(snapshot.get("inventory_shares") or 0)
     if abs(inv) < 1e-9:
         return None
@@ -285,18 +285,27 @@ def _rule_profit_exit(snapshot: dict[str, Any]) -> Decision | None:
     mid = float(snapshot.get("mark_price") or 0.5)
     avg = float(snapshot.get("avg_entry") or mid)
     t_rem = snapshot.get("time_remaining_s")
+    lock_at = float(snapshot.get("lock_profit_usdc") or 1.25)
+    # Asegurar ganancia pequeña/media — no devolverla al mercado
+    if unreal >= lock_at:
+        return Decision("flatten", "rule_lock_green", 1.0, "rule")
+    # Verde en mid vs entry (≥2¢) → cobrar
+    if inv > 0 and mid >= avg + 0.025 and unreal > 0:
+        return Decision("flatten", "rule_lock_tp_mid", 1.0, "rule")
+    if inv < 0 and mid <= avg - 0.025 and unreal > 0:
+        return Decision("flatten", "rule_lock_tp_mid", 1.0, "rule")
     # Rojo + fair en contra → flatten ya
-    if inv > 0 and unreal <= -0.25 and fair < mid - 0.005:
+    if inv > 0 and unreal <= -0.15 and fair < mid - 0.002:
         return Decision("flatten", "rule_cut_red_fade", 1.0, "rule")
-    if inv < 0 and unreal <= -0.25 and fair > mid + 0.005:
+    if inv < 0 and unreal <= -0.15 and fair > mid + 0.002:
         return Decision("flatten", "rule_cut_red_fade", 1.0, "rule")
-    # Fair cruzó el entry en contra
-    if inv > 0 and fair <= avg - 0.025:
+    if inv > 0 and fair <= avg - 0.015:
         return Decision("flatten", "rule_fair_against", 1.0, "rule")
-    if inv < 0 and fair >= avg + 0.025:
+    if inv < 0 and fair >= avg + 0.015:
         return Decision("flatten", "rule_fair_against", 1.0, "rule")
-    # Ventana muriendo en rojo → no esperar resolución
-    if t_rem is not None and float(t_rem) <= 55 and unreal < -0.05:
+    if unreal <= -2.0:
+        return Decision("flatten", "rule_hard_red", 1.0, "rule")
+    if t_rem is not None and float(t_rem) <= 70 and unreal <= 0:
         return Decision("flatten", "rule_late_cut", 1.0, "rule")
     return None
 

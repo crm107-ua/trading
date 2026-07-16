@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,6 +29,10 @@ async def run_batch(
     cfg_path = resolve_config_path(config)
     stamp = datetime.now(timezone.utc).strftime("%H%M%S")
     results: list[dict] = []
+    # Tras N losses seguidas (sesiones con fills), para el batch: evita 5 rojas seguidas.
+    streak_stop = int(os.getenv("BATCH_STOP_AFTER_LOSS_STREAK", "2") or 2)
+    consec_losses = 0
+    stopped_early = False
     for i in range(sessions):
         sid = f"v2_{stamp}_{i+1:02d}"
         print(f"\n=== session {i+1}/{sessions} ({minutes} min) ===", flush=True)
@@ -50,6 +55,19 @@ async def run_batch(
             f"  net={rep['net_session_usdc']:+.2f} fills={rep['fills']} adverse={rep['adverse_rate']}",
             flush=True,
         )
+        if int(rep.get("fills") or 0) > 0:
+            if float(rep["net_session_usdc"]) < 0:
+                consec_losses += 1
+            elif float(rep["net_session_usdc"]) > 0:
+                consec_losses = 0
+            if streak_stop > 0 and consec_losses >= streak_stop:
+                print(
+                    f"\n*** BATCH STREAK KILL: {consec_losses} losses seguidas "
+                    f"(limite={streak_stop}) — no seguir cavando ***",
+                    flush=True,
+                )
+                stopped_early = True
+                break
 
     wins = sum(1 for r in results if r["net"] > 0)
     breakeven = sum(1 for r in results if r["net"] == 0)
@@ -77,6 +95,8 @@ async def run_batch(
             round(sum(r["net"] for r in with_fills) / len(with_fills), 4) if with_fills else 0
         ),
         "results": results,
+        "stopped_early_streak": stopped_early,
+        "loss_streak_limit": streak_stop,
         "verdict_binding": False,
         "warning": (
             "Lab local — win_rate no garantiza PnL real. "

@@ -338,6 +338,13 @@ class PaperSession:
                 adverse = True
         if adverse and self.cfg.get("reject_adverse_fills", True):
             return
+        # No piramidar: v6 perdió apilando 2–3 bids en la misma dirección.
+        if self.cfg.get("no_pyramid_entries", True) and abs(self.inventory_shares) > 1e-9:
+            increasing = (side == "bid" and self.inventory_shares > 0) or (
+                side == "ask" and self.inventory_shares < 0
+            )
+            if increasing:
+                return
         self.spread_total += spread_cap
         self.adverse_total += spread_cap if adverse else 0.0
         inv_before = self.inventory_shares
@@ -570,6 +577,9 @@ class PaperSession:
                                 "spot": state["spot"],
                                 "best_bid": state["best_bid"],
                                 "best_ask": state["best_ask"],
+                                "lock_profit_usdc": float(
+                                    self.cfg.get("lock_profit_usdc", 1.25) or 1.25
+                                ),
                             },
                             latency_budget_ms=2500,
                         )
