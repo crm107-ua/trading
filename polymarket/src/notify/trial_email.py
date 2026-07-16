@@ -21,6 +21,16 @@ def _pct(v: Any) -> str:
         return "—"
 
 
+_CAT_COLORS = {
+    "ELITE": "#0f766e",
+    "PROMISING": "#047857",
+    "MARGINAL": "#a16207",
+    "WEAK": "#b45309",
+    "STARVED": "#57534e",
+    "REJECT": "#b91c1c",
+}
+
+
 def strategy_card_html(rank: int, s: dict[str, Any]) -> str:
     total = float(s.get("total") or 0)
     col = "#047857" if total > 0 else ("#b91c1c" if total < 0 else "#57534e")
@@ -28,7 +38,11 @@ def strategy_card_html(rank: int, s: dict[str, Any]) -> str:
     p = s.get("params") or {}
     name = escape(str(s.get("name") or s.get("label") or "estrategia"))
     method = escape(str(s.get("method") or "—"))
+    family = escape(str(s.get("family") or "—"))
+    cat = str(s.get("category") or "—")
+    cat_bg = _CAT_COLORS.get(cat, "#57534e")
     tag = escape(str(s.get("tag") or ""))
+    hyp = escape(str(s.get("hypothesis") or "")[:220])
     return f"""
     <div style="border:1px solid #e7e5e4;border-radius:14px;padding:12px;margin:0 0 10px 0;background:#fafaf9;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
@@ -36,9 +50,14 @@ def strategy_card_html(rank: int, s: dict[str, Any]) -> str:
           border-radius:999px;background:#1c1917;color:#fff;font-size:13px;font-weight:800;">{medal}</span>
         <div style="font-size:15px;font-weight:800;color:#1c1917;line-height:1.25;">{name}</div>
       </div>
+      <div style="margin-bottom:8px;">
+        <span style="display:inline-block;padding:2px 8px;border-radius:999px;background:{cat_bg};
+          color:#fff;font-size:11px;font-weight:700;">{escape(cat)}</span>
+      </div>
       <div style="font-size:12px;color:#78716c;margin-bottom:8px;">
         <strong>ID</strong> {tag}<br/>
-        <strong>Método</strong> {method}
+        <strong>Familia</strong> {family}
+        · <strong>Método</strong> {method}
         · Trial {escape(str(s.get('trial')))}
         · {escape(str(s.get('sessions')))}×{escape(str(s.get('minutes')))} min
       </div>
@@ -61,7 +80,10 @@ def strategy_card_html(rank: int, s: dict[str, Any]) -> str:
         TP={escape(str(p.get('tp_min')))}–{escape(str(p.get('tp_max')))}
         entries={escape(str(p.get('entries')))}
       </div>
-      <div style="font-size:11px;color:#a8a29e;margin-top:6px;word-break:break-all;">
+      <div style="font-size:11px;color:#57534e;margin-top:6px;line-height:1.4;">
+        <strong>Hipótesis</strong> {hyp or "—"}
+      </div>
+      <div style="font-size:11px;color:#a8a29e;margin-top:4px;word-break:break-all;">
         nets={escape(str(s.get('nets')))}
       </div>
     </div>
@@ -93,15 +115,19 @@ def build_trial_email(
     badge_bg = "#0f766e" if hit or total > 0 else ("#b91c1c" if total < 0 else "#57534e")
     top10 = list(top10 or [])
 
+    category = str(row.get("category") or "—")
     subject = (
-        f"[poly] T{row.get('trial')} {badge} · "
+        f"[poly] T{row.get('trial')} [{category}] {badge} · "
         f"{_f(total)}€ · WR {_pct(wr)} · saldo {saldo:.2f}€"
     )
 
     lines = [
         f"POLY OVERNIGHT — Trial {row.get('trial')} — {badge}",
         f"Run: {run_id}",
-        f"Estrategia: {row.get('label')} | Método: {row.get('method')}",
+        f"Familia: {row.get('family')} | Método: {row.get('method')} | Cat: {category}",
+        f"Diagnóstico: {row.get('diagnosis')} — {row.get('diagnosis_detail')}",
+        f"Hipótesis: {row.get('hypothesis')}",
+        f"Por qué: {row.get('rationale')}",
         f"Batch: {sessions} x {minutes} min",
         "",
         f"SALDO: {saldo:.2f} EUR  (base 100 + {_f(total)})",
@@ -184,14 +210,29 @@ def build_trial_email(
         Poly Overnight · Paper
       </div>
       <div style="font-size:22px;font-weight:800;margin-top:6px;line-height:1.25;">
-        Trial {escape(str(row.get('trial')))} · {escape(str(row.get('method') or ''))}
+        Trial {escape(str(row.get('trial')))} · {escape(str(row.get('family') or row.get('method') or ''))}
       </div>
       <div style="font-size:13px;opacity:0.85;margin-top:4px;">
-        {escape(str(row.get('label') or ''))}
+        {escape(str(row.get('method') or ''))} · {escape(str(row.get('label') or ''))}
       </div>
       <div style="margin-top:10px;">
         <span style="display:inline-block;padding:6px 12px;border-radius:999px;background:{badge_bg};
           color:#fff;font-size:13px;font-weight:700;">{escape(badge)}</span>
+        <span style="display:inline-block;margin-left:6px;padding:6px 12px;border-radius:999px;
+          background:{_CAT_COLORS.get(category, '#57534e')};color:#fff;font-size:13px;font-weight:700;">
+          {escape(category)}</span>
+      </div>
+    </div>
+
+    <div style="background:#fff;border-radius:16px;padding:16px;margin-bottom:12px;">
+      <div style="font-size:13px;font-weight:700;color:#44403c;margin-bottom:8px;">Hipótesis de esta prueba</div>
+      <div style="font-size:14px;line-height:1.45;color:#292524;margin-bottom:10px;">
+        {escape(str(row.get('hypothesis') or '—'))}
+      </div>
+      <div style="font-size:12px;color:#78716c;line-height:1.4;">
+        <strong>Diagnóstico</strong> {escape(str(row.get('diagnosis') or '—'))}:
+        {escape(str(row.get('diagnosis_detail') or ''))}<br/>
+        <strong>Por qué se eligió</strong> {escape(str(row.get('rationale') or '—'))}
       </div>
     </div>
 
