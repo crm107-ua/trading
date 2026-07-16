@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plantillas HTML mobile-first para informes overnight."""
+"""Plantillas HTML mobile-first para informes overnight (+ Top 10)."""
 
 from __future__ import annotations
 
@@ -21,6 +21,53 @@ def _pct(v: Any) -> str:
         return "—"
 
 
+def strategy_card_html(rank: int, s: dict[str, Any]) -> str:
+    total = float(s.get("total") or 0)
+    col = "#047857" if total > 0 else ("#b91c1c" if total < 0 else "#57534e")
+    medal = {1: "1", 2: "2", 3: "3"}.get(rank, str(rank))
+    p = s.get("params") or {}
+    name = escape(str(s.get("name") or s.get("label") or "estrategia"))
+    method = escape(str(s.get("method") or "—"))
+    tag = escape(str(s.get("tag") or ""))
+    return f"""
+    <div style="border:1px solid #e7e5e4;border-radius:14px;padding:12px;margin:0 0 10px 0;background:#fafaf9;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <span style="display:inline-block;min-width:28px;height:28px;line-height:28px;text-align:center;
+          border-radius:999px;background:#1c1917;color:#fff;font-size:13px;font-weight:800;">{medal}</span>
+        <div style="font-size:15px;font-weight:800;color:#1c1917;line-height:1.25;">{name}</div>
+      </div>
+      <div style="font-size:12px;color:#78716c;margin-bottom:8px;">
+        <strong>ID</strong> {tag}<br/>
+        <strong>Método</strong> {method}
+        · Trial {escape(str(s.get('trial')))}
+        · {escape(str(s.get('sessions')))}×{escape(str(s.get('minutes')))} min
+      </div>
+      <div style="font-size:14px;font-weight:700;color:{col};margin-bottom:6px;">
+        PnL {_f(total)} € · WR {_pct(s.get('wr'))} · avg {_f(s.get('avg'))} €
+      </div>
+      <div style="font-size:12px;color:#44403c;line-height:1.45;">
+        {int(s.get('wins') or 0)}W / {int(s.get('losses') or 0)}L
+        · traded {escape(str(s.get('traded')))}
+        · best {_f(s.get('best_sess'))} / worst {_f(s.get('worst'))}<br/>
+        <strong>Params</strong>
+        size={escape(str(p.get('size')))}
+        mult={escape(str(p.get('mult')))}
+        cap={escape(str(p.get('cap')))}
+        edge={escape(str(p.get('edge')))}
+        max_loss={escape(str(p.get('max_loss')))}
+        kill={escape(str(p.get('kill')))}
+        lock={escape(str(p.get('lock')))}
+        mid={escape(str(p.get('mid_lo')))}–{escape(str(p.get('mid_hi')))}
+        TP={escape(str(p.get('tp_min')))}–{escape(str(p.get('tp_max')))}
+        entries={escape(str(p.get('entries')))}
+      </div>
+      <div style="font-size:11px;color:#a8a29e;margin-top:6px;word-break:break-all;">
+        nets={escape(str(s.get('nets')))}
+      </div>
+    </div>
+    """
+
+
 def build_trial_email(
     *,
     row: dict[str, Any],
@@ -28,6 +75,7 @@ def build_trial_email(
     run_id: str,
     trial_dir: str,
     summary: dict[str, Any] | None = None,
+    top10: list[dict[str, Any]] | None = None,
 ) -> tuple[str, str, str]:
     """Returns (subject, text, html)."""
     total = float(row.get("total") or 0)
@@ -43,24 +91,23 @@ def build_trial_email(
     hit = bool(row.get("hit"))
     badge = "HIT OBJETIVO" if hit else ("EN VERDE" if total > 0 else ("EN ROJO" if total < 0 else "FLAT"))
     badge_bg = "#0f766e" if hit or total > 0 else ("#b91c1c" if total < 0 else "#57534e")
+    top10 = list(top10 or [])
 
     subject = (
         f"[poly] T{row.get('trial')} {badge} · "
         f"{_f(total)}€ · WR {_pct(wr)} · saldo {saldo:.2f}€"
     )
 
-    # Plain text fallback
     lines = [
         f"POLY OVERNIGHT — Trial {row.get('trial')} — {badge}",
         f"Run: {run_id}",
-        f"Label: {row.get('label')} | Method: {row.get('method')}",
+        f"Estrategia: {row.get('label')} | Método: {row.get('method')}",
         f"Batch: {sessions} x {minutes} min",
         "",
         f"SALDO: {saldo:.2f} EUR  (base 100 + {_f(total)})",
         f"PnL total: {_f(total)} EUR | avg {_f(avg)} EUR",
         f"WR: {_pct(wr)}  ({wins}W / {losses}L)  traded={traded}/{sessions}",
         f"Mejor sesión: {_f(row.get('best_sess'))} | Peor: {_f(row.get('worst'))}",
-        f"Streak kill: {row.get('stopped_early_streak')}",
         "",
         "SESIONES:",
     ]
@@ -72,21 +119,21 @@ def build_trial_email(
         "PARAMS:",
         f"  size={cfg.get('quote_size_shares')} mult={cfg.get('max_size_mult')} "
         f"cap={cfg.get('max_quote_size_shares')}",
-        f"  edge={cfg.get('min_edge')} soft={cfg.get('soft_edge')} hard={cfg.get('hard_edge')}",
-        f"  max_loss={cfg.get('max_loss_usdc')} kill={cfg.get('session_kill_net_usdc')} "
+        f"  edge={cfg.get('min_edge')} max_loss={cfg.get('max_loss_usdc')} "
         f"lock={cfg.get('lock_profit_usdc')}",
-        f"  mid=[{cfg.get('min_quote_mid')}-{cfg.get('max_quote_mid')}] "
-        f"entries={cfg.get('max_entry_fills')} TP={cfg.get('min_take_profit')}-{cfg.get('max_take_profit')}",
-        f"  no_pyramid={cfg.get('no_pyramid_entries')} fair_fade={cfg.get('fair_fade_exit')}",
         "",
-        f"Informe disco: {trial_dir}",
-        "Paper lab — no on-chain.",
+        "=== TOP 10 ESTRATEGIAS (acumulado) ===",
     ]
-    if summary:
-        lines.append(f"stopped_early_streak(summary)={summary.get('stopped_early_streak')}")
+    for i, s in enumerate(top10[:10], 1):
+        p = s.get("params") or {}
+        lines.append(
+            f"{i}. [{s.get('tag')}] {s.get('name')} | method={s.get('method')} | "
+            f"PnL={_f(s.get('total'))} WR={_pct(s.get('wr'))} avg={_f(s.get('avg'))} | "
+            f"size={p.get('size')} edge={p.get('edge')} max_loss={p.get('max_loss')} lock={p.get('lock')}"
+        )
+    lines += ["", f"Informe disco: {trial_dir}", "Paper lab — no on-chain."]
     body_text = "\n".join(lines)
 
-    # Session cards HTML
     sess_blocks: list[str] = []
     running = 100.0
     for i, n in enumerate(nets, 1):
@@ -117,6 +164,10 @@ def build_trial_email(
             '<tr><td colspan="3" style="padding:14px;color:#78716c;">Sin sesiones cerradas</td></tr>'
         )
 
+    top_html = "".join(strategy_card_html(i, s) for i, s in enumerate(top10[:10], 1))
+    if not top_html:
+        top_html = '<div style="padding:12px;color:#78716c;font-size:14px;">Aún no hay ranking.</div>'
+
     html = f"""\
 <!DOCTYPE html>
 <html lang="es">
@@ -135,18 +186,19 @@ def build_trial_email(
       <div style="font-size:22px;font-weight:800;margin-top:6px;line-height:1.25;">
         Trial {escape(str(row.get('trial')))} · {escape(str(row.get('method') or ''))}
       </div>
+      <div style="font-size:13px;opacity:0.85;margin-top:4px;">
+        {escape(str(row.get('label') or ''))}
+      </div>
       <div style="margin-top:10px;">
         <span style="display:inline-block;padding:6px 12px;border-radius:999px;background:{badge_bg};
           color:#fff;font-size:13px;font-weight:700;">{escape(badge)}</span>
       </div>
     </div>
 
-    <div style="background:#fff;border-radius:16px;padding:16px;margin-bottom:12px;
-      box-shadow:0 1px 2px rgba(0,0,0,0.04);">
-      <div style="font-size:13px;color:#78716c;margin-bottom:4px;">Saldo paper</div>
-      <div style="font-size:36px;font-weight:800;line-height:1.1;color:#1c1917;">
-        {saldo:.2f} <span style="font-size:18px;font-weight:600;">EUR</span>
-      </div>
+    <div style="background:#fff;border-radius:16px;padding:16px;margin-bottom:12px;">
+      <div style="font-size:13px;color:#78716c;margin-bottom:4px;">Saldo paper (esta prueba)</div>
+      <div style="font-size:36px;font-weight:800;line-height:1.1;">{saldo:.2f}
+        <span style="font-size:18px;font-weight:600;">EUR</span></div>
       <div style="margin-top:6px;font-size:15px;color:{'#047857' if total>=0 else '#b91c1c'};font-weight:700;">
         PnL {_f(total)} EUR · base 100
       </div>
@@ -165,9 +217,7 @@ def build_trial_email(
           <div style="background:#fff;border-radius:14px;padding:14px;">
             <div style="font-size:12px;color:#78716c;">Avg / sesión</div>
             <div style="font-size:24px;font-weight:800;color:{'#047857' if avg>=0 else '#b91c1c'};">
-              {escape(_f(avg))}
-            </div>
-            <div style="font-size:13px;color:#57534e;">EUR</div>
+              {escape(_f(avg))}</div>
           </div>
         </td>
       </tr>
@@ -202,7 +252,7 @@ def build_trial_email(
     </div>
 
     <div style="background:#fff;border-radius:16px;padding:16px;margin-bottom:12px;">
-      <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:#44403c;">Parámetros</div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:#44403c;">Parámetros de esta prueba</div>
       <div style="font-size:14px;line-height:1.55;color:#292524;">
         <div><strong>Size</strong> {escape(str(cfg.get('quote_size_shares')))}
           · mult {escape(str(cfg.get('max_size_mult')))}
@@ -215,10 +265,17 @@ def build_trial_email(
           · lock {escape(str(cfg.get('lock_profit_usdc')))} €</div>
         <div><strong>Mid</strong> {escape(str(cfg.get('min_quote_mid')))}–{escape(str(cfg.get('max_quote_mid')))}
           · entries {escape(str(cfg.get('max_entry_fills')))}</div>
-        <div><strong>TP</strong> {escape(str(cfg.get('min_take_profit')))}–{escape(str(cfg.get('max_take_profit')))}
-          · pyramid off={escape(str(cfg.get('no_pyramid_entries')))}</div>
-        <div><strong>Label</strong> {escape(str(row.get('label')))}</div>
+        <div><strong>TP</strong> {escape(str(cfg.get('min_take_profit')))}–{escape(str(cfg.get('max_take_profit')))}</div>
       </div>
+    </div>
+
+    <div style="background:#fff;border-radius:16px;padding:16px;margin-bottom:12px;">
+      <div style="font-size:16px;font-weight:800;margin-bottom:4px;color:#1c1917;">Top 10 estrategias</div>
+      <div style="font-size:12px;color:#78716c;margin-bottom:12px;line-height:1.4;">
+        Ranking acumulado (todas las pruebas). Se actualiza en cada email aunque pares el proceso.
+        Orden: HIT → PnL total → WR → avg → menos losses.
+      </div>
+      {top_html}
     </div>
 
     <div style="padding:8px 4px 20px;font-size:12px;color:#78716c;line-height:1.45;">
@@ -234,7 +291,6 @@ def build_trial_email(
 
 
 def build_simple_banner_email(*, title: str, body: str) -> tuple[str, str]:
-    """HTML simple mobile para START/FIN."""
     html = f"""\
 <!DOCTYPE html>
 <html lang="es"><head><meta charset="utf-8"/>

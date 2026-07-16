@@ -25,7 +25,11 @@ from pathlib import Path
 from polymarket.research.local_lab.batch_paper_eval import run_batch
 from polymarket.src.ai.env_loader import load_repo_dotenv, require_nvidia_api_key
 from polymarket.src.notify.mailer import send_email
-from polymarket.src.notify.trial_email import build_simple_banner_email, build_trial_email
+from polymarket.src.notify.trial_email import (
+    build_simple_banner_email,
+    build_trial_email,
+    strategy_card_html,
+)
 
 load_repo_dotenv()
 
@@ -226,8 +230,99 @@ def _write_trial_report(trial_dir: Path, row: dict, cfg: dict, summary: dict) ->
     return md
 
 
+def _strategy_record(row: dict, cfg: dict, run_id: str) -> dict:
+    """Entrada etiquetada para el leaderboard persistente."""
+    label = str(row.get("label") or "unnamed")
+    method = str(row.get("method") or "unknown")
+    trial = int(row.get("trial") or 0)
+    tag = f"{run_id}::T{trial:02d}::{method}::{label}"
+    name = f"{method} · {label}"
+    return {
+        "tag": tag,
+        "name": name,
+        "label": label,
+        "method": method,
+        "trial": trial,
+        "run_id": run_id,
+        "wr": row.get("wr"),
+        "avg": row.get("avg"),
+        "total": row.get("total"),
+        "wins": row.get("wins"),
+        "losses": row.get("losses"),
+        "traded": row.get("traded"),
+        "sessions": row.get("sessions"),
+        "minutes": row.get("minutes"),
+        "nets": row.get("nets"),
+        "worst": row.get("worst"),
+        "best_sess": row.get("best_sess"),
+        "hit": row.get("hit"),
+        "params": {
+            "size": cfg.get("quote_size_shares"),
+            "mult": cfg.get("max_size_mult"),
+            "cap": cfg.get("max_quote_size_shares"),
+            "edge": cfg.get("min_edge"),
+            "soft_edge": cfg.get("soft_edge"),
+            "hard_edge": cfg.get("hard_edge"),
+            "max_loss": cfg.get("max_loss_usdc"),
+            "kill": cfg.get("session_kill_net_usdc"),
+            "lock": cfg.get("lock_profit_usdc"),
+            "mid_lo": cfg.get("min_quote_mid"),
+            "mid_hi": cfg.get("max_quote_mid"),
+            "tp_min": cfg.get("min_take_profit"),
+            "tp_max": cfg.get("max_take_profit"),
+            "entries": cfg.get("max_entry_fills"),
+            "no_pyramid": cfg.get("no_pyramid_entries"),
+            "fair_fade": cfg.get("fair_fade_exit"),
+        },
+    }
+
+
+def _leaderboard_path() -> Path:
+    return OVERNIGHT / "leaderboard.json"
+
+
+def _upsert_leaderboard(entry: dict) -> list[dict]:
+    """Acumula estrategias entre reinicios; devuelve top 10 ordenado."""
+    path = _leaderboard_path()
+    items: list[dict] = []
+    if path.is_file():
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            items = list(raw.get("strategies") or [])
+        except Exception:
+            items = []
+    by_tag = {str(x.get("tag")): x for x in items if x.get("tag")}
+    by_tag[str(entry["tag"])] = entry
+
+    def sort_key(x: dict) -> tuple:
+        return (
+            1 if x.get("hit") else 0,
+            float(x.get("total") or 0),
+            float(x.get("wr") or 0),
+            float(x.get("avg") or 0),
+            -int(x.get("losses") or 0),
+            -abs(float(x.get("worst") or 0)),
+            int(x.get("traded") or 0),
+        )
+
+    ranked = sorted(by_tag.values(), key=sort_key, reverse=True)
+    payload = {
+        "updated_utc": datetime.now(timezone.utc).isoformat(),
+        "count": len(ranked),
+        "strategies": ranked,
+        "top10": ranked[:10],
+    }
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return ranked[:10]
+
+
 def _email_trial(
-    row: dict, cfg: dict, run_id: str, trial_dir: Path, summary: dict | None = None
+    row: dict,
+    cfg: dict,
+    run_id: str,
+    trial_dir: Path,
+    summary: dict | None = None,
+    top10: list[dict] | None = None,
 ) -> dict:
     subject, body, html = build_trial_email(
         row=row,
@@ -235,6 +330,7 @@ def _email_trial(
         run_id=run_id,
         trial_dir=str(trial_dir),
         summary=summary,
+        top10=top10 or [],
     )
     return send_email(subject=subject, body_text=body, body_html=html)
 
@@ -273,7 +369,9 @@ async def main() -> int:
         f"max_trials={MAX_TRIALS}\n"
         f"HIT targets: WR>={HIT_WR} avg>={HIT_AVG}€ total>={HIT_TOTAL}€ "
         f"losses<={HIT_MAX_LOSSES} traded>={HIT_MIN_TRADED}\n"
-        f"Cada trial te llegará un email mobile con saldo, wins/losses y params.\n"
+        f"Cada trial: email con análisis + Top 10 estrategias acumulado "
+        f"(nombre, método, params, métricas).\n"
+        f"Leaderboard persistente: {OVERNIGHT / 'leaderboard.json'}\n"
     )
     _, start_html = build_simple_banner_email(
         title=f"START {run_id}",
@@ -363,7 +461,9 @@ async def main() -> int:
             "hit": False,
         }
         row["hit"] = _hit(row)
+        entry = _strategy_record(row, cfg_disk, run_id)
         _write_trial_report(trial_dir, row, cfg_disk, summary)
+        (trial_dir / "strategy.json").write_text(json.dumps(entry, indent=2), encoding="utf-8")
         history.append(row)
         (run_dir / "history.json").write_text(json.dumps(history, indent=2), encoding="utf-8")
 
@@ -373,19 +473,28 @@ async def main() -> int:
             flush=True,
         )
 
-        mail_r = _email_trial(row, cfg_disk, run_id, trial_dir, summary=summary)
-        print(f"mail: {{'ok': {mail_r.get('ok')}, 'to': {mail_r.get('to')!r}}}", flush=True)
+        top10 = _upsert_leaderboard(entry)
+        (run_dir / "top10.json").write_text(json.dumps(top10, indent=2), encoding="utf-8")
+
+        mail_r = _email_trial(
+            row, cfg_disk, run_id, trial_dir, summary=summary, top10=top10
+        )
+        print(f"mail: ok={mail_r.get('ok')} to={mail_r.get('to')!r}", flush=True)
 
         sc = _score(row)
         freeze = CFG_DIR / "maker_demo_100_usd_overnight_best.json"
         if best is None or sc > best["score"]:
             best = {"score": sc, "cfg": deepcopy(cfg), "row": row}
             (run_dir / "best.json").write_text(
-                json.dumps({"cfg": cfg_disk, "row": row}, indent=2), encoding="utf-8"
+                json.dumps({"cfg": cfg_disk, "row": row, "entry": entry}, indent=2),
+                encoding="utf-8",
             )
             freeze.write_text(json.dumps(cfg_disk, indent=2), encoding="utf-8")
             (LAB / "overnight_best.json").write_text(
-                json.dumps({"cfg": cfg_disk, "row": row, "run_id": run_id}, indent=2),
+                json.dumps(
+                    {"cfg": cfg_disk, "row": row, "run_id": run_id, "entry": entry},
+                    indent=2,
+                ),
                 encoding="utf-8",
             )
 
@@ -393,9 +502,18 @@ async def main() -> int:
             hit_body = (
                 f"TARGET HIT en trial {i}.\n"
                 f"total={total:+.2f} EUR  WR={100*(row['wr'] or 0):.1f}%\n"
-                f"best_cfg={freeze}\n\n{json.dumps(row, indent=2)}\n"
+                f"best_cfg={freeze}\n\n{json.dumps(row, indent=2)}\n\n"
+                f"TOP 10:\n{json.dumps(top10, indent=2)}\n"
             )
-            _, hit_html = build_simple_banner_email(title="TARGET HIT", body=hit_body)
+            # Reusa plantilla trial (incluye Top 10 visual)
+            _, _, hit_html = build_trial_email(
+                row=row,
+                cfg=cfg_disk,
+                run_id=run_id,
+                trial_dir=str(trial_dir),
+                summary=summary,
+                top10=top10,
+            )
             send_email(
                 subject=f"[poly] *** HIT *** T{i} total={total:+.1f}€",
                 body_text=hit_body,
@@ -408,15 +526,50 @@ async def main() -> int:
         await asyncio.sleep(5)
 
     # Fin
+    top10_final = []
+    lb_path = _leaderboard_path()
+    if lb_path.is_file():
+        try:
+            top10_final = list(json.loads(lb_path.read_text(encoding="utf-8")).get("top10") or [])
+        except Exception:
+            top10_final = []
     fin = {
         "run_id": run_id,
         "ended_utc": datetime.now(timezone.utc).isoformat(),
         "trials_done": len(history),
         "best": best["row"] if best else None,
+        "top10": top10_final,
     }
     (run_dir / "final.json").write_text(json.dumps(fin, indent=2), encoding="utf-8")
-    fin_body = json.dumps(fin, indent=2) + "\n"
-    _, fin_html = build_simple_banner_email(title=f"FIN {run_id}", body=fin_body)
+    fin_lines = [
+        f"FIN overnight {run_id}",
+        f"trials_done={len(history)}",
+        f"best={json.dumps(best['row'] if best else None, indent=2)}",
+        "",
+        "=== TOP 10 ESTRATEGIAS (acumulado) ===",
+    ]
+    for j, s in enumerate(top10_final[:10], 1):
+        p = s.get("params") or {}
+        fin_lines.append(
+            f"{j}. [{s.get('tag')}] {s.get('name')} | method={s.get('method')} | "
+            f"PnL={s.get('total')} WR={s.get('wr')} avg={s.get('avg')} | "
+            f"size={p.get('size')} edge={p.get('edge')} lock={p.get('lock')}"
+        )
+    fin_body = "\n".join(fin_lines) + "\n"
+    # HTML FIN: banner + cards Top 10
+    cards = "".join(strategy_card_html(j, s) for j, s in enumerate(top10_final[:10], 1))
+    if not cards:
+        cards = "<div style='padding:12px;color:#78716c;'>Sin ranking aún.</div>"
+    _, fin_banner = build_simple_banner_email(title=f"FIN {run_id}", body=fin_body)
+    fin_html = fin_banner.replace(
+        "</body>",
+        f"""<div style="max-width:560px;margin:0 auto;padding:0 16px 24px;">
+          <div style="background:#fff;border-radius:16px;padding:16px;">
+            <div style="font-size:16px;font-weight:800;margin-bottom:10px;">Top 10 estrategias</div>
+            {cards}
+          </div>
+        </div></body>""",
+    )
     send_email(
         subject=f"[poly] FIN overnight {run_id} trials={len(history)}",
         body_text=fin_body,
