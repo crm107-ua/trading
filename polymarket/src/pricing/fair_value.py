@@ -20,10 +20,28 @@ def _norm_cdf(x: float) -> float:
     return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
 
 
-def estimate_fair_values(features: MarketFeatures) -> dict[str, float]:
+def estimate_fair_values(
+    features: MarketFeatures,
+    *,
+    sigma_annual: float | None = None,
+) -> dict[str, float]:
+    """
+    P(up) ≈ Φ( (spot - strike) / (spot · σ · √T) ).
+
+    σ is annual *return* vol; denominator must be in USD (spot·σ·√T).
+    The old form (spot-strike)/(σ·√T) treated σ as dollar vol and collapsed
+    fair to 0.001/0.999 on ~$1 moves in 5m windows.
+    """
+    sigma = float(SIGMA_ANNUAL if sigma_annual is None else sigma_annual)
     t_years = max(features.time_remaining_s / (365.25 * 24 * 3600), 1e-8)
-    denom = SIGMA_ANNUAL * math.sqrt(t_years)
-    z = (features.spot - features.strike) / denom if denom > 0 else 0.0
+    # Prefer log-moneyness (stable near ATM); equivalent to scaled arithmetic for small moves.
+    if features.spot <= 0 or features.strike <= 0:
+        return {"up": 0.5, "down": 0.5}
+    denom = sigma * math.sqrt(t_years)
+    if denom <= 0:
+        z = 0.0
+    else:
+        z = math.log(features.spot / features.strike) / denom
     p_up = max(0.001, min(0.999, _norm_cdf(z)))
     return {"up": p_up, "down": 1.0 - p_up}
 

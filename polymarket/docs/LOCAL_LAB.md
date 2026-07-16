@@ -2,6 +2,9 @@
 
 **Sin prod.** Sin on-chain. Sin proyecciones anuales. Sin registry hasta pre-reg + screen.
 
+**Hito 2026-07-16 (maker_edge $100):** ver [`MILESTONE_2026-07-16_MAKER_EDGE_LAB.md`](MILESTONE_2026-07-16_MAKER_EDGE_LAB.md).  
+Siguiente paso: simulación real-feed OOS (`research/local_lab/real_sim_confirm_loop.py`) + grabación WS hacia Fase A.
+
 ---
 
 ## Frontera (congelada)

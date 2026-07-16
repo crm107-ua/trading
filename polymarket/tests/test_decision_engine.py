@@ -78,7 +78,8 @@ def test_coerce_hold_to_quote_when_reason_says_capturing():
     assert _coerce_action("hold", "uncertain book", 0.8, 0.55) == "hold"
 
 
-def test_fast_path_quotes_without_nim():
+def test_fast_path_quotes_without_nim(monkeypatch):
+    monkeypatch.setenv("NVIDIA_NIM_MODE", "fast")
     snap = _base_snapshot()
     decision, nim = decide_quote_action(snapshot=snap, use_cache=False)
     assert decision.action == "quote"

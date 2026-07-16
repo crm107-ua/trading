@@ -107,7 +107,11 @@ def main() -> None:
     p = argparse.ArgumentParser(description="Lab local Polymarket (sin prod)")
     p.add_argument("--record", action="store_true", help="Grabar BTC+CLOB en local_lab/")
     p.add_argument("--paper", action="store_true", help="Paper maker virtual")
-    p.add_argument("--strategy", default="maker_16", choices=["maker_16", "wide_spread_probe", "tight_mid_fade"])
+    p.add_argument(
+        "--strategy",
+        default="maker_16",
+        choices=["maker_16", "wide_spread_probe", "tight_mid_fade", "maker_edge"],
+    )
     p.add_argument("--minutes", type=float, default=30.0)
     p.add_argument(
         "--config",

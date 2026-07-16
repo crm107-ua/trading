@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -94,17 +95,26 @@ def _market_from_gamma(m: dict[str, Any], title: str) -> MarketInfo | None:
 
 
 def _fetch_event_by_slug(client: httpx.Client, slug: str) -> list[MarketInfo]:
-    r = client.get(f"{GAMMA}/events", params={"slug": slug}, timeout=20.0)
-    r.raise_for_status()
-    events = r.json() if isinstance(r.json(), list) else []
-    out: list[MarketInfo] = []
-    for ev in events:
-        title = ev.get("title") or ""
-        for m in ev.get("markets") or []:
-            info = _market_from_gamma(m, title)
-            if info:
-                out.append(info)
-    return out
+    last: Exception | None = None
+    for attempt in range(4):
+        try:
+            r = client.get(f"{GAMMA}/events", params={"slug": slug}, timeout=30.0)
+            r.raise_for_status()
+            events = r.json() if isinstance(r.json(), list) else []
+            out: list[MarketInfo] = []
+            for ev in events:
+                title = ev.get("title") or ""
+                for m in ev.get("markets") or []:
+                    info = _market_from_gamma(m, title)
+                    if info:
+                        out.append(info)
+            return out
+        except (httpx.TimeoutException, httpx.TransportError, httpx.HTTPStatusError) as e:
+            last = e
+            time.sleep(min(20.0, 1.5 * (attempt + 1)))
+    if last is not None:
+        raise last
+    return []
 
 
 def discover_btc_5m_by_slug(

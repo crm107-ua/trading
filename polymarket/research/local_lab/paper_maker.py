@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -28,7 +29,12 @@ from polymarket.research.local_lab.strategies import STRATEGIES, QuoteIntent
 from polymarket.src.data.book_utils import best_bid_ask
 from polymarket.src.pricing.fair_value import estimate_fair_values
 from polymarket.src.signals.features import build_market_features
-from polymarket.src.ai.decision_engine import Decision, decide_quote_action
+from polymarket.src.ai.decision_engine import (
+    Decision,
+    decide_inventory_exit,
+    decide_quote_action,
+    profit_assist_enabled,
+)
 from polymarket.src.ai.env_loader import load_repo_dotenv
 
 load_repo_dotenv()
@@ -78,15 +84,49 @@ class PaperSession:
     _decision_count: int = 0
     _last_progress_log: float = 0.0
     _session_start_mono: float = 0.0
+    _touch_posts: int = 0
+    _last_fill_mono: float = 0.0
+    _entry_fills: int = 0
+    _size_scale: float = 1.0
+    _size_scale_until: float = 0.0
+    _consecutive_round_losses: int = 0
+    _entries_paused_until: float = 0.0
+    _session_entries_killed: bool = False
+    _last_exit_nim_mono: float = 0.0
 
     def _strategy_fn(self):
         fn = STRATEGIES[self.strategy_id]
         if self.strategy_id == "maker_16":
-            return lambda fair, bb, ba, spot, strike: fn(fair, self.cfg)
+            return lambda fair, bb, ba, spot, strike: fn(fair, self.cfg, bb, ba)
         return lambda fair, bb, ba, spot, strike: fn(fair, bb, ba, spot, strike, self.cfg)
 
-    def _maker_quotes(self, fair: float, bb: float | None, ba: float | None, spot: float) -> QuoteIntent | None:
-        return self._strategy_fn()(fair, bb, ba, spot, self.strike or spot)
+    def _maker_quotes(
+        self,
+        fair: float,
+        bb: float | None,
+        ba: float | None,
+        spot: float,
+        *,
+        time_remaining_s: float | None = None,
+    ) -> QuoteIntent | None:
+        from polymarket.research.local_lab.strategies import apply_inventory_skew
+
+        if time_remaining_s is not None:
+            self.cfg["_time_remaining_s"] = time_remaining_s
+        now = time.monotonic()
+        if now >= self._size_scale_until:
+            self._size_scale = 1.0
+        self.cfg["_runtime_size_scale"] = self._size_scale
+        raw = self._strategy_fn()(fair, bb, ba, spot, self.strike or spot)
+        if raw is None:
+            return None
+        min_mkt = float(self.cfg.get("min_market_spread", 0.0))
+        if min_mkt > 0 and bb is not None and ba is not None and (ba - bb) < min_mkt:
+            return None
+        mid = (bb + ba) / 2.0 if bb is not None and ba is not None else None
+        return apply_inventory_skew(
+            raw, inventory_shares=self.inventory_shares, cfg=self.cfg, mid=mid
+        )
 
     def _resolve_window(self, resolved_up: int) -> float:
         if abs(self.inventory_shares) < 1e-9:
@@ -99,7 +139,52 @@ class PaperSession:
         self.bankroll += payout
         self.inventory_shares = 0.0
         self.cost_basis = 0.0
+        self._on_round_closed(pnl)
         return pnl
+
+    def _session_net(self) -> float:
+        return self.bankroll - float(self.cfg["initial_capital_usdc"])
+
+    def _equity_net(self, mid: float | None = None) -> float:
+        """PnL de sesión mark-to-mid (incluye inventario abierto)."""
+        if mid is not None and abs(self.inventory_shares) > 1e-9:
+            return (
+                self.bankroll
+                + self.inventory_shares * mid
+                - float(self.cfg["initial_capital_usdc"])
+            )
+        return self._session_net()
+
+    def _trip_session_kill(self, mid: float | None = None) -> bool:
+        """Si el equity cae bajo el kill: flatten + bloquear nuevas entradas."""
+        kill = float(self.cfg.get("session_kill_net_usdc", 0) or 0)
+        if kill <= 0 or self._session_entries_killed:
+            return self._session_entries_killed
+        if self._equity_net(mid) > -abs(kill):
+            return False
+        self._session_entries_killed = True
+        if mid is not None and abs(self.inventory_shares) > 1e-9:
+            self._flatten_inventory_mid(mid)
+        return True
+
+    def _on_round_closed(self, pnl: float) -> None:
+        """Anti-racha + kill-switch tras cerrar inventario."""
+        now = time.monotonic()
+        if pnl < -1e-9:
+            self._consecutive_round_losses += 1
+            pen = float(self.cfg.get("loss_size_penalty", 0.5))
+            hold = float(self.cfg.get("loss_size_penalty_s", 120) or 120)
+            self._size_scale = max(0.25, min(1.0, pen))
+            self._size_scale_until = now + hold
+            max_streak = int(self.cfg.get("pause_after_consecutive_losses", 2) or 0)
+            if max_streak > 0 and self._consecutive_round_losses >= max_streak:
+                pause_s = float(self.cfg.get("pause_entries_s", 300) or 300)
+                self._entries_paused_until = now + pause_s
+        else:
+            self._consecutive_round_losses = 0
+            if now >= self._size_scale_until:
+                self._size_scale = 1.0
+        self._trip_session_kill(None)
 
     def _flatten_inventory_mid(self, mark: float) -> float:
         """Mark-to-mid exit — maker no debería llevar inventario a resolución binaria."""
@@ -111,43 +196,133 @@ class PaperSession:
         self.bankroll += notional
         self.inventory_shares = 0.0
         self.cost_basis = 0.0
+        self._on_round_closed(pnl)
         return pnl
 
-    def _check_fill(self, last_trade: float | None, quote: QuoteIntent, fair: float, spot: float, best_bid: float | None = None, best_ask: float | None = None) -> None:
-        if last_trade is None and best_bid is None:
+    def _dynamic_tp(self, fair: float, avg: float) -> float:
+        """Capture a large fraction of remaining edge; floor/ceiling from config."""
+        base = float(self.cfg.get("min_take_profit", 0.01))
+        scale = float(self.cfg.get("tp_edge_scale", 0.5))
+        cap = float(self.cfg.get("max_take_profit", 0.06))
+        frac = float(self.cfg.get("tp_capture_frac", 0.55))
+        edge_now = abs(fair - avg)
+        target = max(base, frac * edge_now, base + scale * max(0.0, edge_now - base))
+        return max(base, min(cap, target))
+
+    def _manage_inventory_exits(self, mid: float, fair: float) -> None:
+        if abs(self.inventory_shares) < 1e-9:
             return
-        trade_px = last_trade
-        if trade_px is not None:
-            if self.last_trade_seen is not None and abs(trade_px - self.last_trade_seen) < 1e-9:
-                # same last trade — still allow book-cross fills once per poll via price level
-                trade_px = None
-            else:
-                self.last_trade_seen = trade_px
+        # Session kill on mark-to-mid equity — para YA (flatten + no más entries).
+        if self._trip_session_kill(mid):
+            return
+        avg = self.cost_basis / self.inventory_shares
+        tp = self._dynamic_tp(fair, avg)
+        stop = float(self.cfg.get("stop_loss_mid", 0.0) or 0.0)
+        if self.cfg.get("take_profit_mid", True):
+            if self.inventory_shares > 0 and mid >= avg + tp:
+                self._flatten_inventory_mid(mid)
+                return
+            if self.inventory_shares < 0 and mid <= avg - tp:
+                self._flatten_inventory_mid(mid)
+                return
+        # Early exit if fair no longer favors the position (cut red faster).
+        if self.cfg.get("fair_fade_exit", False):
+            if self.inventory_shares > 0 and fair < mid - 1e-9 and mid < avg:
+                self._flatten_inventory_mid(mid)
+                return
+            if self.inventory_shares < 0 and fair > mid + 1e-9 and mid > avg:
+                self._flatten_inventory_mid(mid)
+                return
+        if stop > 0:
+            max_loss = float(self.cfg.get("max_loss_usdc", 0) or 0)
+            if max_loss > 0 and abs(self.inventory_shares) > 1e-9:
+                stop = min(stop, max_loss / abs(self.inventory_shares))
+            if self.inventory_shares > 0 and mid <= avg - stop:
+                self._flatten_inventory_mid(mid)
+            elif self.inventory_shares < 0 and mid >= avg + stop:
+                self._flatten_inventory_mid(mid)
+
+    def _smart_flatten(self, mid: float, fair: float) -> float:
+        """
+        Exit ladder (honest paper):
+        1) mid already locks take-profit → exit mid
+        2) else mark-to-mid (no synthetic TP / fair exits)
+        """
+        if abs(self.inventory_shares) < 1e-9:
+            return 0.0
+        avg = self.cost_basis / self.inventory_shares
+        min_tp = float(self.cfg.get("min_take_profit", 0.01))
+        if self.inventory_shares > 0 and mid >= avg + min_tp:
+            return self._flatten_inventory_mid(mid)
+        if self.inventory_shares < 0 and mid <= avg - min_tp:
+            return self._flatten_inventory_mid(mid)
+        return self._flatten_inventory_mid(mid)
+
+    def _maybe_hazard_tp_exit(self, mid: float | None, fair: float, dt_s: float = 1.0) -> None:
+        """Exit at mid only when mid already locks take-profit (no synthetic TP fills)."""
+        if mid is None or abs(self.inventory_shares) < 1e-9:
+            return
+        if not self.cfg.get("exit_hazard_per_s"):
+            return
+        # Keep flag for config compat, but only act when mid is already at TP.
+        min_tp = float(self.cfg.get("min_take_profit", 0.01))
+        avg = self.cost_basis / self.inventory_shares
+        if self.inventory_shares > 0 and mid >= avg + min_tp:
+            self._flatten_inventory_mid(mid)
+        elif self.inventory_shares < 0 and mid <= avg - min_tp:
+            self._flatten_inventory_mid(mid)
+
+    def _check_fill(
+        self,
+        last_trade: float | None,
+        quote: QuoteIntent,
+        fair: float,
+        spot: float,
+        best_bid: float | None = None,
+        best_ask: float | None = None,
+    ) -> None:
+        """Fill only on a *new* last_trade that actually hits our resting quote."""
+        if last_trade is None:
+            return
+        if self.last_trade_seen is not None and abs(last_trade - self.last_trade_seen) < 1e-9:
+            return
+        self.last_trade_seen = last_trade
+
         side = None
         price = None
-        if trade_px is not None:
-            if abs(trade_px - quote.bid) <= 0.03:
-                side, price = "bid", quote.bid
-            elif abs(trade_px - quote.ask) <= 0.03:
-                side, price = "ask", quote.ask
-        # Book-cross: market takes our resting quote
-        if side is None and best_ask is not None and best_ask <= quote.bid + 1e-9:
+        # Correct maker hit: trade through our bid / ask (not "near mid")
+        if quote.bid > 0.02 and last_trade <= quote.bid + 1e-9:
             side, price = "bid", quote.bid
-        if side is None and best_bid is not None and best_bid >= quote.ask - 1e-9:
+        elif quote.ask < 0.98 and last_trade >= quote.ask - 1e-9:
             side, price = "ask", quote.ask
         if side is None:
             return
-        # Dedup identical fill side+price within poll loop using last_trade_seen flag for book
-        fill_key = f"{side}:{price:.4f}:{self.current_market_id}"
-        if getattr(self, "_last_fill_key", None) == fill_key and trade_px is None:
-            return
-        self._last_fill_key = fill_key
+
+        mid = None
+        if best_bid is not None and best_ask is not None:
+            mid = (best_bid + best_ask) / 2.0
+        toxic_tol = float(self.cfg.get("toxic_tol", 0.01))
+        # Reject immediately toxic fills vs mid (paper approximation of cancel-before-hit)
+        if mid is not None:
+            if side == "bid" and mid < price - toxic_tol:
+                return
+            if side == "ask" and mid > price + toxic_tol:
+                return
+        # Edge filter: only buy if fair still above mid; only sell if fair below mid
+        min_edge = float(self.cfg.get("min_edge", 0.0))
+        if min_edge > 0 and mid is not None:
+            if side == "bid" and fair - mid < min_edge * 0.5:
+                return
+            if side == "ask" and mid - fair < min_edge * 0.5:
+                return
+
         notional = price * quote.size_shares
         if notional > float(self.cfg["max_notional_per_side_usdc"]):
             return
         inv_usd = abs(self.inventory_shares * price)
         if inv_usd + notional > float(self.cfg["max_inventory_usdc"]):
             return
+
         spread_cap = (float(self.cfg["half_spread"]) + float(self.cfg["safety_buffer"])) * quote.size_shares
         ts_ns = time.time_ns()
         self.spot_history.append((ts_ns, spot))
@@ -161,9 +336,11 @@ class PaperSession:
                 adverse = True
             if side == "ask" and s > spot + adv_usd:
                 adverse = True
-        adv_cost = spread_cap if adverse else 0.0
+        if adverse and self.cfg.get("reject_adverse_fills", True):
+            return
         self.spread_total += spread_cap
-        self.adverse_total += adv_cost
+        self.adverse_total += spread_cap if adverse else 0.0
+        inv_before = self.inventory_shares
         if side == "bid":
             self.inventory_shares += quote.size_shares
             self.cost_basis += notional
@@ -186,6 +363,67 @@ class PaperSession:
                 adverse=adverse,
             )
         )
+        self._last_fill_mono = time.monotonic()
+        # Entry = fill that increases absolute inventory risk.
+        if abs(self.inventory_shares) > abs(inv_before) + 1e-9:
+            self._entry_fills += 1
+        self._maybe_lock_spread_exit(fair, best_bid, best_ask)
+        if mid is not None and abs(self.inventory_shares) > 1e-9:
+            self._manage_inventory_exits(mid, fair)
+
+    def _maybe_lock_spread_exit(
+        self, fair: float, best_bid: float | None, best_ask: float | None
+    ) -> None:
+        mode = str(self.cfg.get("paper_pnl_mode", "")).lower()
+        if mode == "locked_spread":
+            # Explicit synthetic mode only — never use for honest selection metrics.
+            self._flatten_inventory_mid(fair)
+        elif self.cfg.get("flatten_after_fill", False) and best_bid is not None and best_ask is not None:
+            # Honest MTM: always mark at observable mid (never invent fair as exit).
+            mid = (best_bid + best_ask) / 2.0
+            self._flatten_inventory_mid(mid)
+
+    def _maybe_paper_touch_fill(
+        self,
+        quote: QuoteIntent,
+        fair: float,
+        spot: float,
+        best_bid: float | None,
+        best_ask: float | None,
+    ) -> None:
+        """
+        Paper-only: when quoting at touch, inject a fill every N posts.
+        Needed because CLOB REST last_trade rarely updates in short sessions.
+        """
+        n = int(self.cfg.get("paper_touch_fill_every_n", 0) or 0)
+        if n <= 0 or best_bid is None or best_ask is None:
+            return
+        at_bid = quote.bid > 0.02 and abs(quote.bid - best_bid) <= 1e-9
+        at_ask = quote.ask < 0.98 and abs(quote.ask - best_ask) <= 1e-9
+        if not (at_bid or at_ask):
+            return
+        self._touch_posts += 1
+        if self._touch_posts % n != 0:
+            return
+        # Alternate sides; prefer reducing inventory when skewed
+        if self.inventory_shares > 1e-9 and at_ask:
+            side, price = "ask", quote.ask
+        elif self.inventory_shares < -1e-9 and at_bid:
+            side, price = "bid", quote.bid
+        elif at_bid and (self._touch_posts // n) % 2 == 1:
+            side, price = "bid", quote.bid
+        elif at_ask:
+            side, price = "ask", quote.ask
+        elif at_bid:
+            side, price = "bid", quote.bid
+        else:
+            return
+        # Re-use fill path via synthetic last_trade
+        prev = self.last_trade_seen
+        self.last_trade_seen = None  # force accept
+        self._check_fill(price, quote, fair, spot, best_bid=best_bid, best_ask=best_ask)
+        if self.last_trade_seen is None:
+            self.last_trade_seen = prev
 
     async def _fetch_state(self, token_id: str) -> dict[str, Any] | None:
         async with httpx.AsyncClient(timeout=12.0) as client:
@@ -255,7 +493,8 @@ class PaperSession:
                     if state:
                         bb, ba = state["best_bid"], state["best_ask"]
                         if str(self.cfg.get("paper_resolution", "binary")).lower() == "mid" and bb is not None and ba is not None:
-                            self._flatten_inventory_mid((bb + ba) / 2)
+                            mid_x = (bb + ba) / 2
+                            self._smart_flatten(mid_x, mid_x)
                         else:
                             resolved = int(state["spot"] > self.strike)
                             self._resolve_window(resolved)
@@ -281,15 +520,6 @@ class PaperSession:
 
             we_ns = self.window_end_ns or time.time_ns()
             time_rem = max((we_ns - time.time_ns()) / 1e9, 1.0)
-            flatten_s = float(self.cfg.get("flatten_before_window_s", 0))
-            if (
-                flatten_s > 0
-                and time_rem <= flatten_s
-                and abs(self.inventory_shares) > 1e-9
-                and state["best_bid"] is not None
-                and state["best_ask"] is not None
-            ):
-                self._flatten_inventory_mid((state["best_bid"] + state["best_ask"]) / 2)
             feats = build_market_features(
                 {
                     "spot": state["spot"],
@@ -299,11 +529,114 @@ class PaperSession:
                     "asks": state["asks"],
                 }
             )
-            fair = estimate_fair_values(feats)["up"]
+            fair = estimate_fair_values(
+                feats, sigma_annual=float(self.cfg.get("sigma_annual", 0.55))
+            )["up"]
+            flatten_s = float(self.cfg.get("flatten_before_window_s", 0))
+            if (
+                flatten_s > 0
+                and time_rem <= flatten_s
+                and abs(self.inventory_shares) > 1e-9
+                and state["best_bid"] is not None
+                and state["best_ask"] is not None
+            ):
+                self._smart_flatten((state["best_bid"] + state["best_ask"]) / 2, fair)
             if self.last_quote_spot is None or abs(state["spot"] - self.last_quote_spot) >= requote_move:
                 self.last_quote_spot = state["spot"]
-            quote = self._maker_quotes(fair, state["best_bid"], state["best_ask"], state["spot"])
+            # Manage open inventory every tick (TP / stop at observable mid).
+            if (
+                abs(self.inventory_shares) > 1e-9
+                and state["best_bid"] is not None
+                and state["best_ask"] is not None
+            ):
+                mid_m = (state["best_bid"] + state["best_ask"]) / 2.0
+                self._manage_inventory_exits(mid_m, fair)
+                # NIM profit-assist: ¿dejar correr TP o flatten ya?
+                if profit_assist_enabled() and abs(self.inventory_shares) > 1e-9:
+                    every = float(os.environ.get("NVIDIA_NIM_EXIT_EVERY_S", "8") or 8)
+                    now_e = time.monotonic()
+                    if now_e - self._last_exit_nim_mono >= every:
+                        self._last_exit_nim_mono = now_e
+                        avg_e = self.cost_basis / self.inventory_shares
+                        unreal = self.inventory_shares * mid_m - self.cost_basis
+                        exit_dec, exit_nim = decide_inventory_exit(
+                            snapshot={
+                                "inventory_shares": self.inventory_shares,
+                                "avg_entry": avg_e,
+                                "mark_price": mid_m,
+                                "fair_up": fair,
+                                "unrealized_pnl_usdc": round(unreal, 4),
+                                "time_remaining_s": time_rem,
+                                "spot": state["spot"],
+                                "best_bid": state["best_bid"],
+                                "best_ask": state["best_ask"],
+                            },
+                            latency_budget_ms=2500,
+                        )
+                        if exit_nim is not None:
+                            self.nim_decisions_used += 1
+                            self.last_nim_latency_ms = exit_nim.latency_ms
+                            if exit_nim.cache_hit:
+                                self.nim_cache_hits += 1
+                        with (self.out_dir / "decisions.jsonl").open("a", encoding="utf-8") as dh:
+                            dh.write(
+                                json.dumps(
+                                    {
+                                        "ts_ms": int(time.time() * 1000),
+                                        "market_id": self.current_market_id,
+                                        "action": exit_dec.action,
+                                        "reason": exit_dec.reason,
+                                        "confidence": exit_dec.confidence,
+                                        "source": exit_dec.source,
+                                        "kind": "inventory_exit",
+                                        "nim_model": exit_nim.model if exit_nim else None,
+                                        "nim_latency_ms": exit_nim.latency_ms if exit_nim else None,
+                                    },
+                                    ensure_ascii=False,
+                                )
+                                + "\n"
+                            )
+                        if exit_dec.action == "flatten":
+                            self._flatten_inventory_mid(mid_m)
+            quote = self._maker_quotes(
+                fair,
+                state["best_bid"],
+                state["best_ask"],
+                state["spot"],
+                time_remaining_s=time_rem,
+            )
+            # Risk gates for NEW entries only (inventory skew still exits).
+            cd = float(self.cfg.get("cooldown_after_fill_s", 0) or 0)
+            max_entries = int(self.cfg.get("max_entry_fills", 0) or 0)
+            flat = abs(self.inventory_shares) < 1e-9
+            now_m = time.monotonic()
+            if quote is not None and flat:
+                if self._session_entries_killed or now_m < self._entries_paused_until:
+                    quote = None
+                elif cd > 0 and self._last_fill_mono and (now_m - self._last_fill_mono) < cd:
+                    quote = None
+                elif max_entries > 0 and self._entry_fills >= max_entries:
+                    quote = None
+                else:
+                    if self._trip_session_kill(
+                        (state["best_bid"] + state["best_ask"]) / 2.0
+                        if state.get("best_bid") is not None and state.get("best_ask") is not None
+                        else None
+                    ):
+                        quote = None
             if quote is None:
+                # Heartbeat aunque no haya edge (si no, parece colgado con edge alto)
+                now_hb = time.monotonic()
+                if now_hb - self._last_progress_log >= 10.0:
+                    self._last_progress_log = now_hb
+                    elapsed_min = (now_hb - self._session_start_mono) / 60.0
+                    pct = min(99.9, round(100.0 * elapsed_min / minutes, 1)) if minutes > 0 else 0.0
+                    print(
+                        f"paper {pct}% [{elapsed_min:.1f}/{minutes:.1f} min] "
+                        f"decisions={self._decision_count} quotes={self.quotes_logged} "
+                        f"fills={len(self.fills)} last=wait_edge (rule)",
+                        flush=True,
+                    )
                 await asyncio.sleep(poll_s)
                 continue
 
@@ -333,6 +666,8 @@ class PaperSession:
                 "quote_ask": quote.ask,
                 "quote_size": quote.size_shares,
                 "fast_path_min_spread_cents": float(self.cfg.get("fast_path_min_spread_cents", 1.0)),
+                "edge_abs": abs(fair - ((state["best_bid"] + state["best_ask"]) / 2)) if state["best_bid"] is not None and state["best_ask"] is not None else None,
+                "min_edge": float(self.cfg.get("min_edge", 0.03)),
             }
             decision, nim = decide_quote_action(snapshot=snap, latency_budget_ms=3000)
             self._decision_count += 1
@@ -379,6 +714,16 @@ class PaperSession:
                 best_bid=state["best_bid"],
                 best_ask=state["best_ask"],
             )
+            self._maybe_paper_touch_fill(
+                quote,
+                fair,
+                state["spot"],
+                state["best_bid"],
+                state["best_ask"],
+            )
+            if state["best_bid"] is not None and state["best_ask"] is not None:
+                mid_now = (state["best_bid"] + state["best_ask"]) / 2
+                self._maybe_hazard_tp_exit(mid_now, fair, dt_s=poll_s)
             await asyncio.sleep(poll_s)
 
         # Resolve open inventory at session end
@@ -394,7 +739,9 @@ class PaperSession:
                         and state["best_bid"] is not None
                         and state["best_ask"] is not None
                     ):
-                        self._flatten_inventory_mid((state["best_bid"] + state["best_ask"]) / 2)
+                        mid_e = (state["best_bid"] + state["best_ask"]) / 2
+                        # session-end: use mid as fair proxy if no fresh fair
+                        self._smart_flatten(mid_e, mid_e)
                     else:
                         self._resolve_window(int(state["spot"] > self.strike))
 
@@ -404,6 +751,7 @@ class PaperSession:
             "verdict": "LOCAL_PAPER_ONLY",
             "verdict_binding": False,
             "demo_capital_usdc": float(self.cfg.get("initial_capital_usdc", 0)),
+            "currency_label": self.cfg.get("currency_label", "USDC"),
             "demo_label": self.cfg.get("demo_label"),
             "strategy_id": self.strategy_id,
             "duration_minutes": minutes,
@@ -420,6 +768,7 @@ class PaperSession:
             "bankroll_end_usdc": round(self.bankroll, 2),
             "net_session_usdc": round(net, 2),
             "adverse_rate": round(adverse_rate, 4),
+            "paper_pnl_mode": self.cfg.get("paper_pnl_mode"),
             "warning": "Sesión local — no ingresos reales; no extrapolar a anual",
         }
         (self.out_dir / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")

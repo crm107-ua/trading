@@ -1,8 +1,0 @@
-data/
-*.sqlite
-*.sqlite-shm
-*.sqlite-wal
-node_modules/
-dist/
-.DS_Store
-.env

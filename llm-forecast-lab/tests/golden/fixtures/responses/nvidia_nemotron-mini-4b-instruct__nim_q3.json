@@ -1,7 +1,0 @@
-{
-  "p": 0.5,
-  "key_factors": ["Balanced evidence", "Market mid near 0.5"],
-  "base_rate_considered": "Base rate ~50% for generic binary questions",
-  "confidence_note": "Low-medium; fixture-only"
-}
-

@@ -23,6 +23,21 @@ def test_fair_value_above_strike():
     assert abs(fv["up"] + fv["down"] - 1.0) < 1e-6
 
 
+def test_fair_value_small_move_not_collapsed():
+    """$1 under strike in a 2m window must not floor to 0.001 (old dollar-vol bug)."""
+    features = build_market_features(
+        {
+            "spot": 64_214,
+            "strike": 64_215,
+            "time_remaining_s": 120,
+            "bids": [{"price": "0.34", "size": "10"}],
+            "asks": [{"price": "0.36", "size": "10"}],
+        }
+    )
+    fv = estimate_fair_values(features)
+    assert 0.35 < fv["up"] < 0.65
+
+
 def test_no_edge_when_ask_too_high():
     state = {
         "spot": 62_000,
