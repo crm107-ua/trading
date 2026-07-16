@@ -69,10 +69,19 @@ FAMILY_SPECS: list[dict[str, Any]] = [
         "sessions": 6,
         "minutes": 10.0,
         "hypothesis": (
-            "Lock +1.5€ sin pyramid: captura wins medianos y corta verdes que "
-            "se vuelven rojos. Mid 0.35–0.65, size ~30."
+            "Lock +1.5€ sin pyramid. Edge/mid calibrados para poder cotizar "
+            "(evita wait_edge eterno): edge 0.032, mid 0.28–0.72, min_z 1.0."
         ),
-        "overlays": {},
+        # v7 crudo (edge 0.038 + mid 0.35–0.65) se queda en 0 fills en mercados calmados.
+        "overlays": {
+            "min_edge": 0.032,
+            "soft_edge": 0.045,
+            "hard_edge": 0.07,
+            "min_z": 1.0,
+            "min_expected_pnl_usdc": 0.40,
+            "min_quote_mid": 0.28,
+            "max_quote_mid": 0.72,
+        },
     },
     {
         "family": "hito_margin_safe",
@@ -87,8 +96,11 @@ FAMILY_SPECS: list[dict[str, Any]] = [
             "no_pyramid_entries": True,
             "fair_fade_exit": True,
             "lock_profit_usdc": 2.0,
-            "min_quote_mid": 0.30,
-            "max_quote_mid": 0.70,
+            "min_edge": 0.030,
+            "min_z": 1.0,
+            "min_expected_pnl_usdc": 0.35,
+            "min_quote_mid": 0.28,
+            "max_quote_mid": 0.72,
             "max_entry_fills": 6,
             "quote_size_shares": 42,
             "max_size_mult": 2.2,
@@ -109,7 +121,12 @@ FAMILY_SPECS: list[dict[str, Any]] = [
             "Cortar cola: size 32, max_loss 3.5, kill sesión, pause tras 1 loss. "
             "Prioriza WR y peores acotados frente a size máximo."
         ),
-        "overlays": {"no_pyramid_entries": True, "lock_profit_usdc": 1.2},
+        "overlays": {
+            "no_pyramid_entries": True,
+            "lock_profit_usdc": 1.2,
+            "min_z": 1.0,
+            "min_expected_pnl_usdc": 0.35,
+        },
     },
     {
         "family": "selective_edge",
@@ -117,22 +134,23 @@ FAMILY_SPECS: list[dict[str, Any]] = [
         "sessions": 6,
         "minutes": 10.0,
         "hypothesis": (
-            "Menos fills, mejor calidad: edge↑, mid estrecho, size 34, lock 2€. "
-            "Busca avg € más alto aunque traded sea menor."
+            "Calidad > cantidad: edge 0.036 (no 0.042), mid 0.32–0.68, size 34, lock 2€. "
+            "Solo tras haber demostrado fills en familias más abiertas."
         ),
         "overlays": {
-            "min_edge": 0.042,
-            "soft_edge": 0.058,
-            "hard_edge": 0.085,
-            "min_quote_mid": 0.38,
-            "max_quote_mid": 0.62,
+            "min_edge": 0.036,
+            "soft_edge": 0.05,
+            "hard_edge": 0.078,
+            "min_z": 1.05,
+            "min_quote_mid": 0.32,
+            "max_quote_mid": 0.68,
             "quote_size_shares": 34,
             "max_quote_size_shares": 40,
             "max_size_mult": 1.8,
             "lock_profit_usdc": 2.0,
             "max_loss_usdc": 2.2,
             "max_entry_fills": 3,
-            "min_expected_pnl_usdc": 0.7,
+            "min_expected_pnl_usdc": 0.50,
         },
     },
 ]
@@ -323,6 +341,110 @@ def _sync_size_caps(c: dict) -> None:
     c["hard_edge"] = round(max(float(c.get("hard_edge") or 0), edge * 2.0), 3)
 
 
+def _cfg_from_leaderboard_entry(entry: dict) -> dict:
+    """Reconstruye cfg ejecutable desde entrada del Top (cfg guardado o params)."""
+    raw = entry.get("cfg")
+    if isinstance(raw, dict) and raw.get("quote_size_shares") is not None:
+        c = deepcopy(raw)
+    else:
+        # Fallback: overlay params sobre DNA lock
+        c = _load_json(CFG_DIR / "maker_demo_100_usd_margin_v7_lock.json")
+        p = entry.get("params") or {}
+        mapping = {
+            "size": "quote_size_shares",
+            "mult": "max_size_mult",
+            "cap": "max_quote_size_shares",
+            "edge": "min_edge",
+            "soft_edge": "soft_edge",
+            "hard_edge": "hard_edge",
+            "max_loss": "max_loss_usdc",
+            "kill": "session_kill_net_usdc",
+            "lock": "lock_profit_usdc",
+            "mid_lo": "min_quote_mid",
+            "mid_hi": "max_quote_mid",
+            "tp_min": "min_take_profit",
+            "tp_max": "max_take_profit",
+            "entries": "max_entry_fills",
+        }
+        for pk, ck in mapping.items():
+            if p.get(pk) is not None:
+                c[ck] = p[pk]
+    c = _apply_lab_invariants(c)
+    c["_family"] = str(entry.get("family") or "top")
+    c["_method"] = str(entry.get("method") or "refine_top")
+    c["_sessions"] = int(entry.get("sessions") or 6)
+    c["_minutes"] = float(entry.get("minutes") or 10.0)
+    return c
+
+
+def plan_refine_top(*, top_entry: dict, gen: int, refine_round: int) -> dict:
+    """
+    Mejora una estrategia del Top 5: un eje por ronda para maximizar €
+    sin destruir WR (lecciones del lab: no size↑ agresivo).
+    """
+    c = _cfg_from_leaderboard_entry(top_entry)
+    family = str(top_entry.get("family") or c.get("_family") or "top")
+    wr = float(top_entry.get("wr") or 0)
+    avg = float(top_entry.get("avg") or 0)
+    total = float(top_entry.get("total") or 0)
+    axis = refine_round % 4
+    minutes = float(c.get("_minutes") or 10.0)
+    sessions = int(c.get("_sessions") or 6)
+
+    if axis == 0 and wr >= 0.45:
+        method = "refine_scale_eur"
+        c["quote_size_shares"] = min(SIZE_SOFT_CAP, int(c.get("quote_size_shares", 30)) + 2)
+        c["lock_profit_usdc"] = round(min(3.5, float(c.get("lock_profit_usdc", 1.5)) + 0.4), 2)
+        c["max_take_profit"] = round(min(0.09, float(c.get("max_take_profit", 0.05)) + 0.01), 3)
+        hyp = (
+            f"REFINE Top «{top_entry.get('name')}»: WR={wr:.0%} total={total:+.1f} → "
+            f"+2 size (≤{SIZE_SOFT_CAP}), lock↑, TP↑ para más €."
+        )
+    elif axis == 1:
+        method = "refine_confirm"
+        sessions = min(8, sessions + 2)
+        minutes = min(12.0, max(minutes, 10.0))
+        hyp = (
+            f"REFINE Top «{top_entry.get('name')}»: confirmar con {sessions}×{minutes}m "
+            f"(params congelados) para validar edge real."
+        )
+    elif axis == 2 and wr >= 0.5 and avg < HIT_AVG:
+        method = "refine_lock_avg"
+        c["lock_profit_usdc"] = round(min(3.5, float(c.get("lock_profit_usdc", 1.5)) + 0.5), 2)
+        c["min_take_profit"] = round(min(0.03, float(c.get("min_take_profit", 0.02)) + 0.003), 3)
+        minutes = min(12.0, minutes + 1.0)
+        hyp = (
+            f"REFINE Top «{top_entry.get('name')}»: WR alto pero avg {avg:+.2f} < HIT → "
+            f"subir lock/TP sin tocar size."
+        )
+    else:
+        method = "refine_protect_edge"
+        # Si WR flojo o eje default: un poco más selectivo + mismo size
+        c["min_edge"] = round(min(0.038, float(c.get("min_edge", 0.03)) + 0.002), 3)
+        c["max_loss_usdc"] = round(max(1.5, float(c.get("max_loss_usdc", 2.5)) - 0.2), 2)
+        c["lock_profit_usdc"] = round(max(1.2, float(c.get("lock_profit_usdc", 1.5))), 2)
+        hyp = (
+            f"REFINE Top «{top_entry.get('name')}»: proteger WR (edge+0.002, max_loss↓) "
+            f"y mantener DNA ganador."
+        )
+
+    stamp = datetime.now(timezone.utc).strftime("%H%M%S")
+    c = _apply_lab_invariants(c)
+    _sync_size_caps(c)
+    c["_family"] = family
+    c["_method"] = method
+    c["_sessions"] = sessions
+    c["_minutes"] = round(minutes, 1)
+    c["_hypothesis"] = hyp
+    c["_rationale"] = (
+        f"Nuevas estrategias fuera del Top 5 → mejorar #{refine_round + 1} del ranking "
+        f"(tag={top_entry.get('tag')})."
+    )
+    c["_diagnosis_prev"] = "REFINE_TOP"
+    c["demo_label"] = f"{method}_g{gen}_{stamp}"
+    return c
+
+
 def plan_next(
     *,
     base_cfg: dict,
@@ -331,24 +453,69 @@ def plan_next(
     gen: int,
     families_tried: set[str],
     methods_tried: set[str],
+    refine_top: bool = False,
+    top_entry: dict | None = None,
+    refine_round: int = 0,
 ) -> dict:
     """
     Elige la siguiente prueba con reglas (sin random).
-    Preferencia: 1) familia DNA aún no evaluada  2) ajuste de un eje sobre el best.
+    Preferencia:
+      0) refine_top si nuevas no entran en Top 5
+      1) si STARVED → open_feed (no quemar familias selectivas)
+      2) familia DNA pendiente
+      3) ajuste de un eje sobre el best
     """
-    # Familias pendientes en cola fija
+    if refine_top and top_entry:
+        return plan_refine_top(top_entry=top_entry, gen=gen, refine_round=refine_round)
+
+    code = diagnosis["code"]
+
+    # Starve: abrir feed YA (no pasar a selective_edge con 0 fills)
+    if code == "STARVED":
+        open_count = sum(1 for m in methods_tried if str(m).startswith("open_feed"))
+        if open_count < 3:
+            c = deepcopy(base_cfg)
+            method = "open_feed"
+            minutes = min(12.0, float(c.get("_minutes") or 8.0) + 2.0)
+            c["min_edge"] = round(max(0.026, float(c.get("min_edge", 0.032)) - 0.006), 3)
+            c["min_z"] = round(max(0.85, float(c.get("min_z", 1.0)) - 0.15), 2)
+            c["min_quote_mid"] = round(max(0.22, float(c.get("min_quote_mid", 0.28)) - 0.04), 2)
+            c["max_quote_mid"] = round(min(0.78, float(c.get("max_quote_mid", 0.72)) + 0.04), 2)
+            c["min_expected_pnl_usdc"] = round(
+                max(0.25, float(c.get("min_expected_pnl_usdc", 0.40)) - 0.12), 2
+            )
+            c["quote_time_min_s"] = max(20, int(float(c.get("quote_time_min_s") or 60) - 20))
+            hyp = (
+                "STARVE: bajar edge/z/mid/EV y +2 min — el mercado no da |fair-mid| "
+                "con filtros previos (evita wait_edge eterno)."
+            )
+            c = _apply_lab_invariants(c)
+            _sync_size_caps(c)
+            stamp = datetime.now(timezone.utc).strftime("%H%M%S")
+            c["_family"] = str(c.get("_family") or "lock_green")
+            c["_method"] = method
+            c["_sessions"] = min(6, int(c.get("_sessions") or 6))
+            c["_minutes"] = round(minutes, 1)
+            c["_hypothesis"] = hyp
+            c["_rationale"] = f"Diagnóstico STARVED: {diagnosis['detail']}"
+            c["_diagnosis_prev"] = code
+            c["demo_label"] = f"{method}_g{gen}_{stamp}"
+            return c
+
+    # Familias pendientes (skip selective si venimos de starve reciente)
     for spec in FAMILY_SPECS:
         fam = spec["family"]
         if fam not in families_tried and (CFG_DIR / spec["file"]).exists():
+            if code == "STARVED" and fam == "selective_edge":
+                continue
             cfg = _build_family_cfg(spec)
             cfg["_rationale"] = (
-                f"Tras diagnóstico {diagnosis['code']}: aún falta evaluar familia «{fam}»."
+                f"Tras diagnóstico {code}: aún falta evaluar familia «{fam}»."
             )
-            cfg["_diagnosis_prev"] = diagnosis["code"]
+            cfg["_diagnosis_prev"] = code
             return cfg
 
     c = deepcopy(base_cfg)
-    code = diagnosis["code"]
     minutes = float(c.get("_minutes") or 8.0)
     sessions = int(c.get("_sessions") or 6)
     family = str(c.get("_family") or c.get("_method") or "adapt")
@@ -359,17 +526,19 @@ def plan_next(
     if code == "STARVED":
         method = "open_feed"
         minutes = min(12.0, minutes + 2.0)
-        c["min_edge"] = round(max(0.030, float(c.get("min_edge", 0.038)) - 0.004), 3)
-        c["min_quote_mid"] = round(max(0.28, float(c.get("min_quote_mid", 0.35)) - 0.03), 2)
-        c["max_quote_mid"] = round(min(0.72, float(c.get("max_quote_mid", 0.65)) + 0.03), 2)
-        c["min_expected_pnl_usdc"] = round(max(0.35, float(c.get("min_expected_pnl_usdc", 0.55)) - 0.1), 2)
-        hyp = "Bajar barreras de entrada (edge/mid) y +2 min para obtener fills reales."
+        c["min_edge"] = round(max(0.026, float(c.get("min_edge", 0.032)) - 0.004), 3)
+        c["min_z"] = round(max(0.85, float(c.get("min_z", 1.0)) - 0.1), 2)
+        c["min_quote_mid"] = round(max(0.22, float(c.get("min_quote_mid", 0.28)) - 0.03), 2)
+        c["max_quote_mid"] = round(min(0.78, float(c.get("max_quote_mid", 0.72)) + 0.03), 2)
+        c["min_expected_pnl_usdc"] = round(max(0.25, float(c.get("min_expected_pnl_usdc", 0.4)) - 0.1), 2)
+        hyp = "Bajar barreras de entrada (edge/mid/z/EV) y +2 min para obtener fills reales."
     elif code == "LOW_FILLS":
         method = "more_time"
         minutes = min(12.0, max(10.0, minutes + 2.0))
         sessions = min(8, sessions + 1) if minutes >= 10 else sessions
-        c["min_edge"] = round(max(0.032, float(c.get("min_edge", 0.038)) - 0.002), 3)
-        hyp = "Más tiempo de mercado; edge −0.002 para sample usable sin tirar calidad."
+        c["min_edge"] = round(max(0.028, float(c.get("min_edge", 0.032)) - 0.002), 3)
+        c["min_z"] = round(max(0.9, float(c.get("min_z", 1.0)) - 0.05), 2)
+        hyp = "Más tiempo de mercado; edge/z ↓ para sample usable sin tirar calidad."
     elif code in ("TOXIC_TAIL", "FAT_TAIL", "DEAD_RED"):
         method = "cut_tail_hard"
         c["quote_size_shares"] = max(22, int(c.get("quote_size_shares", 30)) - 4)
@@ -546,7 +715,11 @@ def _strategy_record(row: dict, cfg: dict, run_id: str) -> dict:
             "entries": cfg.get("max_entry_fills"),
             "no_pyramid": cfg.get("no_pyramid_entries"),
             "fair_fade": cfg.get("fair_fade_exit"),
+            "min_z": cfg.get("min_z"),
+            "min_ev": cfg.get("min_expected_pnl_usdc"),
         },
+        # Snapshot para poder REFINE el Top sin perder la DNA exacta
+        "cfg": {k: v for k, v in cfg.items() if not str(k).startswith("_")},
     }
 
 
@@ -668,14 +841,39 @@ async def main() -> int:
     methods_tried: set[str] = set()
     cfg = queue[0]
     plans_log: list[dict] = []
+    miss_top5_streak = 0
+    refine_round = 0
+    # Si el primer trial arranca en mercado calmado, no quemar 6×10 min a ciegas:
+    # batch_paper_eval corta a las 2 sesiones sin fills (BATCH_STOP_AFTER_STARVE_STREAK).
 
     for i in range(1, MAX_TRIALS + 1):
         if STOP_FLAG.exists():
             print("STOP_OVERNIGHT flag — exiting", flush=True)
             break
 
-        if i <= len(queue):
-            cfg = queue[i - 1]
+        do_refine = False
+        top_entry_for_refine: dict | None = None
+        if i == 1:
+            cfg = queue[0]
+        elif i <= len(queue) and miss_top5_streak == 0:
+            # Solo seguir cola de familias si no estamos ya en modo refine
+            # y el último no fue STARVED (en ese caso plan_next abre feed)
+            last = history[-1] if history else None
+            if last and last.get("diagnosis") == "STARVED":
+                base_cfg = last.get("_full_cfg") or cfg
+                cfg = plan_next(
+                    base_cfg=base_cfg,
+                    row=last,
+                    diagnosis={
+                        "code": "STARVED",
+                        "detail": str(last.get("diagnosis_detail") or ""),
+                    },
+                    gen=i,
+                    families_tried=families_tried,
+                    methods_tried=methods_tried,
+                )
+            else:
+                cfg = queue[i - 1]
         else:
             last = history[-1]
             last_cfg = last.get("_full_cfg") or cfg
@@ -683,12 +881,33 @@ async def main() -> int:
                 "code": str(last.get("diagnosis") or "DEAD_RED"),
                 "detail": str(last.get("diagnosis_detail") or ""),
             }
-            # DNA base: best si es usable; si no, último trial
             best_cat = categorize(best["row"]) if best else "REJECT"
             if best and best_cat in ("ELITE", "PROMISING", "MARGINAL"):
                 base_cfg = best["cfg"]
             else:
                 base_cfg = last_cfg
+
+            # Top 5 lleno + última estrategia fuera → mejorar el Top
+            lb_top: list[dict] = []
+            if _leaderboard_path().is_file():
+                try:
+                    lb_top = list(
+                        json.loads(_leaderboard_path().read_text(encoding="utf-8")).get("top10")
+                        or []
+                    )[:5]
+                except Exception:
+                    lb_top = []
+            if miss_top5_streak >= 1 and len(lb_top) >= 5:
+                do_refine = True
+                top_entry_for_refine = lb_top[refine_round % min(3, len(lb_top))]
+            elif (
+                diag["code"] not in ("STARVED", "LOW_FILLS")
+                and len(lb_top) >= 5
+                and last.get("tag_in_top5") is False
+            ):
+                do_refine = True
+                top_entry_for_refine = lb_top[0]
+
             cfg = plan_next(
                 base_cfg=base_cfg,
                 row=last,
@@ -696,7 +915,12 @@ async def main() -> int:
                 gen=i,
                 families_tried=families_tried,
                 methods_tried=methods_tried,
+                refine_top=do_refine,
+                top_entry=top_entry_for_refine,
+                refine_round=refine_round,
             )
+            if do_refine:
+                refine_round += 1
 
         sessions = int(cfg.get("_sessions") or 6)
         minutes = float(cfg.get("_minutes") or 8.0)
@@ -780,6 +1004,7 @@ async def main() -> int:
             "edge": cfg_disk.get("min_edge"),
             "lock": cfg_disk.get("lock_profit_usdc"),
             "stopped_early_streak": summary.get("stopped_early_streak"),
+            "stopped_early_starve": summary.get("stopped_early_starve"),
             "hit": False,
         }
         row["hit"] = _hit(row)
@@ -810,6 +1035,19 @@ async def main() -> int:
 
         top10 = _upsert_leaderboard(entry)
         (run_dir / "top10.json").write_text(json.dumps(top10, indent=2), encoding="utf-8")
+
+        top5_tags = {str(x.get("tag")) for x in top10[:5]}
+        in_top5 = entry["tag"] in top5_tags
+        hist_row["tag_in_top5"] = in_top5
+        if len(top10) >= 5 and not in_top5:
+            miss_top5_streak += 1
+        else:
+            miss_top5_streak = 0
+        print(
+            f"leaderboard: in_top5={in_top5} miss_streak={miss_top5_streak} "
+            f"cat={row['category']}",
+            flush=True,
+        )
 
         mail_r = _email_trial(
             hist_row, cfg_disk, run_id, trial_dir, summary=summary, top10=top10

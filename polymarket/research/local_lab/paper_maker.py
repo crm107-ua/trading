@@ -641,10 +641,17 @@ class PaperSession:
                     self._last_progress_log = now_hb
                     elapsed_min = (now_hb - self._session_start_mono) / 60.0
                     pct = min(99.9, round(100.0 * elapsed_min / minutes, 1)) if minutes > 0 else 0.0
+                    mid_hb = None
+                    edge_hb = None
+                    if state.get("best_bid") is not None and state.get("best_ask") is not None:
+                        mid_hb = (float(state["best_bid"]) + float(state["best_ask"])) / 2.0
+                        edge_hb = abs(float(fair) - mid_hb)
                     print(
                         f"paper {pct}% [{elapsed_min:.1f}/{minutes:.1f} min] "
                         f"decisions={self._decision_count} quotes={self.quotes_logged} "
-                        f"fills={len(self.fills)} last=wait_edge (rule)",
+                        f"fills={len(self.fills)} last=wait_edge (rule) "
+                        f"edge={edge_hb if edge_hb is not None else 'n/a'} "
+                        f"need>={self.cfg.get('min_edge')} mid={mid_hb if mid_hb is not None else 'n/a'}",
                         flush=True,
                     )
                 await asyncio.sleep(poll_s)

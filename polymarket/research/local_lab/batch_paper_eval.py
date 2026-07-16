@@ -31,8 +31,12 @@ async def run_batch(
     results: list[dict] = []
     # Tras N losses seguidas (sesiones con fills), para el batch: evita 5 rojas seguidas.
     streak_stop = int(os.getenv("BATCH_STOP_AFTER_LOSS_STREAK", "2") or 2)
+    # N sesiones seguidas sin fills → parar (no quemar 60 min en wait_edge).
+    starve_stop = int(os.getenv("BATCH_STOP_AFTER_STARVE_STREAK", "2") or 2)
     consec_losses = 0
+    consec_starve = 0
     stopped_early = False
+    stopped_early_starve = False
     for i in range(sessions):
         sid = f"v2_{stamp}_{i+1:02d}"
         print(f"\n=== session {i+1}/{sessions} ({minutes} min) ===", flush=True)
@@ -55,7 +59,20 @@ async def run_batch(
             f"  net={rep['net_session_usdc']:+.2f} fills={rep['fills']} adverse={rep['adverse_rate']}",
             flush=True,
         )
-        if int(rep.get("fills") or 0) > 0:
+        n_fills = int(rep.get("fills") or 0)
+        if n_fills <= 0:
+            consec_starve += 1
+            if starve_stop > 0 and consec_starve >= starve_stop:
+                print(
+                    f"\n*** BATCH STARVE KILL: {consec_starve} sesiones sin fills "
+                    f"(limite={starve_stop}) — abrir edge/mid en siguiente trial ***",
+                    flush=True,
+                )
+                stopped_early = True
+                stopped_early_starve = True
+                break
+        else:
+            consec_starve = 0
             if float(rep["net_session_usdc"]) < 0:
                 consec_losses += 1
             elif float(rep["net_session_usdc"]) > 0:
@@ -95,8 +112,10 @@ async def run_batch(
             round(sum(r["net"] for r in with_fills) / len(with_fills), 4) if with_fills else 0
         ),
         "results": results,
-        "stopped_early_streak": stopped_early,
+        "stopped_early_streak": stopped_early and not stopped_early_starve,
+        "stopped_early_starve": stopped_early_starve,
         "loss_streak_limit": streak_stop,
+        "starve_streak_limit": starve_stop,
         "verdict_binding": False,
         "warning": (
             "Lab local — win_rate no garantiza PnL real. "
