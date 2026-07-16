@@ -479,15 +479,17 @@ def plan_next(
             minutes = min(12.0, float(c.get("_minutes") or 8.0) + 2.0)
             c["min_edge"] = round(max(0.026, float(c.get("min_edge", 0.032)) - 0.006), 3)
             c["min_z"] = round(max(0.85, float(c.get("min_z", 1.0)) - 0.15), 2)
-            c["min_quote_mid"] = round(max(0.22, float(c.get("min_quote_mid", 0.28)) - 0.04), 2)
-            c["max_quote_mid"] = round(min(0.78, float(c.get("max_quote_mid", 0.72)) + 0.04), 2)
+            c["min_quote_mid"] = round(max(0.18, float(c.get("min_quote_mid", 0.28)) - 0.06), 2)
+            c["max_quote_mid"] = round(min(0.82, float(c.get("max_quote_mid", 0.72)) + 0.06), 2)
             c["min_expected_pnl_usdc"] = round(
                 max(0.25, float(c.get("min_expected_pnl_usdc", 0.40)) - 0.12), 2
             )
-            c["quote_time_min_s"] = max(20, int(float(c.get("quote_time_min_s") or 60) - 20))
+            c["quote_time_min_s"] = max(15, int(float(c.get("quote_time_min_s") or 60) - 30))
+            # Ventanas BTC 5m: permitir cotizar casi todo el tramo útil
+            c["quote_time_max_s"] = max(int(c.get("quote_time_max_s") or 520), 280)
             hyp = (
-                "STARVE: bajar edge/z/mid/EV y +2 min — el mercado no da |fair-mid| "
-                "con filtros previos (evita wait_edge eterno)."
+                "STARVE: bajar edge/z/mid/EV y +2 min. Si mid~0.9 era wait_mid_hi "
+                "(lotería); ampliamos banda 0.18–0.82 y esperamos ventana usable."
             )
             c = _apply_lab_invariants(c)
             _sync_size_caps(c)

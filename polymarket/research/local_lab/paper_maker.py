@@ -643,13 +643,25 @@ class PaperSession:
                     pct = min(99.9, round(100.0 * elapsed_min / minutes, 1)) if minutes > 0 else 0.0
                     mid_hb = None
                     edge_hb = None
+                    why = "wait_edge"
                     if state.get("best_bid") is not None and state.get("best_ask") is not None:
                         mid_hb = (float(state["best_bid"]) + float(state["best_ask"])) / 2.0
                         edge_hb = abs(float(fair) - mid_hb)
+                        mid_lo = float(self.cfg.get("min_quote_mid", 0) or 0)
+                        mid_hi = float(self.cfg.get("max_quote_mid", 1) or 1)
+                        need = float(self.cfg.get("min_edge", 0.03) or 0.03)
+                        if mid_lo > 0 and mid_hb < mid_lo:
+                            why = "wait_mid_lo"
+                        elif mid_hi < 1 and mid_hb > mid_hi:
+                            why = "wait_mid_hi"  # cola/lotería (p.ej. mid 0.93)
+                        elif edge_hb is not None and edge_hb < need:
+                            why = "wait_edge"
+                        else:
+                            why = "wait_filter"  # z / EV / time / spread
                     print(
                         f"paper {pct}% [{elapsed_min:.1f}/{minutes:.1f} min] "
                         f"decisions={self._decision_count} quotes={self.quotes_logged} "
-                        f"fills={len(self.fills)} last=wait_edge (rule) "
+                        f"fills={len(self.fills)} last={why} (rule) "
                         f"edge={edge_hb if edge_hb is not None else 'n/a'} "
                         f"need>={self.cfg.get('min_edge')} mid={mid_hb if mid_hb is not None else 'n/a'}",
                         flush=True,
