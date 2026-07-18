@@ -1,6 +1,8 @@
 # Hito 2026-07-18 — Grind NIM BEST (WR ≥ 75% micro 5/10/15€)
 
-**Estado:** CAMPEÓN DE LABORATORIO (paper) · **no** es PnL on-chain  
+**Estado:** CAMPEÓN DE LABORATORIO (paper) · revalidación cloud parcial · **no** es PnL on-chain  
+**Revalidación:** ver [`REVALIDATE_2026-07-18_GRIND_NIM_BEST.md`](./REVALIDATE_2026-07-18_GRIND_NIM_BEST.md)  
+
 **Metodología:** `grind_nim_flow` → snapshot `grind_nim_best`  
 **Stack IA:** NVIDIA NIM hybrid + profit-assist + grind (`nemotron-mini-4b-instruct`)  
 **Capital de referencia:** 10 EUR (validación corta también en 5 / 15)  

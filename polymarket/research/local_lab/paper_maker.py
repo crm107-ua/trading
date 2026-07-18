@@ -211,7 +211,13 @@ class PaperSession:
         target = max(base, frac * edge_now, base + scale * max(0.0, edge_now - base))
         return max(base, min(cap, target))
 
-    def _manage_inventory_exits(self, mid: float, fair: float) -> None:
+    def _manage_inventory_exits(
+        self,
+        mid: float,
+        fair: float,
+        *,
+        exit_mark: float | None = None,
+    ) -> None:
         if abs(self.inventory_shares) < 1e-9:
             return
         # Session kill on mark-to-mid equity — para YA (flatten + no más entries).
@@ -220,6 +226,8 @@ class PaperSession:
         avg = self.cost_basis / self.inventory_shares
         tp = self._dynamic_tp(fair, avg)
         stop = float(self.cfg.get("stop_loss_mid", 0.0) or 0.0)
+        # Conservative mark for stops: bid if long, ask if short (exitable price).
+        mark = mid if exit_mark is None else float(exit_mark)
         if self.cfg.get("take_profit_mid", True):
             if self.inventory_shares > 0 and mid >= avg + tp:
                 self._flatten_inventory_mid(mid)
@@ -235,19 +243,21 @@ class PaperSession:
             if self.inventory_shares < 0 and fair > mid + 1e-9 and mid > avg:
                 self._flatten_inventory_mid(mid)
                 return
-        # Corte duro por PnL no realizado (no depende de saltos de mid entre polls)
-        unreal = self.inventory_shares * mid - self.cost_basis
+        # Corte por PnL no realizado usando precio ejecutable (no mid optimista).
+        unreal = self.inventory_shares * mark - self.cost_basis
         max_loss = float(self.cfg.get("max_loss_usdc", 0) or 0)
-        if max_loss > 0 and unreal <= -abs(max_loss):
-            self._flatten_inventory_mid(mid)
-            return
+        if max_loss > 0:
+            soft = abs(max_loss) * (0.7 if grind_mode_enabled() else 1.0)
+            if unreal <= -soft:
+                self._flatten_inventory_mid(mark)
+                return
         if stop > 0:
             if max_loss > 0 and abs(self.inventory_shares) > 1e-9:
                 stop = min(stop, max_loss / abs(self.inventory_shares))
-            if self.inventory_shares > 0 and mid <= avg - stop:
-                self._flatten_inventory_mid(mid)
-            elif self.inventory_shares < 0 and mid >= avg + stop:
-                self._flatten_inventory_mid(mid)
+            if self.inventory_shares > 0 and mark <= avg - stop:
+                self._flatten_inventory_mid(mark)
+            elif self.inventory_shares < 0 and mark >= avg + stop:
+                self._flatten_inventory_mid(mark)
 
     def _smart_flatten(self, mid: float, fair: float) -> float:
         """
@@ -559,7 +569,12 @@ class PaperSession:
                 and state["best_ask"] is not None
             ):
                 mid_m = (state["best_bid"] + state["best_ask"]) / 2.0
-                self._manage_inventory_exits(mid_m, fair)
+                exit_mark = (
+                    float(state["best_bid"])
+                    if self.inventory_shares > 0
+                    else float(state["best_ask"])
+                )
+                self._manage_inventory_exits(mid_m, fair, exit_mark=exit_mark)
                 # NIM profit-assist: ¿dejar correr TP o flatten ya?
                 if (
                     profit_assist_enabled() or grind_mode_enabled()

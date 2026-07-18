@@ -28,6 +28,7 @@ POLY = Path(__file__).resolve().parents[2]
 OUT = POLY / "data_local" / "local_lab" / "grind_iterate"
 
 STRATS = (
+    "grind_nim_best",
     "grind_nim_flow",
     "grind_nim_v1",
     "grind_nim_v2",
@@ -310,11 +311,29 @@ async def async_main(args: argparse.Namespace) -> int:
         best_cfg = json.loads(Path(best["cfg"]).read_text(encoding="utf-8"))
         snap = OUT / "best_grind_cfg.json"
         snap.write_text(json.dumps(best_cfg, indent=2), encoding="utf-8")
-        # Also copy into config if champion
+        # Copy into frozen champ only when DNA is the 10 EUR reference.
+        # Capital-scaled winners (5/15) go to a side file so we don't overwrite
+        # the base maker_demo_grind_nim_best.json with size/lock from another book.
         if best.get("hit_wr75") or best.get("hit_grind"):
-            dest = POLY / "config" / "maker_demo_grind_nim_best.json"
-            dest.write_text(json.dumps(best_cfg, indent=2), encoding="utf-8")
-            print(f"Saved best cfg -> {dest}", flush=True)
+            capital = float(best.get("capital") or 0)
+            if abs(capital - 10.0) < 1e-9:
+                dest = POLY / "config" / "maker_demo_grind_nim_best.json"
+                best_cfg["demo_label"] = "grind_nim_best"
+                best_cfg["initial_capital_usdc"] = 10.0
+                dest.write_text(json.dumps(best_cfg, indent=2), encoding="utf-8")
+                print(f"Saved best cfg -> {dest}", flush=True)
+            else:
+                side = (
+                    POLY
+                    / "config"
+                    / f"maker_demo_grind_nim_best_c{int(capital)}.json"
+                )
+                side.write_text(json.dumps(best_cfg, indent=2), encoding="utf-8")
+                print(
+                    f"Saved capital-scaled champ -> {side} "
+                    f"(base grind_nim_best.json untouched)",
+                    flush=True,
+                )
 
     print(f"\nREPORT -> {path}", flush=True)
     print("BEST:", json.dumps(best, indent=2, ensure_ascii=False)[:1200])

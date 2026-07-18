@@ -3,8 +3,9 @@
 **Fecha:** 2026-07-18  
 **Nombre corto:** Grind NIM BEST  
 **IDs:** catálogo `grind_nim_best` · config `maker_demo_grind_nim_best.json`  
-**Veredicto lab:** WR **80%** paper @10 EUR (4 wins / 1 loss, +0.37 EUR)  
-**Aviso:** no es PnL on-chain; no extrapolar a live sin revalidación.
+**Veredicto lab (origen):** WR **80%** paper @10 EUR (4 wins / 1 loss, +0.37 EUR)  
+**Revalidación cloud 2026-07-18:** 5€ **WR 100%** (+1.25) · 10€ **WR 50%** (+0.04, no confirma) · 15€ **WR 100%** (+2.04)  
+**Aviso:** no es PnL on-chain; **no listo para live** hasta recuperar WR≥75% estable @10€.
 
 Documento hermano con detalle de hito:  
 [`MILESTONE_2026-07-18_GRIND_NIM_BEST.md`](./MILESTONE_2026-07-18_GRIND_NIM_BEST.md)
