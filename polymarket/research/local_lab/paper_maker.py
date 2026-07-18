@@ -556,18 +556,9 @@ class PaperSession:
             fair = estimate_fair_values(
                 feats, sigma_annual=float(self.cfg.get("sigma_annual", 0.55))
             )["up"]
-            flatten_s = float(self.cfg.get("flatten_before_window_s", 0))
-            if (
-                flatten_s > 0
-                and time_rem <= flatten_s
-                and abs(self.inventory_shares) > 1e-9
-                and state["best_bid"] is not None
-                and state["best_ask"] is not None
-            ):
-                self._smart_flatten((state["best_bid"] + state["best_ask"]) / 2, fair)
             if self.last_quote_spot is None or abs(state["spot"] - self.last_quote_spot) >= requote_move:
                 self.last_quote_spot = state["spot"]
-            # Manage open inventory every tick (TP / stop at observable mid).
+            # Manage open inventory every tick BEFORE window flatten (stops first).
             if (
                 abs(self.inventory_shares) > 1e-9
                 and state["best_bid"] is not None
@@ -632,6 +623,16 @@ class PaperSession:
                             )
                         if exit_dec.action == "flatten":
                             self._flatten_inventory_mid(mid_m)
+            # Window flatten only if stops/NIM did not already cut.
+            flatten_s = float(self.cfg.get("flatten_before_window_s", 0))
+            if (
+                flatten_s > 0
+                and time_rem <= flatten_s
+                and abs(self.inventory_shares) > 1e-9
+                and state["best_bid"] is not None
+                and state["best_ask"] is not None
+            ):
+                self._smart_flatten((state["best_bid"] + state["best_ask"]) / 2, fair)
             # Holding inventory: skip entry NIM/quotes (latency) so stops re-check every poll.
             if abs(self.inventory_shares) > 1e-9:
                 await asyncio.sleep(poll_s)
@@ -763,6 +764,7 @@ class PaperSession:
             if decision.action == "cancel_replace":
                 self.last_quote_spot = state["spot"]
             self.quotes_logged += 1
+            fills_before = len(self.fills)
             self._check_fill(
                 state["last_trade"],
                 quote,
@@ -781,6 +783,14 @@ class PaperSession:
             if state["best_bid"] is not None and state["best_ask"] is not None:
                 mid_now = (state["best_bid"] + state["best_ask"]) / 2
                 self._maybe_hazard_tp_exit(mid_now, fair, dt_s=poll_s)
+                # Immediate stop check on the fill tick (don't wait another poll).
+                if len(self.fills) > fills_before and abs(self.inventory_shares) > 1e-9:
+                    exit_mark = (
+                        float(state["best_bid"])
+                        if self.inventory_shares > 0
+                        else float(state["best_ask"])
+                    )
+                    self._manage_inventory_exits(mid_now, fair, exit_mark=exit_mark)
             await asyncio.sleep(poll_s)
 
         # Resolve open inventory at session end
