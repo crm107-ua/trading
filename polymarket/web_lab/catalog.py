@@ -132,6 +132,17 @@ FEATURED: list[dict[str, Any]] = [
         "base_capital": 10.0,
     },
     {
+        "id": "selective_mom",
+        "name": "Selective + Momentum align",
+        "badge": "CHAMP",
+        "file": "maker_demo_selective_mom.json",
+        "default_sessions": 6,
+        "default_minutes": 5.0,
+        "blurb": "Edge selectivo solo con roll BTC. Scout @10€ WR 75% (3W/1L +0.37, traded=4).",
+        "metrics": {"total": 0.37, "wr": 0.75, "avg": 0.0925},
+        "base_capital": 10.0,
+    },
+    {
         "id": "follow_gate",
         "name": "FollowGate (anti-fade)",
         "badge": "PIONEER",

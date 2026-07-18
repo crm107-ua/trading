@@ -211,16 +211,23 @@ async def async_main(args: argparse.Namespace) -> int:
         ):
             winners[c] = row
 
+    # Mismo DNA en todos los capitals (no mezclar fusion@5 + selective@10).
+    same_label = None
+    if winners and all(c in winners for c in capitals):
+        labels = {winners[c]["label"] for c in capitals}
+        if len(labels) == 1:
+            same_label = next(iter(labels))
     report = {
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "method": "multi_dna",
-        "target": "WR>=0.70 @5 and @10 with traded>=2",
+        "target": "WR>=0.70 @5 and @10 with traded>=2 SAME DNA",
         "parallel": args.parallel,
         "sessions": args.sessions,
         "minutes": args.minutes,
         "rows": rows_l,
         "winners": {str(k): v for k, v in winners.items()},
-        "both_ready": all(c in winners for c in capitals),
+        "both_ready": bool(same_label),
+        "same_label": same_label,
     }
     OUT.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -229,29 +236,33 @@ async def async_main(args: argparse.Namespace) -> int:
     path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     latest.write_text(json.dumps(report, indent=2), encoding="utf-8")
 
-    if report["both_ready"]:
+    if report["both_ready"] and same_label:
         best10 = winners.get(10.0) or next(iter(winners.values()))
         champ = json.loads(Path(best10["cfg"]).read_text(encoding="utf-8"))
-        # Keep strategy hint in notes; paper runner uses strategy arg at promo time
-        champ["demo_label"] = "grind_nim_best"
+        champ["demo_label"] = same_label
         champ["notes"] = (
-            f"MULTI-DNA {stamp}: "
+            f"MULTI-DNA SAME {stamp}: {same_label}/{best10['strategy']} "
             + ", ".join(
-                f"{int(c)}€ WR{winners[c]['wr']:.0%} ({winners[c]['label']}/{winners[c]['strategy']})"
+                f"{int(c)}€ WR{winners[c]['wr']:.0%} traded={winners[c]['sessions_with_fills']}"
                 for c in sorted(winners)
             )
             + ". Paper feeds reales. No on-chain."
         )
         champ["_promo_strategy"] = best10["strategy"]
-        dest = POLY / "config" / "maker_demo_grind_nim_best.json"
-        # Only overwrite champ cfg if strategy is maker_edge-compatible fields;
-        # always write fusion/follow winners to their own promo file too.
-        promo = POLY / "config" / f"maker_demo_promo_{best10['label']}.json"
+        # Nunca pisar grind_nim_best (invariantes selective). Solo promo dedicado.
+        promo = POLY / "config" / f"maker_demo_promo_{same_label}.json"
         promo.write_text(json.dumps(champ, indent=2) + "\n", encoding="utf-8")
-        if best10["strategy"] == "maker_edge":
-            dest.write_text(json.dumps(champ, indent=2) + "\n", encoding="utf-8")
-            print(f"\nPROMOTED EDGE -> {dest}", flush=True)
-        print(f"PROMO SNAPSHOT -> {promo}", flush=True)
+        # Si es fusion/follow, actualizar su config canónica
+        if same_label.startswith("fusion") or same_label.startswith("follow"):
+            canon = POLY / "config" / f"maker_demo_{same_label}.json"
+            if canon.exists() or "fusion_follow_heavy" in same_label:
+                dest = POLY / "config" / "maker_demo_fusion_follow_heavy.json"
+                dest.write_text(
+                    json.dumps({**champ, "demo_label": "fusion_follow_heavy"}, indent=2)
+                    + "\n",
+                    encoding="utf-8",
+                )
+        print(f"PROMO SNAPSHOT -> {promo} (same DNA={same_label})", flush=True)
 
     print(f"\nREPORT -> {path}", flush=True)
     for c in capitals:
