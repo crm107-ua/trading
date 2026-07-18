@@ -83,7 +83,7 @@ FEATURED: list[dict[str, Any]] = [
         "file": "maker_demo_grind_nim_selective.json",
         "default_sessions": 6,
         "default_minutes": 5.0,
-        "blurb": "Listón alto: min_edge 0.031, min_z 1.0, mid 0.32–0.68, max_abs_edge 0.085. Objetivo WR≥75% @10€ feeds reales.",
+        "blurb": "Listón alto v2: min_edge 0.031, min_z 1.0, max_abs_edge 0.085, mid base 0.28–0.72. v1 mid-estrecho WR25% rechazada.",
         "metrics": {"total": None, "wr": None, "avg": None},
         "base_capital": 10.0,
     },

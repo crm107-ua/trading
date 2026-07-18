@@ -21,9 +21,10 @@ def test_selective_raises_entry_bar_vs_base() -> None:
 
     assert float(sel["min_edge"]) > float(base["min_edge"])
     assert float(sel["min_z"]) > float(base["min_z"])
-    assert float(sel["min_quote_mid"]) > float(base["min_quote_mid"])
-    assert float(sel["max_quote_mid"]) < float(base["max_quote_mid"])
     assert float(sel["max_abs_edge"]) <= float(base["max_abs_edge"])
+    # v2: keep base mid band (narrow mid starved into bad regimes in v1)
+    assert float(sel["min_quote_mid"]) == float(base["min_quote_mid"])
+    assert float(sel["max_quote_mid"]) == float(base["max_quote_mid"])
 
     # Hierarchy: soft >= min, hard >= soft
     assert float(sel["soft_edge"]) >= float(sel["min_edge"])
@@ -37,5 +38,5 @@ def test_selective_floors_preserve_bar() -> None:
     cfg = apply_live_clob_floors(cfg)
     assert float(cfg["min_edge"]) >= 0.031
     assert float(cfg["min_z"]) >= 1.0
-    assert float(cfg["min_quote_mid"]) >= 0.32
-    assert float(cfg["max_quote_mid"]) <= 0.68
+    assert float(cfg["min_quote_mid"]) >= 0.28
+    assert float(cfg["max_quote_mid"]) <= 0.72
