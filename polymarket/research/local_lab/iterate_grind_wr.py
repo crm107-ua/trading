@@ -28,6 +28,7 @@ POLY = Path(__file__).resolve().parents[2]
 OUT = POLY / "data_local" / "local_lab" / "grind_iterate"
 
 STRATS = (
+    "grind_nim_selective",
     "grind_nim_best",
     "grind_nim_flow",
     "grind_nim_v1",

@@ -77,6 +77,17 @@ FEATURED: list[dict[str, Any]] = [
         "base_capital": 10.0,
     },
     {
+        "id": "grind_nim_selective",
+        "name": "Grind NIM Selective (entry bar↑)",
+        "badge": "WR",
+        "file": "maker_demo_grind_nim_selective.json",
+        "default_sessions": 6,
+        "default_minutes": 5.0,
+        "blurb": "Listón alto: min_edge 0.031, min_z 1.0, mid 0.32–0.68, max_abs_edge 0.085. Objetivo WR≥75% @10€ feeds reales.",
+        "metrics": {"total": None, "wr": None, "avg": None},
+        "base_capital": 10.0,
+    },
+    {
         "id": "grind_nim_best_c5",
         "name": "Grind NIM BEST @5€ (reval)",
         "badge": "CHAMP",
