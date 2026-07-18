@@ -95,7 +95,7 @@ async def async_main(args: argparse.Namespace) -> int:
 
     if report["both_ready"]:
         champ = json.loads(BASE.read_text(encoding="utf-8"))
-        champ["demo_label"] = "grind_nim_best"
+        champ["demo_label"] = "fusion_follow_heavy"
         champ["notes"] = (
             f"PROMOTED fusion_follow_heavy {stamp}: "
             + ", ".join(
@@ -106,19 +106,14 @@ async def async_main(args: argparse.Namespace) -> int:
             + ". Strategy=maker_fusion. Paper feeds reales. No on-chain."
         )
         champ["_promo_strategy"] = "maker_fusion"
-        # Write dedicated promo + update fusion champ; also snapshot as grind best notes
+        # No sobrescribir grind_nim_best (invariantes selective). Champ nuevo aparte.
         (POLY / "config" / "maker_demo_fusion_follow_heavy.json").write_text(
-            json.dumps({**champ, "demo_label": "fusion_follow_heavy"}, indent=2) + "\n",
-            encoding="utf-8",
+            json.dumps(champ, indent=2) + "\n", encoding="utf-8"
         )
         (POLY / "config" / "maker_demo_promo_fusion_follow_heavy.json").write_text(
             json.dumps(champ, indent=2) + "\n", encoding="utf-8"
         )
-        # Keep grind_nim_best as paper champ pointer with fusion DNA + strategy hint
-        (POLY / "config" / "maker_demo_grind_nim_best.json").write_text(
-            json.dumps(champ, indent=2) + "\n", encoding="utf-8"
-        )
-        print("PROMOTED fusion_follow_heavy -> grind_nim_best (+ promo snapshot)", flush=True)
+        print("PROMOTED fusion_follow_heavy (+ promo snapshot)", flush=True)
 
     print(f"REPORT -> {path}", flush=True)
     print("BOTH_READY:", report["both_ready"], flush=True)
