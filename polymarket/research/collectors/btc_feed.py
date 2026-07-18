@@ -11,17 +11,15 @@ from pathlib import Path
 import httpx
 
 from polymarket.src.data import write_manifest
+from polymarket.src.data.btc_spot import fetch_btc_spot_rest
 
 BINANCE_REST = "https://api.binance.com/api/v3/ticker/price"
 BINANCE_WS = "wss://stream.binance.com:9443/ws/btcusdt@trade"
 
 
 def fetch_btc_price_rest() -> tuple[float, float]:
-    t0 = time.perf_counter()
-    r = httpx.get(BINANCE_REST, params={"symbol": "BTCUSDT"}, timeout=10.0)
-    r.raise_for_status()
-    latency_ms = (time.perf_counter() - t0) * 1000
-    return float(r.json()["price"]), latency_ms
+    price, latency_ms, _source = fetch_btc_spot_rest(timeout=10.0)
+    return price, latency_ms
 
 
 async def record_trades(duration_s: float, out_path: Path) -> int:

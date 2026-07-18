@@ -27,6 +27,7 @@ from polymarket.research.collectors.market_discovery import (
 )
 from polymarket.research.local_lab.strategies import STRATEGIES, QuoteIntent
 from polymarket.src.data.book_utils import best_bid_ask
+from polymarket.src.data.btc_spot import fetch_btc_spot_async
 from polymarket.src.pricing.fair_value import estimate_fair_values
 from polymarket.src.signals.features import build_market_features
 from polymarket.src.ai.decision_engine import (
@@ -440,10 +441,10 @@ class PaperSession:
 
     async def _fetch_state(self, token_id: str) -> dict[str, Any] | None:
         async with httpx.AsyncClient(timeout=12.0) as client:
-            br = await client.get(
-                "https://api.binance.com/api/v3/ticker/price",
-                params={"symbol": "BTCUSDT"},
-            )
+            try:
+                spot, _src = await fetch_btc_spot_async(client)
+            except RuntimeError:
+                return None
             cr = await client.get(
                 "https://clob.polymarket.com/book",
                 params={"token_id": token_id},
@@ -451,7 +452,6 @@ class PaperSession:
         if cr.status_code != 200:
             return None
         book = cr.json()
-        spot = float(br.json()["price"])
         bids = book.get("bids") or []
         asks = book.get("asks") or []
         bb, ba = best_bid_ask(bids, asks)
@@ -518,11 +518,7 @@ class PaperSession:
                 we = window_end(target)
                 self.window_end_ns = int(we.timestamp() * 1e9) if we else None
                 async with httpx.AsyncClient(timeout=12.0) as c:
-                    r = await c.get(
-                        "https://api.binance.com/api/v3/ticker/price",
-                        params={"symbol": "BTCUSDT"},
-                    )
-                    self.strike = float(r.json()["price"])
+                    self.strike, _src = await fetch_btc_spot_async(c)
                 self.last_trade_seen = None
                 self.last_quote_spot = None
 
