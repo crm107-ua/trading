@@ -239,9 +239,106 @@ def maker_edge(
     return QuoteIntent(bid, ask, size, "maker_edge", f"rich e={abs_edge:.3f} sz={size}")
 
 
+def maker_pulse(
+    fair_up: float,
+    best_bid: float | None,
+    best_ask: float | None,
+    spot: float,
+    strike: float,
+    cfg: dict[str, Any],
+) -> QuoteIntent | None:
+    """
+    PulseGate — régimen + latencia BTC→libro + anti-toxicidad.
+
+    No fadra mids informados. Solo puja el lado cheap (UP) cuando:
+      1) régimen vivo (mid en banda, lejos del settlement/manip),
+      2) strike fiable (ventana fresca),
+      3) momentum BTC confirma (spot>strike + velocidad),
+      4) edge fair−mid y libro no tóxico (imbalance),
+      5) señal persistente N polls.
+    """
+    if best_bid is None or best_ask is None:
+        return None
+    if not bool(cfg.get("_strike_trusted", True)):
+        return None
+
+    mid = (best_bid + best_ask) / 2.0
+    mid_lo = float(cfg.get("min_quote_mid", 0.38) or 0.38)
+    mid_hi = float(cfg.get("max_quote_mid", 0.62) or 0.62)
+    if mid < mid_lo or mid > mid_hi:
+        return None
+
+    # Blackout de settlement (literatura 2026: push en últimos ~10–60s).
+    t_rem = cfg.get("_time_remaining_s")
+    t_min = float(cfg.get("quote_time_min_s", 110) or 110)
+    t_max = float(cfg.get("quote_time_max_s", 260) or 260)
+    if t_rem is not None:
+        if float(t_rem) < t_min or float(t_rem) > t_max:
+            return None
+
+    # Latencia: spot ya gana, mid aún barato vs fair.
+    lead = float(spot) - float(strike)
+    min_lead = float(cfg.get("min_spot_lead_usd", 12.0) or 12.0)
+    if lead < min_lead:
+        return None
+    vel = float(cfg.get("_spot_velocity_usd", 0.0) or 0.0)
+    min_vel = float(cfg.get("min_spot_velocity_usd", 4.0) or 4.0)
+    if vel < min_vel:
+        return None
+
+    edge = float(fair_up) - mid
+    min_edge = float(cfg.get("min_edge", 0.028) or 0.028)
+    max_abs_edge = float(cfg.get("max_abs_edge", 0.09) or 0.09)
+    if edge < min_edge or edge > max_abs_edge:
+        return None
+    sigma = float(cfg.get("sigma_mid", 0.03) or 0.03)
+    if edge / max(sigma, 1e-6) < float(cfg.get("min_z", 0.9) or 0.9):
+        return None
+
+    imb = cfg.get("_book_imbalance")
+    min_imb = float(cfg.get("min_bid_imbalance", 0.52) or 0.52)
+    if imb is not None and float(imb) < min_imb:
+        return None  # ask-heavy → flujo tóxico contra nuestro bid
+
+    need = int(cfg.get("pulse_persist_polls", 2) or 2)
+    if int(cfg.get("_pulse_streak", 0) or 0) < need:
+        return None
+
+    mkt_spread = best_ask - best_bid
+    if mkt_spread < float(cfg.get("min_market_spread", 0.01) or 0.01):
+        return None
+
+    size = float(cfg["quote_size_shares"])
+    size = max(1.0, round(size * float(cfg.get("_runtime_size_scale", 1.0) or 1.0), 2))
+    hard_cap = float(cfg.get("max_quote_size_shares", 0) or 0)
+    if hard_cap > 0:
+        size = min(size, hard_cap)
+
+    capture = float(cfg.get("expected_capture_frac", 0.5) or 0.5)
+    min_ev = float(cfg.get("min_expected_pnl_usdc", 0.0) or 0.0)
+    if min_ev > 0 and edge * size * capture < min_ev:
+        return None
+
+    bid = _clip(
+        best_bid if cfg.get("quote_join_touch", True) else fair_up - float(cfg["half_spread"]),
+        0.01,
+        0.98,
+    )
+    if bid >= mid - 1e-9 or (mid_lo > 0 and bid < mid_lo):
+        return None
+    return QuoteIntent(
+        bid,
+        0.99,
+        size,
+        "maker_pulse",
+        f"pulse e={edge:.3f} lead={lead:.0f} vel={vel:.0f} imb={imb}",
+    )
+
+
 STRATEGIES = {
     "maker_16": maker_16,
     "wide_spread_probe": wide_spread_only,
     "tight_mid_fade": tight_mid_fade,
     "maker_edge": maker_edge,
+    "maker_pulse": maker_pulse,
 }

@@ -26,7 +26,7 @@ from polymarket.research.collectors.market_discovery import (
     window_start,
 )
 from polymarket.research.local_lab.strategies import STRATEGIES, QuoteIntent
-from polymarket.src.data.book_utils import best_bid_ask
+from polymarket.src.data.book_utils import best_bid_ask, top_size_imbalance
 from polymarket.src.data.btc_spot import fetch_btc_spot_async
 from polymarket.src.pricing.fair_value import estimate_fair_values
 from polymarket.src.signals.features import build_market_features
@@ -77,8 +77,11 @@ class PaperSession:
     current_market_id: str | None = None
     current_question: str | None = None
     strike: float | None = None
+    strike_trusted: bool = False
+    window_start_ns: int | None = None
     window_end_ns: int | None = None
     spot_history: list[tuple[int, float]] = field(default_factory=list)
+    _pulse_streak: int = 0
     nim_decisions_used: int = 0
     nim_rule_holds: int = 0
     nim_cache_hits: int = 0
@@ -102,6 +105,72 @@ class PaperSession:
             return lambda fair, bb, ba, spot, strike: fn(fair, self.cfg, bb, ba)
         return lambda fair, bb, ba, spot, strike: fn(fair, bb, ba, spot, strike, self.cfg)
 
+    def _spot_velocity_usd(self, window_ms: int = 3000) -> float:
+        if len(self.spot_history) < 2:
+            return 0.0
+        now_ns = self.spot_history[-1][0]
+        cutoff = now_ns - int(window_ms * 1e6)
+        pts = [(t, s) for t, s in self.spot_history if t >= cutoff]
+        if len(pts) < 2:
+            pts = self.spot_history[-min(5, len(self.spot_history)) :]
+        if len(pts) < 2:
+            return 0.0
+        return float(pts[-1][1] - pts[0][1])
+
+    def _inject_pulse_runtime(
+        self,
+        *,
+        fair: float,
+        spot: float,
+        bids: list,
+        asks: list,
+        bb: float | None,
+        ba: float | None,
+        time_remaining_s: float | None,
+    ) -> None:
+        """Runtime features for PulseGate (and harmless for other strats)."""
+        if time_remaining_s is not None:
+            self.cfg["_time_remaining_s"] = time_remaining_s
+        self.cfg["_strike_trusted"] = bool(self.strike_trusted)
+        self.cfg["_spot_velocity_usd"] = self._spot_velocity_usd(
+            int(self.cfg.get("pulse_velocity_window_ms", 3000) or 3000)
+        )
+        self.cfg["_book_imbalance"] = top_size_imbalance(
+            bids or [], asks or [], n=int(self.cfg.get("pulse_book_levels", 3) or 3)
+        )
+        strike = float(self.strike or spot)
+        lead = float(spot) - strike
+        min_lead = float(self.cfg.get("min_spot_lead_usd", 12.0) or 12.0)
+        min_vel = float(self.cfg.get("min_spot_velocity_usd", 4.0) or 4.0)
+        min_edge = float(self.cfg.get("min_edge", 0.028) or 0.028)
+        mid_lo = float(self.cfg.get("min_quote_mid", 0.38) or 0.38)
+        mid_hi = float(self.cfg.get("max_quote_mid", 0.62) or 0.62)
+        mid_ok = False
+        edge_ok = False
+        if bb is not None and ba is not None:
+            mid = (float(bb) + float(ba)) / 2.0
+            mid_ok = mid_lo <= mid <= mid_hi
+            edge_ok = (float(fair) - mid) >= min_edge
+        t_ok = True
+        if time_remaining_s is not None:
+            t_min = float(self.cfg.get("quote_time_min_s", 0) or 0)
+            t_max = float(self.cfg.get("quote_time_max_s", 0) or 0)
+            tr = float(time_remaining_s)
+            if t_min > 0 and tr < t_min:
+                t_ok = False
+            if t_max > 0 and tr > t_max:
+                t_ok = False
+        agree = (
+            self.strike_trusted
+            and mid_ok
+            and edge_ok
+            and t_ok
+            and lead >= min_lead
+            and float(self.cfg["_spot_velocity_usd"]) >= min_vel
+        )
+        self._pulse_streak = self._pulse_streak + 1 if agree else 0
+        self.cfg["_pulse_streak"] = self._pulse_streak
+
     def _maker_quotes(
         self,
         fair: float,
@@ -110,11 +179,20 @@ class PaperSession:
         spot: float,
         *,
         time_remaining_s: float | None = None,
+        bids: list | None = None,
+        asks: list | None = None,
     ) -> QuoteIntent | None:
         from polymarket.research.local_lab.strategies import apply_inventory_skew
 
-        if time_remaining_s is not None:
-            self.cfg["_time_remaining_s"] = time_remaining_s
+        self._inject_pulse_runtime(
+            fair=fair,
+            spot=spot,
+            bids=bids or [],
+            asks=asks or [],
+            bb=bb,
+            ba=ba,
+            time_remaining_s=time_remaining_s,
+        )
         now = time.monotonic()
         if now >= self._size_scale_until:
             self._size_scale = 1.0
@@ -531,9 +609,18 @@ class PaperSession:
                 self.current_question = target.question
                 ws = window_start(target)
                 we = window_end(target)
+                self.window_start_ns = int(ws.timestamp() * 1e9) if ws else None
                 self.window_end_ns = int(we.timestamp() * 1e9) if we else None
                 async with httpx.AsyncClient(timeout=12.0) as c:
                     self.strike, _src = await fetch_btc_spot_async(c)
+                # Strike paper ≈ open solo si entramos frescos; si no, no operar ventana
+                # (evita sesgo mid-window que mataba WR en maker_edge).
+                join_age_s = 999.0
+                if self.window_start_ns is not None:
+                    join_age_s = max(0.0, (time.time_ns() - self.window_start_ns) / 1e9)
+                max_join = float(self.cfg.get("max_window_join_age_s", 45) or 45)
+                self.strike_trusted = join_age_s <= max_join
+                self._pulse_streak = 0
                 self.last_trade_seen = None
                 self.last_quote_spot = None
 
@@ -541,6 +628,11 @@ class PaperSession:
             if state is None:
                 await asyncio.sleep(poll_s)
                 continue
+
+            # Track spot every poll (PulseGate velocity / adverse window).
+            self.spot_history.append((time.time_ns(), float(state["spot"])))
+            if len(self.spot_history) > 240:
+                self.spot_history = self.spot_history[-180:]
 
             we_ns = self.window_end_ns or time.time_ns()
             time_rem = max((we_ns - time.time_ns()) / 1e9, 1.0)
@@ -650,6 +742,8 @@ class PaperSession:
                 state["best_ask"],
                 state["spot"],
                 time_remaining_s=time_rem,
+                bids=state.get("bids") or [],
+                asks=state.get("asks") or [],
             )
             # Risk gates for NEW entries only (inventory skew still exits).
             cd = float(self.cfg.get("cooldown_after_fill_s", 0) or 0)

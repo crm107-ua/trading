@@ -99,6 +99,17 @@ FEATURED: list[dict[str, Any]] = [
         "base_capital": 10.0,
     },
     {
+        "id": "pulse_gate",
+        "name": "PulseGate (latencia+régimen)",
+        "badge": "PIONEER",
+        "file": "maker_demo_pulse_gate.json",
+        "default_sessions": 4,
+        "default_minutes": 3.0,
+        "blurb": "Nuevo DNA: strike fresco + momentum BTC + blackout settlement + imbalance. No fade mid informado.",
+        "metrics": {"total": None, "wr": None, "avg": None},
+        "base_capital": 10.0,
+    },
+    {
         "id": "grind_nim_best_c5",
         "name": "Grind NIM BEST @5€ (reval)",
         "badge": "CHAMP",
