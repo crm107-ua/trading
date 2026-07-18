@@ -152,6 +152,11 @@ def maker_edge(
     min_z = float(cfg.get("min_z", 1.0))
     if abs_edge < min_edge or z < min_z:
         return None
+    # Si |fair-mid| es enorme, el modelo suele estar mal (mid 0.95 vs fair 0.5).
+    # No fades de mercados casi resueltos: matan el WR del grind.
+    max_abs_edge = float(cfg.get("max_abs_edge", 0) or 0)
+    if max_abs_edge > 0 and abs_edge > max_abs_edge:
+        return None
 
     # Evita lotería (YES a 0.09 / 0.90): ahí el "edge" vs fair suele ser ruido de cola.
     mid_lo = float(cfg.get("min_quote_mid", 0.0) or 0.0)
@@ -204,6 +209,16 @@ def maker_edge(
     if mkt_spread < float(cfg.get("min_market_spread", 0.0)):
         return None
 
+    # Solo lado cheap (bid) si rich está desactivado (grind / micro_strict).
+    allow_rich = bool(
+        cfg.get(
+            "allow_rich_side",
+            cfg.get("allow_rich_side_live", True),
+        )
+    )
+    if cfg.get("cheap_side_only", False):
+        allow_rich = False
+
     if edge >= min_edge:
         bid = _clip(best_bid if cfg.get("quote_join_touch", True) else fair_up - hs - buf, 0.01, 0.98)
         if bid >= mid - 1e-9:
@@ -213,6 +228,8 @@ def maker_edge(
             return None
         ask = 0.99
         return QuoteIntent(bid, ask, size, "maker_edge", f"cheap e={abs_edge:.3f} sz={size}")
+    if not allow_rich:
+        return None
     ask = _clip(best_ask if cfg.get("quote_join_touch", True) else fair_up + hs + buf, 0.02, 0.99)
     if ask <= mid + 1e-9:
         return None

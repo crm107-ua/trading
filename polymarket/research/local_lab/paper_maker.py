@@ -33,6 +33,7 @@ from polymarket.src.ai.decision_engine import (
     Decision,
     decide_inventory_exit,
     decide_quote_action,
+    grind_mode_enabled,
     profit_assist_enabled,
 )
 from polymarket.src.ai.env_loader import load_repo_dotenv
@@ -233,8 +234,13 @@ class PaperSession:
             if self.inventory_shares < 0 and fair > mid + 1e-9 and mid > avg:
                 self._flatten_inventory_mid(mid)
                 return
+        # Corte duro por PnL no realizado (no depende de saltos de mid entre polls)
+        unreal = self.inventory_shares * mid - self.cost_basis
+        max_loss = float(self.cfg.get("max_loss_usdc", 0) or 0)
+        if max_loss > 0 and unreal <= -abs(max_loss):
+            self._flatten_inventory_mid(mid)
+            return
         if stop > 0:
-            max_loss = float(self.cfg.get("max_loss_usdc", 0) or 0)
             if max_loss > 0 and abs(self.inventory_shares) > 1e-9:
                 stop = min(stop, max_loss / abs(self.inventory_shares))
             if self.inventory_shares > 0 and mid <= avg - stop:
@@ -559,7 +565,9 @@ class PaperSession:
                 mid_m = (state["best_bid"] + state["best_ask"]) / 2.0
                 self._manage_inventory_exits(mid_m, fair)
                 # NIM profit-assist: ¿dejar correr TP o flatten ya?
-                if profit_assist_enabled() and abs(self.inventory_shares) > 1e-9:
+                if (
+                    profit_assist_enabled() or grind_mode_enabled()
+                ) and abs(self.inventory_shares) > 1e-9:
                     every = float(os.environ.get("NVIDIA_NIM_EXIT_EVERY_S", "8") or 8)
                     now_e = time.monotonic()
                     if now_e - self._last_exit_nim_mono >= every:

@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from polymarket.src.execution.clob_live import read_gates
+from polymarket.src.execution.live_policy import kill_line_reason, validate_real_start
 from polymarket.web_lab.catalog import apply_live_clob_floors, load_scaled_config
 
 POLY = Path(__file__).resolve().parents[1]
@@ -145,7 +146,18 @@ class RunManager:
             return False, f"Capital {capital} > tope live {g.max_capital_usdc} USDC"
         if g.missing:
             return False, f"Faltan credenciales: {', '.join(g.missing)}"
-        return True, "ok"
+        bal = None
+        try:
+            from polymarket.src.execution.clob_live import ClobLiveClient
+
+            bal = ClobLiveClient().balance_collateral_usdc()
+        except Exception as e:
+            if not g.dry_run:
+                return False, f"No se pudo leer saldo pUSD: {e}"
+        if g.dry_run:
+            return True, "ok"
+        # Live real: política Fase A/D (checklist + ≥5 pUSD + capital 1–1.5)
+        return validate_real_start(capital, bal)
 
     async def start(
         self,
@@ -284,7 +296,14 @@ class RunManager:
                     continue
                 self._ingest_line(run, line)
                 await self._emit_log(run, line)
-            code = await run.proc.wait()
+                # Kill-switch externo (Fase B/D)
+                if run.mode == "live" and not run.dry_run:
+                    reason = kill_line_reason(line)
+                    if reason:
+                        await self._emit_log(run, f"GUARD_STOP reason={reason}")
+                        await self.stop(run.run_id)
+                        break
+            code = await run.proc.wait() if run.proc else 0
             if run.status != "stopped":
                 run.status = "done" if code in (0, 1) else "error"
                 if code not in (0, 1):

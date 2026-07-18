@@ -37,6 +37,41 @@ def test_apply_live_floors_widen_opportunity():
     assert cfg["allow_rich_side_live"] is True
 
 
+def test_apply_live_floors_preserve_grind_lock_loss():
+    from polymarket.web_lab.catalog import apply_live_clob_floors
+
+    cfg = apply_live_clob_floors(
+        {
+            "demo_label": "grind_nim_flow",
+            "preserve_selectivity": True,
+            "quote_size_shares": 5,
+            "lock_profit_usdc": 0.10,
+            "max_loss_usdc": 0.10,
+            "min_quote_mid": 0.28,
+            "max_quote_mid": 0.72,
+            "min_edge": 0.028,
+        }
+    )
+    assert cfg["lock_profit_usdc"] <= 0.12
+    assert cfg["max_loss_usdc"] <= 0.12
+    assert cfg["min_quote_mid"] >= 0.28
+    assert cfg["max_quote_mid"] <= 0.72
+
+
+def test_position_token_prefers_held():
+    from pathlib import Path
+    from polymarket.research.local_lab.live_maker import LiveSession
+    from polymarket.src.execution.clob_live import ClobLiveClient
+
+    s = LiveSession(cfg={}, out_dir=Path("."), clob=ClobLiveClient(), bankroll=1.0)
+    s.inventory_shares = 5.0
+    s.held_token_id = "DOWN_TOKEN"
+    s.open_token_id = "UP_TOKEN"
+    assert s._position_token("UP_TOKEN") == "DOWN_TOKEN"
+    s.inventory_shares = 0.0
+    assert s._position_token("UP_TOKEN") == "UP_TOKEN"
+
+
 def test_quote_side_helpers():
     from types import SimpleNamespace
     from polymarket.research.local_lab.live_maker import LiveSession

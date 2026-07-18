@@ -16,6 +16,16 @@ from pydantic import BaseModel, Field
 
 from polymarket.src.ai.env_loader import load_repo_dotenv, repo_root
 from polymarket.src.execution.clob_live import live_health, read_gates
+from polymarket.src.execution.live_policy import (
+    MAX_DAY_LOSS_USDC,
+    MAX_REAL_CAPITAL,
+    MAX_SESSION_LOSS_USDC,
+    MIN_REAL_BALANCE_PUSD,
+    evaluate_readiness,
+    load_checklist,
+    load_day_pnl,
+    validate_real_start,
+)
 from polymarket.web_lab.catalog import list_strategies
 from polymarket.web_lab.run_manager import MANAGER
 
@@ -23,7 +33,7 @@ load_repo_dotenv()
 
 STATIC = Path(__file__).resolve().parent / "static"
 ENV_PATH = repo_root() / ".env"
-app = FastAPI(title="Poly Desk", version="2.1.0")
+app = FastAPI(title="Poly Desk", version="2.2.0")
 app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
 
 # safe | dry | real
@@ -96,6 +106,7 @@ async def health() -> dict:
     live = live_health()
     g = read_gates()
     level = _current_level()
+    cl = load_checklist()
     return {
         "ok": True,
         "level": level,
@@ -107,12 +118,52 @@ async def health() -> dict:
         "signature_type": g.signature_type,
         "funder": g.funder,
         "eoa": g.eoa,
+        "checklist_ok": bool(cl.get("ok")),
+        "dry_sessions_clean": int(cl.get("dry_sessions_clean") or 0),
+        "min_real_balance_pusd": MIN_REAL_BALANCE_PUSD,
+        "max_real_capital": MAX_REAL_CAPITAL,
+        "max_session_loss": MAX_SESSION_LOSS_USDC,
+        "max_day_loss": MAX_DAY_LOSS_USDC,
+        "day_pnl": load_day_pnl(),
+        "policy_blockers": live.get("policy_blockers") or [],
         "levels": {
             "safe": "Bloqueado: no se puede lanzar live.",
             "dry": "Ensayo: misma lógica live, sin enviar órdenes (WOULD_POST).",
-            "real": "Dinero real: GTC post-only con tu pUSD.",
+            "real": "Dinero real: requiere checklist dry + ≥5 pUSD + capital 1–1.5€.",
         },
-        "note": "Elige el modo en el selector. Paper no usa el nivel live.",
+        "note": "Paper libre. Live real congelado hasta Fase B+D.",
+    }
+
+
+@app.get("/api/live/desk")
+async def live_desk() -> dict:
+    """Dashboard: cash, checklist, day pnl, órdenes abiertas."""
+    live = live_health()
+    g = read_gates()
+    ready = evaluate_readiness(
+        balance_pusd=live.get("balance_pusd"), dry_run=g.dry_run
+    )
+    return {
+        "ok": True,
+        "level": _current_level(),
+        "balance_pusd": live.get("balance_pusd"),
+        "open_orders": live.get("open_orders"),
+        "checklist": load_checklist(),
+        "day_pnl": load_day_pnl(),
+        "readiness": {
+            "can_dry": ready.can_dry,
+            "can_real": ready.can_real,
+            "checklist_ok": ready.checklist_ok,
+            "dry_sessions": ready.dry_sessions,
+            "blockers": ready.blockers,
+        },
+        "limits": {
+            "min_real_balance_pusd": MIN_REAL_BALANCE_PUSD,
+            "max_real_capital": MAX_REAL_CAPITAL,
+            "max_session_loss": MAX_SESSION_LOSS_USDC,
+            "max_day_loss": MAX_DAY_LOSS_USDC,
+        },
+        "held_hint": "held_token se ve en logs live (held_token_id / FLATTEN token=)",
     }
 
 
@@ -156,7 +207,27 @@ async def start_run(body: StartBody) -> dict:
                 400,
                 "Para live real marca la casilla de aceptar riesgo (dinero real).",
             )
-        max_cap = float(os.getenv("POLY_LIVE_MAX_CAPITAL_USDC") or 5)
+        # Validar política ANTES de armar real (evita dejar ARMED si falla)
+        bal = None
+        try:
+            from polymarket.src.execution.clob_live import ClobLiveClient
+
+            bal = ClobLiveClient().balance_collateral_usdc()
+        except Exception as e:
+            raise HTTPException(400, f"No se pudo leer saldo pUSD: {e}") from e
+        ok, msg = validate_real_start(body.capital, bal)
+        if not ok:
+            raise HTTPException(409, msg)
+        # Fase D: solo micro_strict
+        if body.strategy_id != "micro_strict":
+            raise HTTPException(
+                400,
+                "Live real solo admite strategy_id=micro_strict (protocolo Fase D).",
+            )
+        max_cap = min(
+            float(os.getenv("POLY_LIVE_MAX_CAPITAL_USDC") or 5),
+            MAX_REAL_CAPITAL,
+        )
         _apply_level("real", max_cap)
         mode = "live"
         if body.capital > max_cap:
@@ -166,8 +237,8 @@ async def start_run(body: StartBody) -> dict:
         run = await MANAGER.start(
             strategy_id=body.strategy_id,
             capital=body.capital,
-            sessions=body.sessions,
-            minutes=body.minutes,
+            sessions=body.sessions if mode == "paper" else 1,
+            minutes=min(float(body.minutes), 8.0) if mode == "live" else body.minutes,
             mode=mode,
         )
     except KeyError as e:
@@ -230,6 +301,13 @@ async def stream_run(run_id: str) -> StreamingResponse:
 
 def main() -> None:
     import uvicorn
+
+    # Fase A: arrancar siempre en SAFE (no dejar real armado de sesiones previas)
+    try:
+        _apply_level("safe", float(os.getenv("POLY_LIVE_MAX_CAPITAL_USDC") or 2))
+        print("Poly Desk → SAFE al arrancar (live real bloqueado por política)", flush=True)
+    except Exception as e:
+        print(f"WARN no se pudo forzar SAFE: {e}", flush=True)
 
     port = int(os.getenv("POLY_WEB_PORT", "4000"))
     uvicorn.run(

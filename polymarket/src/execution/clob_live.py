@@ -182,6 +182,20 @@ class ClobLiveClient:
         bal = self.client.get_balance_allowance(params)
         return int(bal.get("balance") or "0") / 1e6
 
+    def balance_conditional_shares(self, token_id: str) -> float:
+        """Shares del token condicional (tras update allowance)."""
+        from py_clob_client_v2 import AssetType, BalanceAllowanceParams
+
+        params = BalanceAllowanceParams(
+            asset_type=AssetType.CONDITIONAL, token_id=str(token_id)
+        )
+        try:
+            self.client.update_balance_allowance(params)
+        except Exception:
+            pass
+        bal = self.client.get_balance_allowance(params)
+        return int(bal.get("balance") or "0") / 1e6
+
     def assert_can_trade(self, *, capital: float, allow_dry: bool = True) -> None:
         g = self.gates
         if capital > g.max_capital_usdc + 1e-9:
@@ -469,6 +483,13 @@ def _extract_order_id(resp: Any) -> str | None:
 
 
 def live_health() -> dict[str, Any]:
+    from polymarket.src.execution.live_policy import (
+        MIN_REAL_BALANCE_PUSD,
+        evaluate_readiness,
+        load_checklist,
+        load_day_pnl,
+    )
+
     g = read_gates()
     out: dict[str, Any] = {
         "armed": g.armed,
@@ -485,15 +506,31 @@ def live_health() -> dict[str, Any]:
         "can_live": False,
         "can_dry": False,
         "error": None,
+        "min_real_balance_pusd": MIN_REAL_BALANCE_PUSD,
+        "checklist": load_checklist(),
+        "day_pnl": load_day_pnl(),
+        "policy_blockers": [],
     }
     try:
+        bal = None
         if g.signing_ready and g.clob_ready:
             cli = ClobLiveClient()
             cli.connect()
             bal = cli.balance_collateral_usdc()
             out["balance_pusd"] = round(bal, 4)
-            out["can_dry"] = g.armed and bal >= 0
-            out["can_live"] = g.armed and (not g.dry_run) and bal > 0.05 and not g.missing
+        ready = evaluate_readiness(balance_pusd=bal, dry_run=g.dry_run)
+        out["can_dry"] = bool(g.armed and g.dry_run and not g.missing)
+        out["can_live"] = bool(
+            g.armed and (not g.dry_run) and ready.can_real and not g.missing
+        )
+        out["policy_blockers"] = ready.blockers
+        out["checklist_ok"] = ready.checklist_ok
+        out["open_orders"] = 0
+        if g.signing_ready and g.clob_ready and bal is not None:
+            try:
+                out["open_orders"] = len(cli.open_orders())
+            except Exception:
+                pass
     except Exception as e:
         out["error"] = f"{type(e).__name__}: {e}"
     return out

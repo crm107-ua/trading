@@ -32,16 +32,17 @@
       ],
     },
     live_real: {
-      title: "Live real — dinero real",
+      title: "Live real — dinero real (protocolo)",
       chip: "REAL",
       chipClass: "danger",
       banner: "real",
-      bannerTitle: "Live · dinero real",
-      bannerText: "Envía órdenes GTC post-only con tu pUSD. 1 sesión · respeta el tope USDC.",
+      bannerTitle: "Live · bloqueado hasta checklist",
+      bannerText:
+        "Requiere: dry checklist OK + ≥5 pUSD + capital 1–1.5€ + micro_strict. Kill 0.40€/sesión.",
       points: [
-        "Órdenes maker reales en Polymarket.",
-        "Marca la casilla de aceptar riesgo antes de ejecutar.",
-        "Parar cancela órdenes abiertas (best-effort).",
+        "Solo metodología micro_strict (Fase D).",
+        "Checklist: python -m polymarket.research.local_lab.dry_e2e_batch",
+        "Parar cancela órdenes; pérdida día ≥1€ → SAFE.",
       ],
     },
   };
@@ -141,9 +142,12 @@
     $("btnRun").textContent =
       mode === "paper" ? "Ejecutar" : mode === "live_dry" ? "Ejecutar dry-run" : "Ejecutar LIVE";
 
+    const blockers = (health && health.policy_blockers) || [];
     $("armHint").textContent =
       mode === "live_real"
-        ? "Tope live limita el capital máximo. Marca la casilla para habilitar dinero real."
+        ? blockers.length
+          ? "Bloqueado: " + blockers[0]
+          : "Checklist OK. Capital 1–1.5€ · micro_strict · acepta riesgo."
         : mode === "live_dry"
           ? "Dry-run no mueve fondos. Úsalo para validar el cableado CLOB."
           : "Paper no usa wallet ni pUSD.";
@@ -169,6 +173,29 @@
     $("minutes").value = s.default_minutes || 5;
   }
 
+  async function loadDesk() {
+    try {
+      const desk = await fetch("/api/live/desk").then((r) => r.json());
+      const r = desk.readiness || {};
+      const lim = desk.limits || {};
+      const day = desk.day_pnl || {};
+      const cl = desk.checklist || {};
+      $("deskBlurb").textContent = r.can_real
+        ? `Listo real · bal ${desk.balance_pusd ?? "—"} · orders ${desk.open_orders ?? 0}`
+        : `No real: ${(r.blockers && r.blockers[0]) || "checklist/saldo"}. Dry ${r.dry_sessions || 0}/10 · día ${fmt(day.pnl || 0)}€ · min ${lim.min_real_balance_pusd || 5} pUSD`;
+      if ($("pill-check")) {
+        $("pill-check").textContent = cl.ok ? "OK" : `${cl.dry_sessions_clean || 0}/10`;
+        $("chip-check").className = "stat-chip " + (cl.ok ? "ok" : "warn");
+      }
+      if ($("pill-day")) {
+        $("pill-day").textContent = fmt(day.pnl || 0);
+        setPnlClass($("pill-day"), Number(day.pnl || 0));
+      }
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
   async function loadHealth() {
     health = await fetch("/api/health").then((r) => r.json());
     const live = health.live || {};
@@ -184,6 +211,7 @@
     if (live.max_capital_usdc != null) {
       $("armMax").value = live.max_capital_usdc;
     }
+    await loadDesk();
     applyModeUi();
   }
 
@@ -200,8 +228,9 @@
     });
     if (strategies.length) {
       const pref =
+        strategies.find((x) => x.id === "micro_strict") ||
         strategies.find((x) => x.id === "micro_5") ||
-        strategies.find((x) => x.id === "t4_risk_up") ||
+        strategies.find((x) => x.id === "t4_exact") ||
         strategies[0];
       sel.value = pref.id;
       renderStratCard(pref);

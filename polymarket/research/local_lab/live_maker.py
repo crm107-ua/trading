@@ -41,6 +41,10 @@ from polymarket.src.execution.clob_live import (
     read_gates,
     round_inventory_size,
 )
+from polymarket.src.execution.live_policy import (
+    day_loss_breached,
+    record_session_pnl,
+)
 
 _DRY_SEQ = 0
 from polymarket.src.pricing.fair_value import estimate_fair_values
@@ -97,7 +101,11 @@ class LiveSession:
     _dust_stuck: bool = False
     _halt_new_entries: bool = False
     position_leg: str | None = None  # "up" | "down" — qué token tenemos
+    held_token_id: str | None = None  # token con inventario (persiste tras fill)
     realized_pnl: float = 0.0
+    _cash_bal: float | None = None
+    _cash_bal_mono: float = 0.0
+    _skip_cash_until: float = 0.0
 
     def _maker_quote(self, fair: float, bb: float | None, ba: float | None, spot: float, time_rem: float):
         self.cfg["_time_remaining_s"] = time_rem
@@ -133,6 +141,45 @@ class LiveSession:
             "best_ask": ba,
             "feed_ts_ms": int(time.time() * 1000),
         }
+
+    async def _refresh_cash(self, *, force: bool = False) -> float:
+        now = time.monotonic()
+        if (
+            not force
+            and self._cash_bal is not None
+            and (now - self._cash_bal_mono) < 5.0
+        ):
+            return float(self._cash_bal)
+        bal = await asyncio.to_thread(self.clob.balance_collateral_usdc)
+        self._cash_bal = float(bal)
+        self._cash_bal_mono = now
+        return float(bal)
+
+    async def _cancel_stale_open_orders(self) -> None:
+        """Cancela órdenes huérfanas (p.ej. SELL dust @0.01 de sesiones previas)."""
+        try:
+            orders = await asyncio.to_thread(self.clob.open_orders)
+        except Exception as e:
+            print(f"OPEN_ORDERS_ERR {type(e).__name__}: {e}", flush=True)
+            return
+        for o in orders or []:
+            if not isinstance(o, dict):
+                continue
+            oid = str(o.get("id") or o.get("orderID") or "")
+            if not oid:
+                continue
+            side = str(o.get("side") or "").upper()
+            try:
+                px = float(o.get("price") or 0)
+            except (TypeError, ValueError):
+                px = 0.0
+            # Dust exits / basura que no libera nada útil
+            if side == "SELL" and px <= 0.02:
+                try:
+                    await asyncio.to_thread(self.clob.cancel, oid)
+                    print(f"CANCEL_STALE {side}@{px} order={oid[:18]}…", flush=True)
+                except Exception as e:
+                    print(f"CANCEL_STALE_ERR {type(e).__name__}: {e}", flush=True)
 
     def _progress(self, minutes: float, last: str) -> None:
         now = time.monotonic()
@@ -223,6 +270,24 @@ class LiveSession:
         if side_u == "BUY" and px * sz < MIN_BUY_NOTIONAL_USDC:
             print(f"SKIP_MIN_NOTIONAL {px * sz:.2f} < {MIN_BUY_NOTIONAL_USDC}", flush=True)
             return
+        if side_u == "BUY":
+            # CLOB: notional BUY <= collateral libre (pUSD)
+            now_m = time.monotonic()
+            if now_m < self._skip_cash_until:
+                return
+            cash = await self._refresh_cash(force=False)
+            need = px * sz
+            # Buffer 2¢ por redondeos CLOB
+            if need > cash - 0.02:
+                # Con min 5 shares solo cabe si px <= (cash-0.02)/5
+                max_px = max(0.01, (cash - 0.02) / max(sz, MIN_ORDER_SHARES))
+                print(
+                    f"SKIP_CASH need={need:.2f} bal={cash:.4f} "
+                    f"(5sh solo si px<={max_px:.2f})",
+                    flush=True,
+                )
+                self._skip_cash_until = now_m + 8.0
+                return
         try:
             resp = await asyncio.to_thread(
                 self.clob.place_post_only_gtc,
@@ -232,10 +297,14 @@ class LiveSession:
                 size=sz,
             )
         except Exception as e:
+            msg = str(e)
             print(f"POST_ERR {type(e).__name__}: {e}", flush=True)
             if side_u == "SELL":
                 self._flatten_fails += 1
                 self._last_flatten_attempt = time.monotonic()
+            if "balance is not enough" in msg.lower() or "not enough balance" in msg.lower():
+                await self._refresh_cash(force=True)
+                self._skip_cash_until = time.monotonic() + 12.0
             return
         oid = resp.get("orderID")
         st = resp.get("status")
@@ -304,6 +373,7 @@ class LiveSession:
             )
             if self.open_order_id and self.open_side == "BUY":
                 self.position_leg = "up"
+                self.held_token_id = str(target.token_id_up)
                 return "quote_up"
             return "post_fail_up"
         if allow_rich and self._is_rich_quote(quote) and getattr(target, "token_id_down", None):
@@ -335,6 +405,7 @@ class LiveSession:
             )
             if self.open_order_id and self.open_side == "BUY":
                 self.position_leg = "down"
+                self.held_token_id = down_id
                 return "quote_down"
             return "post_fail_down"
         return "skip_rich_side"
@@ -360,6 +431,9 @@ class LiveSession:
             self._entry_fills += 1
             self._exit_posted = False
             self._flatten_fails = 0
+            # Crítico: no perder el token al limpiar open_order_* tras MATCHED
+            if self.open_token_id:
+                self.held_token_id = str(self.open_token_id)
         else:
             if self.inventory_shares > 1e-9:
                 avg = self.cost_basis / self.inventory_shares
@@ -375,6 +449,7 @@ class LiveSession:
             if self.inventory_shares < 1e-9:
                 self._exit_posted = False
                 self.position_leg = None
+                self.held_token_id = None
         self.fills.append(
             LiveFill(
                 ts_ns=time.time_ns(),
@@ -550,28 +625,66 @@ class LiveSession:
             return
         if self.open_side == "SELL" and self.open_order_id:
             return  # ya hay exit resting
+        # Siempre vender el token que realmente tenemos (no el Up por defecto)
+        sell_tid = str(self.held_token_id or self.open_token_id or token_id)
         print(
-            f"FLATTEN reason={reason} inv={self.inventory_shares:.6f}",
+            f"FLATTEN reason={reason} inv={self.inventory_shares:.6f} "
+            f"token={sell_tid[:18]}… leg={self.position_leg}",
             flush=True,
         )
         self._last_flatten_attempt = now
-        inv = round_inventory_size(abs(self.inventory_shares))
+        # Verificar balance CLOB del condicional (evita SELL al token equivocado)
+        try:
+            clob_bal = await asyncio.to_thread(
+                self.clob.balance_conditional_shares, sell_tid
+            )
+        except Exception as e:
+            print(f"BAL_COND_ERR {type(e).__name__}: {e}", flush=True)
+            clob_bal = 0.0
+        if clob_bal < 0.01:
+            print(
+                f"FLATTEN_WRONG_TOKEN bal=0 token={sell_tid[:24]}… "
+                f"held={str(self.held_token_id)[:24] if self.held_token_id else None}",
+                flush=True,
+            )
+            self._flatten_fails += 1
+            return
+        inv = round_inventory_size(min(abs(self.inventory_shares), clob_bal))
         if inv + 1e-9 < MIN_ORDER_SHARES:
-            topped = await self._topup_dust_to_min(token_id, best_ask=best_ask)
+            topped = await self._topup_dust_to_min(sell_tid, best_ask=best_ask)
             if not topped:
                 self._flatten_fails += 1
                 return
-            inv = round_inventory_size(abs(self.inventory_shares))
-        px = float(best_bid) if best_bid is not None else 0.5
-        # Salida agresiva (FAK) primero; si falla, post-only join bid
+            inv = round_inventory_size(
+                min(
+                    abs(self.inventory_shares),
+                    await asyncio.to_thread(
+                        self.clob.balance_conditional_shares, sell_tid
+                    ),
+                )
+            )
+        # Book del token correcto (si nos pasaron bid de otro leg, refetch)
+        if sell_tid != str(token_id) or best_bid is None:
+            st = await self._fetch_state(sell_tid)
+            if st:
+                best_bid = st.get("best_bid")
+                best_ask = st.get("best_ask")
+        if best_bid is not None:
+            px = float(best_bid)
+        elif best_ask is not None:
+            px = max(0.01, float(best_ask) - 0.01)
+        else:
+            px = 0.01
+        # Salida agresiva (FAK) si hay bid; si no, GTC resting (no FAK vacío)
         try:
+            ot = "FAK" if best_bid is not None else "GTC"
             resp = await asyncio.to_thread(
                 self.clob.place_aggressive,
-                token_id=token_id,
+                token_id=sell_tid,
                 side="SELL",
                 price=max(0.01, px),
                 size=inv,
-                order_type="FAK",
+                order_type=ot,
             )
             st = resp.get("status")
             wp = resp.get("would_post") or {}
@@ -603,10 +716,10 @@ class LiveSession:
         except Exception as e:
             print(f"EXIT_FAK_ERR {type(e).__name__}: {e}", flush=True)
         await self._post_quote(
-            token_id,
+            sell_tid,
             "SELL",
             px,
-            abs(self.inventory_shares),
+            inv,
             best_bid=best_bid,
             best_ask=best_ask,
         )
@@ -614,6 +727,31 @@ class LiveSession:
             self._flatten_fails = 0  # post aceptado
         else:
             self._flatten_fails += 1
+
+    def _position_token(self, up_id: str) -> str:
+        """Token con inventario: held > open > up (nunca adivinar Up tras fill Down)."""
+        if abs(self.inventory_shares) < 1e-9:
+            return up_id
+        return str(self.held_token_id or self.open_token_id or up_id)
+
+    def _session_loss_kill(self) -> bool:
+        """Stop duro Fase D: session_kill_net o pérdida diaria."""
+        lim = float(self.cfg.get("session_kill_net_usdc") or 0.40)
+        if self.realized_pnl <= -abs(lim) + 1e-12:
+            print(
+                f"KILL_SESSION realized={self.realized_pnl:.2f} limit=-{abs(lim):.2f}",
+                flush=True,
+            )
+            self._halt_new_entries = True
+            return True
+        if day_loss_breached(self.realized_pnl):
+            print(
+                f"KILL_DAY session_realized={self.realized_pnl:.2f}",
+                flush=True,
+            )
+            self._halt_new_entries = True
+            return True
+        return False
 
     async def _maybe_exit(
         self,
@@ -658,10 +796,29 @@ class LiveSession:
             f"sig={gates.signature_type} funder={gates.funder}",
             flush=True,
         )
-        bal = await asyncio.to_thread(self.clob.balance_collateral_usdc)
-        print(f"balance_pusd={bal:.4f} capital_cap={self.cfg.get('initial_capital_usdc')}", flush=True)
-        if (not gates.dry_run) and bal < 0.05:
-            raise RuntimeError(f"Saldo CLOB insuficiente: {bal:.4f} pUSD")
+        bal = await self._refresh_cash(force=True)
+        cap = float(self.cfg.get("initial_capital_usdc") or bal)
+        max_n = float(self.cfg.get("max_notional_per_side_usdc") or cap)
+        max_px = (min(bal, max_n) - 0.02) / MIN_ORDER_SHARES
+        print(
+            f"balance_pusd={bal:.4f} capital_cap={cap} max_notional={max_n:.2f} "
+            f"max_buy_px≈{max_px:.2f} (min {MIN_ORDER_SHARES:.0f}sh)",
+            flush=True,
+        )
+        if (not gates.dry_run) and bal < MIN_BUY_NOTIONAL_USDC:
+            raise RuntimeError(
+                f"Saldo CLOB insuficiente para min BUY ${MIN_BUY_NOTIONAL_USDC:.0f}: "
+                f"{bal:.4f} pUSD"
+            )
+        if not gates.dry_run:
+            await self._cancel_stale_open_orders()
+            # Si capital UI > cash real, recortar notional al cash
+            if bal + 1e-9 < max_n:
+                self.cfg["max_notional_per_side_usdc"] = round(max(1.0, bal * 0.98), 2)
+                print(
+                    f"CAP_TO_CASH max_notional→{self.cfg['max_notional_per_side_usdc']}",
+                    flush=True,
+                )
 
         end_at = time.monotonic() + minutes * 60
         poll_s = 1.2
@@ -739,20 +896,29 @@ class LiveSession:
 
                 # Señales siempre sobre libro UP; posición puede ser UP o DOWN
                 up_id = target.token_id_up
-                pos_id = self.open_token_id if abs(self.inventory_shares) > 1e-9 and self.open_token_id else up_id
                 state_up = await self._fetch_state(up_id)
                 if state_up is None:
                     await asyncio.sleep(poll_s)
                     continue
+
+                # Poll ANTES de fijar pos_id: un fill Down no debe exit sobre Up
+                await self._poll_fills(self.open_token_id or up_id)
+                if self.open_order_id and self.open_token_id:
+                    await self._poll_fills(self.open_token_id)
+
+                pos_id = self._position_token(up_id)
                 state = state_up
                 if pos_id != up_id:
                     state_pos = await self._fetch_state(pos_id)
                     if state_pos is not None:
                         state = state_pos
-
-                await self._poll_fills(pos_id)
-                if self.open_order_id and self.open_token_id:
-                    await self._poll_fills(self.open_token_id)
+                # Inferir leg si tenemos held Down pero position_leg vacío
+                if (
+                    abs(self.inventory_shares) > 1e-9
+                    and self.position_leg is None
+                    and pos_id != up_id
+                ):
+                    self.position_leg = "down"
 
                 we_ns = self.window_end_ns or time.time_ns()
                 time_rem = max((we_ns - time.time_ns()) / 1e9, 1.0)
@@ -796,6 +962,16 @@ class LiveSession:
                 cd = float(self.cfg.get("cooldown_after_fill_s") or 5)
                 flat = abs(self.inventory_shares) < 1e-9
                 now_m = time.monotonic()
+                if self._session_loss_kill():
+                    # Intentar flatten residual y salir del loop
+                    if abs(self.inventory_shares) > 1e-9:
+                        await self._force_flatten(
+                            pos_id,
+                            best_bid=bb,
+                            best_ask=ba,
+                            reason="kill",
+                        )
+                    break
                 # Con inventario: no nuevas entradas; gestionar exit
                 if not flat:
                     self._progress(minutes, "in_pos")
@@ -945,6 +1121,12 @@ class LiveSession:
             for f in self.fills:
                 fh.write(json.dumps(f.__dict__) + "\n")
         print(f"  net={net:+.2f} fills={len(self.fills)}", flush=True)
+        if not gates.dry_run:
+            day = record_session_pnl(net)
+            print(
+                f"DAY_PNL pnl={day.get('pnl')} sessions={day.get('sessions')}",
+                flush=True,
+            )
         print("=== session 1/1 done ===", flush=True)
         return report
 

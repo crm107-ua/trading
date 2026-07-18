@@ -39,6 +39,17 @@ def profit_assist_enabled() -> bool:
     }
 
 
+def grind_mode_enabled() -> bool:
+    """Lock temprano / sesgo anti-pérdida (metodologías grind_nim)."""
+    load_repo_dotenv()
+    return os.environ.get("NVIDIA_NIM_GRIND", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 def _strong_edge_mult() -> float:
     """Umbral rule_strong_edge. Más alto → más llamadas NIM en hybrid/assist."""
     load_repo_dotenv()
@@ -141,19 +152,32 @@ def _build_nim_messages(snapshot: dict[str, Any]) -> list[dict[str, str]]:
         "proposed_ask": snapshot.get("quote_ask"),
         "quote_size_shares": snapshot.get("quote_size"),
         "inventory_shares": snapshot.get("inventory_shares"),
+        "edge_abs": snapshot.get("edge_abs"),
+        "min_edge": snapshot.get("min_edge"),
+        "mark_mid": snapshot.get("mark_price"),
         "spot_move_since_last_quote_usd": round(move, 2) if move is not None else None,
         "requote_threshold_usd": snapshot.get("requote_spot_move_usd"),
         "feed_age_ms": snapshot.get("feed_age_ms"),
     }
+    profit_bias = (
+        "Maximize session maker PnL under risk caps.\n"
+        "QUOTE when edge_abs >= min_edge and book is stable (capture maker edge).\n"
+        "HOLD in lottery tails (mid very high/low) or when edge is noise.\n"
+        "Prefer fewer high-quality posts over spam; avoid chasing after adverse moves.\n"
+        if profit_assist_enabled()
+        else ""
+    )
     return [
         {
             "role": "system",
             "content": (
-                "You are a risk-averse Polymarket market-maker decision engine.\n"
-                "Output ONLY JSON: {\"action\":\"quote|cancel_replace|hold\",\"confidence\":0..1,\"reason\":\"...\"}\n"
+                "You are a Polymarket BTC-5m market-maker decision engine (NVIDIA NIM).\n"
+                "Output ONLY JSON: "
+                '{"action":"quote|cancel_replace|hold","confidence":0..1,"reason":"..."}\n'
                 "Never change prices — only choose whether to post, refresh, or pause.\n"
-                "If safety rules already passed and spread is worth capturing, action MUST be \"quote\".\n"
-                "Use HOLD only when feed is dubious, spread is too tight, or spot is unstable.\n"
+                f"{profit_bias}"
+                "If safety rules already passed and spread/edge is worth capturing, action MUST be \"quote\".\n"
+                "Use HOLD only when feed is dubious, spread is too tight, edge is weak, or spot is unstable.\n"
                 "CANCEL_REPLACE when spot moved materially vs last quote anchor.\n"
                 "action and reason must agree (do not say worth capturing with action hold)."
             ),
@@ -205,7 +229,13 @@ def decide_quote_action(
     if hybrid_path_enabled():
         strong = _strong_edge_mult()
         if edge_abs is not None:
-            if float(edge_abs) >= min_edge * strong and spread is not None and spread >= min_cents:
+            # Grind: no auto-quote por "strong edge" (fair vs mid suele mentir)
+            if (
+                not grind_mode_enabled()
+                and float(edge_abs) >= min_edge * strong
+                and spread is not None
+                and spread >= min_cents
+            ):
                 return Decision("quote", "rule_strong_edge", 1.0, "rule"), None
             if float(edge_abs) < min_edge * 0.45:
                 return Decision("hold", "rule_weak_edge", 1.0, "rule"), None
@@ -263,6 +293,7 @@ def _build_exit_messages(snapshot: dict[str, Any]) -> list[dict[str, str]]:
                 "Output ONLY JSON: "
                 '{"action":"hold|flatten","confidence":0..1,"reason":"..."}\n'
                 "Bias: LOCK WINS EARLY. Do not let green turn red.\n"
+                "GRIND MODE (micro capital 5-15 EUR): if unrealized_pnl_usdc >= 0.12 → FLATTEN.\n"
                 "If unrealized_pnl_usdc >= 1 → FLATTEN (bank it).\n"
                 "If unrealized_pnl_usdc < 0 → FLATTEN unless fair strongly favors hold.\n"
                 "HOLD only if flat/tiny green and fair clearly supports the side."
@@ -286,26 +317,38 @@ def _rule_profit_exit(snapshot: dict[str, Any]) -> Decision | None:
     avg = float(snapshot.get("avg_entry") or mid)
     t_rem = snapshot.get("time_remaining_s")
     lock_at = float(snapshot.get("lock_profit_usdc") or 1.25)
+    grind = grind_mode_enabled()
+    # Grind: cobrar verdes micro y cortar rojos antes
+    tick_lock = 0.012 if grind else 0.025
+    red_cut = -0.05 if grind else -0.15
+    late_s = 120 if grind else 70
+    if grind:
+        lock_at = min(lock_at, 0.12)
     # Asegurar ganancia pequeña/media — no devolverla al mercado
     if unreal >= lock_at:
         return Decision("flatten", "rule_lock_green", 1.0, "rule")
-    # Verde en mid vs entry (≥2¢) → cobrar
-    if inv > 0 and mid >= avg + 0.025 and unreal > 0:
+    # Verde en mid vs entry → cobrar
+    if inv > 0 and mid >= avg + tick_lock and unreal > 0:
         return Decision("flatten", "rule_lock_tp_mid", 1.0, "rule")
-    if inv < 0 and mid <= avg - 0.025 and unreal > 0:
+    if inv < 0 and mid <= avg - tick_lock and unreal > 0:
         return Decision("flatten", "rule_lock_tp_mid", 1.0, "rule")
+    if grind and unreal >= 0.06:
+        return Decision("flatten", "rule_grind_bank", 1.0, "rule")
+    # Rojo pequeño → flatten (grind no "espera a que vuelva")
+    if grind and unreal <= red_cut:
+        return Decision("flatten", "rule_grind_cut_red", 1.0, "rule")
     # Rojo + fair en contra → flatten ya
-    if inv > 0 and unreal <= -0.15 and fair < mid - 0.002:
+    if inv > 0 and unreal <= red_cut and fair < mid - 0.002:
         return Decision("flatten", "rule_cut_red_fade", 1.0, "rule")
-    if inv < 0 and unreal <= -0.15 and fair > mid + 0.002:
+    if inv < 0 and unreal <= red_cut and fair > mid + 0.002:
         return Decision("flatten", "rule_cut_red_fade", 1.0, "rule")
-    if inv > 0 and fair <= avg - 0.015:
+    if inv > 0 and fair <= avg - 0.012:
         return Decision("flatten", "rule_fair_against", 1.0, "rule")
-    if inv < 0 and fair >= avg + 0.015:
+    if inv < 0 and fair >= avg + 0.012:
         return Decision("flatten", "rule_fair_against", 1.0, "rule")
-    if unreal <= -2.0:
+    if unreal <= (-0.18 if grind else -2.0):
         return Decision("flatten", "rule_hard_red", 1.0, "rule")
-    if t_rem is not None and float(t_rem) <= 70 and unreal <= 0:
+    if t_rem is not None and float(t_rem) <= late_s and unreal <= 0:
         return Decision("flatten", "rule_late_cut", 1.0, "rule")
     return None
 
@@ -319,7 +362,11 @@ def decide_inventory_exit(
     NIM assist for open inventory: hold vs flatten mid.
     Only used when NVIDIA_NIM_PROFIT_ASSIST is on (or mode=full).
     """
-    if not profit_assist_enabled() and _nim_mode() != "full":
+    if (
+        not profit_assist_enabled()
+        and not grind_mode_enabled()
+        and _nim_mode() != "full"
+    ):
         return Decision("hold", "rule_exit_assist_off", 1.0, "rule"), None
     if abs(float(snapshot.get("inventory_shares") or 0)) < 1e-9:
         return Decision("hold", "rule_flat", 1.0, "rule"), None

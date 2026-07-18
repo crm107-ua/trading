@@ -55,6 +55,50 @@ FEATURED: list[dict[str, Any]] = [
         "base_capital": 5.0,
     },
     {
+        "id": "micro_strict",
+        "name": "Micro live STRICT (Fase D)",
+        "badge": "STRICT",
+        "file": "maker_demo_micro_live_strict.json",
+        "default_sessions": 1,
+        "default_minutes": 8.0,
+        "blurb": "1 entrada, rich OFF, kill 0.40€/sesión. Solo tras checklist dry + ≥5 pUSD.",
+        "metrics": {"total": None, "wr": None, "avg": None},
+        "base_capital": 1.2,
+    },
+    {
+        "id": "grind_nim_flow",
+        "name": "Grind NIM flow (tradeable)",
+        "badge": "GRIND",
+        "file": "maker_demo_grind_nim_flow.json",
+        "default_sessions": 6,
+        "default_minutes": 6.0,
+        "blurb": "Entrada abierta (mid/time) + lock temprano NIM. Diseñado para fills reales a 5/10/15€.",
+        "metrics": {"total": None, "wr": None, "avg": None},
+        "base_capital": 10.0,
+    },
+    {
+        "id": "grind_nim_v1",
+        "name": "Grind NIM v1 (wins pequeños)",
+        "badge": "GRIND",
+        "file": "maker_demo_grind_nim_v1.json",
+        "default_sessions": 6,
+        "default_minutes": 6.0,
+        "blurb": "WR-first + NVIDIA hybrid: mid 0.28–0.72, lock temprano, 1 entrada. 5/10/15€.",
+        "metrics": {"total": None, "wr": None, "avg": None},
+        "base_capital": 10.0,
+    },
+    {
+        "id": "grind_nim_v2",
+        "name": "Grind NIM v2 selectivo",
+        "badge": "GRIND",
+        "file": "maker_demo_grind_nim_v2.json",
+        "default_sessions": 6,
+        "default_minutes": 6.0,
+        "blurb": "Más filtro (mid 0.30–0.70). Prioriza no perder / acumular céntimos.",
+        "metrics": {"total": None, "wr": None, "avg": None},
+        "base_capital": 10.0,
+    },
+    {
         "id": "lock_v7",
         "name": "Lock green v7",
         "badge": "SEED",
@@ -135,35 +179,55 @@ def apply_live_clob_floors(cfg: dict) -> dict:
     c["quote_size_shares"] = size
     c["max_quote_size_shares"] = max(size, int(c.get("max_quote_size_shares") or size))
     c["max_inventory_shares"] = max(size, int(c.get("max_inventory_shares") or size))
-    # 5 shares * ~1.0 peor caso; evita SKIP_BUDGET con mids altos
-    c["max_notional_per_side_usdc"] = float(
-        max(5.0, float(c.get("max_notional_per_side_usdc") or 0), size * 1.0)
-    )
-    c["max_inventory_usdc"] = float(
-        max(c.get("max_inventory_usdc") or 0, c["max_notional_per_side_usdc"])
-    )
+    # Notional ≤ capital de sesión (antes forzaba ≥5€ y petaba con ~2 pUSD)
+    capital = max(1.05, float(c.get("initial_capital_usdc") or 2.0))
+    c["max_notional_per_side_usdc"] = round(min(capital * 0.98, 5.0), 2)
+    c["max_inventory_usdc"] = round(min(max(capital, c["max_notional_per_side_usdc"]), 5.0), 2)
     # Con size 5 el hurdle EV antiguo bloqueaba casi todo
     c["min_expected_pnl_usdc"] = min(float(c.get("min_expected_pnl_usdc") or 0.05), 0.05)
-    # Más oportunidades vs paper-100: banda mid más ancha, edge/z algo más bajos
-    c["min_quote_mid"] = min(float(c.get("min_quote_mid") or 0.24), 0.18)
-    c["max_quote_mid"] = max(float(c.get("max_quote_mid") or 0.76), 0.84)
-    c["min_edge"] = min(float(c.get("min_edge") or 0.034), 0.026)
-    c["soft_edge"] = min(float(c.get("soft_edge") or 0.048), 0.038)
-    c["min_z"] = min(float(c.get("min_z") or 1.0), 0.8)
-    c["quote_time_min_s"] = min(float(c.get("quote_time_min_s") or 40), 25)
-    c["quote_time_max_s"] = max(float(c.get("quote_time_max_s") or 280), 310)
-    c["max_entry_fills"] = max(int(c.get("max_entry_fills") or 2), 3)
-    c["cooldown_after_fill_s"] = min(float(c.get("cooldown_after_fill_s") or 5), 3)
+    label = str(c.get("demo_label") or "")
+    preserve = bool(c.get("preserve_selectivity")) or label.startswith("grind")
+    if not preserve:
+        # Más oportunidades vs paper-100: banda mid más ancha, edge/z algo más bajos
+        c["min_quote_mid"] = min(float(c.get("min_quote_mid") or 0.24), 0.18)
+        c["max_quote_mid"] = max(float(c.get("max_quote_mid") or 0.76), 0.84)
+        c["min_edge"] = min(float(c.get("min_edge") or 0.034), 0.026)
+        c["soft_edge"] = min(float(c.get("soft_edge") or 0.048), 0.038)
+        c["min_z"] = min(float(c.get("min_z") or 1.0), 0.8)
+        c["quote_time_min_s"] = min(float(c.get("quote_time_min_s") or 40), 25)
+        c["quote_time_max_s"] = max(float(c.get("quote_time_max_s") or 280), 310)
+        c["cooldown_after_fill_s"] = min(float(c.get("cooldown_after_fill_s") or 5), 3)
+    # No forzar +entradas en configs strict/grind (max_entry_fills=1)
+    if int(c.get("max_entry_fills") or 2) >= 2:
+        c["max_entry_fills"] = max(int(c.get("max_entry_fills") or 2), 3)
     # Live micro: TP/SL con suelo (scale a 1–2€ dejaba 0.05/0.10 → ruido)
-    # y techo para no arrastrar a resolución
-    c["lock_profit_usdc"] = max(
-        0.15, min(float(c.get("lock_profit_usdc") or 0.2), 0.35)
+    # Grind/preserve: NO subir el suelo — anula lock temprano y WR-first.
+    if preserve:
+        c["lock_profit_usdc"] = max(
+            0.06, min(float(c.get("lock_profit_usdc") or 0.12), 0.25)
+        )
+        c["max_loss_usdc"] = max(
+            0.06, min(float(c.get("max_loss_usdc") or 0.12), 0.28)
+        )
+        c["flatten_before_window_s"] = max(
+            float(c.get("flatten_before_window_s") or 45), 70
+        )
+    else:
+        c["lock_profit_usdc"] = max(
+            0.15, min(float(c.get("lock_profit_usdc") or 0.2), 0.35)
+        )
+        c["max_loss_usdc"] = max(
+            0.30, min(float(c.get("max_loss_usdc") or 0.5), 0.55)
+        )
+        c["flatten_before_window_s"] = max(
+            float(c.get("flatten_before_window_s") or 45), 55
+        )
+    # Strict configs set allow_rich_side_live=false; default True for legacy micros
+    if "allow_rich_side_live" not in c:
+        c["allow_rich_side_live"] = True
+    c["session_kill_net_usdc"] = min(
+        float(c.get("session_kill_net_usdc") or 0.40), 0.40
     )
-    c["max_loss_usdc"] = max(
-        0.30, min(float(c.get("max_loss_usdc") or 0.5), 0.55)
-    )
-    c["flatten_before_window_s"] = max(float(c.get("flatten_before_window_s") or 45), 55)
-    c["allow_rich_side_live"] = True
     return c
 
 
