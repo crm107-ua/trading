@@ -647,8 +647,9 @@ class PaperSession:
                 rem_a = (we_a - now).total_seconds() if we_a else 0.0
                 age_a = (now - ws_a).total_seconds() if ws_a else 999.0
                 t_min = float(self.cfg.get("quote_time_min_s", 110) or 110)
-                max_join = float(self.cfg.get("max_window_join_age_s", 45) or 45)
-                if rem_a < t_min or age_a > max_join:
+                # Solo operamos si aún podemos sellar strike≈open.
+                stamp_until = float(self.cfg.get("strike_stamp_max_age_s", 12) or 12)
+                if rem_a < t_min or age_a > stamp_until:
                     target = nxt
             if target is None:
                 await asyncio.sleep(poll_s)
