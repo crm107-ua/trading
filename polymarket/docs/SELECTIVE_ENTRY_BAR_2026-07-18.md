@@ -39,6 +39,11 @@ Log: `selective10_20260718_193617.log`
 
 **Vs expectativas:** supera el umbral WR≥75% y el baseline reval @10€ (WR 50% / push 67%).
 
+### Confirm OOS corta (4×4 @10 €)
+WR **66.7%** (2W/1L), total **+0.09**, worst −0.25.  
+Positivo, pero **no** repite el 100%. Hace falta más muestra antes de live real.  
+Log: `selective10_confirm_20260718_204104.log`
+
 ## Entorno real comprobado (sin órdenes on-chain)
 - Paper Polymarket CLOB books + BTC spot (Binance.US fallback)
 - `dry_e2e_batch` checklist OK
