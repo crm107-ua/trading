@@ -387,7 +387,13 @@ class PaperSession:
                 or bool(self.cfg.get("preserve_selectivity"))
                 or "grind" in str(self.cfg.get("demo_label", "")).lower()
             )
-            soft = abs(max_loss) * (0.7 if grindish else 1.0)
+            # Fusion/follow: corte más temprano (50%) — gaps de 1 poll mataban WR.
+            fusionish = (
+                "fusion" in str(self.cfg.get("demo_label", "")).lower()
+                or "follow" in str(self.cfg.get("demo_label", "")).lower()
+            )
+            frac = 0.5 if fusionish else (0.7 if grindish else 1.0)
+            soft = abs(max_loss) * frac
             if unreal <= -soft:
                 self._flatten_inventory_mid(mark)
                 return
@@ -805,8 +811,17 @@ class PaperSession:
                                 )
                                 + "\n"
                             )
-                        if exit_dec.action == "flatten":
-                            self._flatten_inventory_mid(mid_m)
+                        # Nunca "hold" en rojo en grind/fusion — NIM no puede anular el corte.
+                        if exit_dec.action == "flatten" or (
+                            unreal < -1e-9
+                            and (
+                                grind_mode_enabled()
+                                or bool(self.cfg.get("preserve_selectivity"))
+                                or "fusion" in str(self.cfg.get("demo_label", "")).lower()
+                                or "follow" in str(self.cfg.get("demo_label", "")).lower()
+                            )
+                        ):
+                            self._flatten_inventory_mid(exit_mark)
             # Window flatten only if stops/NIM did not already cut.
             flatten_s = float(self.cfg.get("flatten_before_window_s", 0))
             if (
