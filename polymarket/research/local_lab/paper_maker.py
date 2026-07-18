@@ -78,9 +78,11 @@ class PaperSession:
     current_question: str | None = None
     strike: float | None = None
     strike_trusted: bool = False
+    _strike_stamped: bool = False
     window_start_ns: int | None = None
     window_end_ns: int | None = None
     spot_history: list[tuple[int, float]] = field(default_factory=list)
+    mid_history: list[tuple[int, float]] = field(default_factory=list)
     _pulse_streak: int = 0
     nim_decisions_used: int = 0
     nim_rule_holds: int = 0
@@ -117,6 +119,39 @@ class PaperSession:
             return 0.0
         return float(pts[-1][1] - pts[0][1])
 
+    def _mid_delta(self, window_ms: int = 3000) -> float | None:
+        if len(self.mid_history) < 2:
+            return None
+        now_ns = self.mid_history[-1][0]
+        cutoff = now_ns - int(window_ms * 1e6)
+        pts = [(t, m) for t, m in self.mid_history if t >= cutoff]
+        if len(pts) < 2:
+            return None
+        return float(pts[-1][1] - pts[0][1])
+
+    def _maybe_stamp_strike(self, spot: float) -> None:
+        """Sella strike ≈ open real en los primeros segundos de la ventana."""
+        if self.window_start_ns is None:
+            return
+        age_s = (time.time_ns() - self.window_start_ns) / 1e9
+        stamp_until = float(self.cfg.get("strike_stamp_max_age_s", 12) or 12)
+        max_join = float(self.cfg.get("max_window_join_age_s", 50) or 50)
+        # Ventana aún no abre
+        if age_s < 0:
+            self.strike_trusted = False
+            return
+        if not self._strike_stamped and age_s <= stamp_until:
+            self.strike = float(spot)
+            self._strike_stamped = True
+            self.strike_trusted = True
+            return
+        if not self._strike_stamped and age_s > max_join:
+            # Llegamos tarde: no operar esta ventana
+            self.strike_trusted = False
+            return
+        if self._strike_stamped and age_s <= max_join:
+            self.strike_trusted = True
+
     def _inject_pulse_runtime(
         self,
         *,
@@ -132,9 +167,9 @@ class PaperSession:
         if time_remaining_s is not None:
             self.cfg["_time_remaining_s"] = time_remaining_s
         self.cfg["_strike_trusted"] = bool(self.strike_trusted)
-        self.cfg["_spot_velocity_usd"] = self._spot_velocity_usd(
-            int(self.cfg.get("pulse_velocity_window_ms", 3000) or 3000)
-        )
+        vel_ms = int(self.cfg.get("pulse_velocity_window_ms", 3000) or 3000)
+        self.cfg["_spot_velocity_usd"] = self._spot_velocity_usd(vel_ms)
+        self.cfg["_mid_delta"] = self._mid_delta(vel_ms)
         self.cfg["_book_imbalance"] = top_size_imbalance(
             bids or [], asks or [], n=int(self.cfg.get("pulse_book_levels", 3) or 3)
         )
@@ -639,26 +674,31 @@ class PaperSession:
                 self.window_end_ns = int(we.timestamp() * 1e9) if we else None
                 async with httpx.AsyncClient(timeout=12.0) as c:
                     self.strike, _src = await fetch_btc_spot_async(c)
-                # Strike paper ≈ open solo si entramos frescos; si no, no operar ventana
-                # (evita sesgo mid-window que mataba WR en maker_edge).
-                join_age_s = 999.0
-                if self.window_start_ns is not None:
-                    join_age_s = max(0.0, (time.time_ns() - self.window_start_ns) / 1e9)
-                max_join = float(self.cfg.get("max_window_join_age_s", 45) or 45)
-                self.strike_trusted = join_age_s <= max_join
+                # Strike se sella al open real (ver _maybe_stamp_strike). Placeholder ahora.
+                self._strike_stamped = False
+                self.strike_trusted = False
                 self._pulse_streak = 0
+                self.mid_history.clear()
                 self.last_trade_seen = None
                 self.last_quote_spot = None
+                self._maybe_stamp_strike(float(self.strike))
 
             state = await self._fetch_state(target.token_id_up)
             if state is None:
                 await asyncio.sleep(poll_s)
                 continue
 
-            # Track spot every poll (PulseGate velocity / adverse window).
-            self.spot_history.append((time.time_ns(), float(state["spot"])))
+            # Track spot/mid every poll (PulseGate velocity + mid-lag).
+            now_ns = time.time_ns()
+            self.spot_history.append((now_ns, float(state["spot"])))
             if len(self.spot_history) > 240:
                 self.spot_history = self.spot_history[-180:]
+            if state.get("best_bid") is not None and state.get("best_ask") is not None:
+                mid_now = (float(state["best_bid"]) + float(state["best_ask"])) / 2.0
+                self.mid_history.append((now_ns, mid_now))
+                if len(self.mid_history) > 240:
+                    self.mid_history = self.mid_history[-180:]
+            self._maybe_stamp_strike(float(state["spot"]))
 
             we_ns = self.window_end_ns or time.time_ns()
             time_rem = max((we_ns - time.time_ns()) / 1e9, 1.0)
@@ -814,12 +854,28 @@ class PaperSession:
                             why = "wait_edge"
                         else:
                             why = "wait_filter"  # z / EV / time / spread
+                        if self.strategy_id == "maker_pulse":
+                            if not self.strike_trusted:
+                                why = "wait_strike"
+                            elif abs(float(state["spot"]) - float(self.strike or state["spot"])) < float(
+                                self.cfg.get("min_spot_lead_usd", 6) or 6
+                            ):
+                                why = "wait_lead"
+                    lead_hb = None
+                    if self.strategy_id == "maker_pulse" and self.strike is not None:
+                        lead_hb = float(state["spot"]) - float(self.strike)
                     print(
                         f"paper {pct}% [{elapsed_min:.1f}/{minutes:.1f} min] "
                         f"decisions={self._decision_count} quotes={self.quotes_logged} "
                         f"fills={len(self.fills)} last={why} (rule) "
                         f"edge={edge_hb if edge_hb is not None else 'n/a'} "
-                        f"need>={self.cfg.get('min_edge')} mid={mid_hb if mid_hb is not None else 'n/a'}",
+                        f"need>={self.cfg.get('min_edge')} mid={mid_hb if mid_hb is not None else 'n/a'}"
+                        + (
+                            f" lead={lead_hb:.1f} trusted={self.strike_trusted} "
+                            f"streak={self._pulse_streak}"
+                            if lead_hb is not None
+                            else ""
+                        ),
                         flush=True,
                     )
                 await asyncio.sleep(poll_s)

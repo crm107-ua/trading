@@ -31,6 +31,7 @@ def _cfg(**over):
         "_time_remaining_s": 180,
         "_spot_velocity_usd": 8.0,
         "_book_imbalance": 0.60,
+        "_mid_delta": 0.005,
         "_pulse_streak": 2,
     }
     base.update(over)

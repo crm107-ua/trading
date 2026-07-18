@@ -326,6 +326,15 @@ def maker_pulse(
     if side is None:
         return None
 
+    # Mid-lag: el libro no ha absorbido el move del spot (núcleo latencia).
+    mid_d = cfg.get("_mid_delta")
+    max_mid_catch = float(cfg.get("max_mid_catchup", 0.025) or 0.025)
+    if mid_d is not None:
+        if side == "bid" and float(mid_d) > max_mid_catch:
+            return None  # mid ya subió → sin lag
+        if side == "ask" and float(mid_d) < -max_mid_catch:
+            return None  # mid ya bajó → sin lag
+
     imb = cfg.get("_book_imbalance")
     min_imb = float(cfg.get("min_bid_imbalance", 0.52) or 0.52)
     if imb is not None:
