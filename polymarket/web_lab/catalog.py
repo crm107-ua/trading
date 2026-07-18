@@ -88,6 +88,17 @@ FEATURED: list[dict[str, Any]] = [
         "base_capital": 10.0,
     },
     {
+        "id": "grind_nim_wr_lock",
+        "name": "Grind NIM WR-LOCK (prep inversión)",
+        "badge": "LOCK",
+        "file": "maker_demo_grind_nim_wr_lock.json",
+        "default_sessions": 4,
+        "default_minutes": 3.0,
+        "blurb": "Fusión entry+stops duros. Objetivo WR≥70% @5/10€ antes de capital real.",
+        "metrics": {"total": None, "wr": None, "avg": None},
+        "base_capital": 10.0,
+    },
+    {
         "id": "grind_nim_best_c5",
         "name": "Grind NIM BEST @5€ (reval)",
         "badge": "CHAMP",

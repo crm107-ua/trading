@@ -580,12 +580,13 @@ class PaperSession:
                     if now_e - self._last_exit_nim_mono >= every:
                         self._last_exit_nim_mono = now_e
                         avg_e = self.cost_basis / self.inventory_shares
-                        unreal = self.inventory_shares * mid_m - self.cost_basis
+                        # PnL al precio ejecutable (bid long / ask short) — WR-lock
+                        unreal = self.inventory_shares * exit_mark - self.cost_basis
                         exit_dec, exit_nim = decide_inventory_exit(
                             snapshot={
                                 "inventory_shares": self.inventory_shares,
                                 "avg_entry": avg_e,
-                                "mark_price": mid_m,
+                                "mark_price": exit_mark,
                                 "fair_up": fair,
                                 "unrealized_pnl_usdc": round(unreal, 4),
                                 "time_remaining_s": time_rem,
@@ -594,6 +595,12 @@ class PaperSession:
                                 "best_ask": state["best_ask"],
                                 "lock_profit_usdc": float(
                                     self.cfg.get("lock_profit_usdc", 1.25) or 1.25
+                                ),
+                                "max_loss_usdc": float(
+                                    self.cfg.get("max_loss_usdc", 0) or 0
+                                ),
+                                "grind_bank_usdc": float(
+                                    self.cfg.get("grind_bank_usdc", 0.055) or 0.055
                                 ),
                             },
                             latency_budget_ms=2500,

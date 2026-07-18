@@ -317,13 +317,23 @@ def _rule_profit_exit(snapshot: dict[str, Any]) -> Decision | None:
     avg = float(snapshot.get("avg_entry") or mid)
     t_rem = snapshot.get("time_remaining_s")
     lock_at = float(snapshot.get("lock_profit_usdc") or 1.25)
+    max_loss = float(snapshot.get("max_loss_usdc") or 0)
     grind = grind_mode_enabled()
     # Grind: cobrar verdes micro y cortar rojos antes
     tick_lock = 0.012 if grind else 0.025
-    red_cut = -0.05 if grind else -0.15
+    # WR-lock: cortar al 70% del max_loss config (o -0.05 por defecto)
+    if grind:
+        if max_loss > 0:
+            red_cut = -abs(max_loss) * 0.70
+        else:
+            red_cut = -0.05
+    else:
+        red_cut = -0.15
     late_s = 120 if grind else 70
     if grind:
         lock_at = min(lock_at, 0.12)
+        # Bank aún más temprano en modo wr_lock / selective
+        bank_at = float(snapshot.get("grind_bank_usdc") or 0.055)
     # Asegurar ganancia pequeña/media — no devolverla al mercado
     if unreal >= lock_at:
         return Decision("flatten", "rule_lock_green", 1.0, "rule")
@@ -332,7 +342,7 @@ def _rule_profit_exit(snapshot: dict[str, Any]) -> Decision | None:
         return Decision("flatten", "rule_lock_tp_mid", 1.0, "rule")
     if inv < 0 and mid <= avg - tick_lock and unreal > 0:
         return Decision("flatten", "rule_lock_tp_mid", 1.0, "rule")
-    if grind and unreal >= 0.06:
+    if grind and unreal >= bank_at:
         return Decision("flatten", "rule_grind_bank", 1.0, "rule")
     # Rojo pequeño → flatten (grind no "espera a que vuelva")
     if grind and unreal <= red_cut:
