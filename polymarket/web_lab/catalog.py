@@ -121,6 +121,17 @@ FEATURED: list[dict[str, Any]] = [
         "base_capital": 10.0,
     },
     {
+        "id": "fusion_follow_heavy",
+        "name": "Fusion Follow-Heavy (champ candidate)",
+        "badge": "CHAMP",
+        "file": "maker_demo_fusion_follow_heavy.json",
+        "default_sessions": 6,
+        "default_minutes": 5.0,
+        "blurb": "Pulse+Follow, edge OFF. Scout @5€ WR 100% (2W/0L +0.34). Confirm en curso.",
+        "metrics": {"total": 0.34, "wr": 1.0, "avg": 0.17},
+        "base_capital": 10.0,
+    },
+    {
         "id": "follow_gate",
         "name": "FollowGate (anti-fade)",
         "badge": "PIONEER",
