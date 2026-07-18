@@ -286,16 +286,17 @@ def maker_pulse(
         if float(t_rem) < t_min or float(t_rem) > t_max:
             return None
 
-    lead = float(spot) - float(strike)
-    min_lead = float(cfg.get("min_spot_lead_usd", 12.0) or 12.0)
+    # Lead rodante (spot vs hace ~8s). El lead vs open se anula al sellar strike.
     vel = float(cfg.get("_spot_velocity_usd", 0.0) or 0.0)
+    roll = float(cfg.get("_roll_lead_usd", float(spot) - float(strike)) or 0.0)
+    min_lead = float(cfg.get("min_spot_lead_usd", 12.0) or 12.0)
     min_vel = float(cfg.get("min_spot_velocity_usd", 4.0) or 4.0)
 
     scale = float(cfg.get("pulse_fair_scale_usd", 28.0) or 28.0)
-    spot_fair = pulse_spot_fair(spot, strike, scale)
-    # Mezcla: spot-fair (latencia) + BS; toma el más extremo en la dirección del lead.
+    spot_fair = pulse_spot_fair(float(spot), float(spot) - roll, scale)
+    # Mezcla: spot-fair (latencia) + BS; más extremo en la dirección del roll.
     if bool(cfg.get("pulse_blend_bs_fair", True)):
-        if lead >= 0:
+        if roll >= 0:
             model_fair = max(float(fair_up), spot_fair)
         else:
             model_fair = min(float(fair_up), spot_fair)
@@ -314,11 +315,11 @@ def maker_pulse(
 
     symmetric = bool(cfg.get("pulse_symmetric", True))
     side: str | None = None
-    if lead >= min_lead and vel >= min_vel and edge >= min_edge:
+    if roll >= min_lead and vel >= min_vel and edge >= min_edge:
         side = "bid"  # latency long UP
     elif (
         symmetric
-        and lead <= -min_lead
+        and roll <= -min_lead
         and vel <= -min_vel
         and edge <= -min_edge
     ):
@@ -376,7 +377,7 @@ def maker_pulse(
             0.99,
             size,
             "maker_pulse",
-            f"pulse_up e={abs_edge:.3f} sf={spot_fair:.2f} lead={lead:.0f} vel={vel:.0f}",
+            f"pulse_up e={abs_edge:.3f} sf={spot_fair:.2f} roll={roll:.0f} vel={vel:.0f}",
         )
 
     ask = _clip(
@@ -391,7 +392,7 @@ def maker_pulse(
         ask,
         size,
         "maker_pulse",
-        f"pulse_dn e={abs_edge:.3f} sf={spot_fair:.2f} lead={lead:.0f} vel={vel:.0f}",
+        f"pulse_dn e={abs_edge:.3f} sf={spot_fair:.2f} roll={roll:.0f} vel={vel:.0f}",
     )
 
 

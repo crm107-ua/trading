@@ -44,6 +44,7 @@
   "pulse_blend_bs_fair": true,
   "pulse_persist_polls": 2,
   "pulse_velocity_window_ms": 3000,
+  "pulse_roll_window_ms": 8000,
   "pulse_book_levels": 3,
   "min_bid_imbalance": 0.52,
   "kelly_sizing": false,

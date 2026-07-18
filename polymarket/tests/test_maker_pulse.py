@@ -39,14 +39,20 @@ def _cfg(**over):
 
 
 def test_pulse_quotes_when_all_gates_pass():
-    # lead ~$15 → spot-fair ~0.63; mid 0.50 → edge ~0.13 capped by max_abs
+    # roll ~$15 → spot-fair ~0.63; mid 0.50 → edge usable
     q = maker_pulse(
         0.55,
         0.49,
         0.51,
         100_015.0,
         100_000.0,
-        _cfg(max_abs_edge=0.20, min_edge=0.022, pulse_fair_scale_usd=28),
+        _cfg(
+            max_abs_edge=0.20,
+            min_edge=0.022,
+            pulse_fair_scale_usd=28,
+            _roll_lead_usd=15.0,
+            _spot_velocity_usd=8.0,
+        ),
     )
     assert q is not None
     assert q.strategy_id == "maker_pulse"
@@ -55,7 +61,7 @@ def test_pulse_quotes_when_all_gates_pass():
 
 
 def test_pulse_symmetric_ask_on_down_momentum():
-    # spot below strike + vel down; spot-fair < mid → ask
+    # roll down + vel down; spot-fair < mid → ask
     q = maker_pulse(
         0.45,
         0.49,
@@ -66,6 +72,7 @@ def test_pulse_symmetric_ask_on_down_momentum():
             pulse_symmetric=True,
             max_abs_edge=0.20,
             min_edge=0.022,
+            _roll_lead_usd=-15.0,
             _spot_velocity_usd=-8.0,
             _book_imbalance=0.35,
         ),
@@ -92,7 +99,12 @@ def test_pulse_rejects_settlement_window():
 def test_pulse_rejects_no_momentum():
     assert (
         maker_pulse(
-            0.58, 0.49, 0.51, 100_005.0, 100_000.0, _cfg(_spot_velocity_usd=1.0)
+            0.58,
+            0.49,
+            0.51,
+            100_005.0,
+            100_000.0,
+            _cfg(_roll_lead_usd=15.0, _spot_velocity_usd=1.0),
         )
         is None
     )

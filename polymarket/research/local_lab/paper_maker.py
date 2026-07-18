@@ -107,7 +107,7 @@ class PaperSession:
             return lambda fair, bb, ba, spot, strike: fn(fair, self.cfg, bb, ba)
         return lambda fair, bb, ba, spot, strike: fn(fair, bb, ba, spot, strike, self.cfg)
 
-    def _spot_velocity_usd(self, window_ms: int = 3000) -> float:
+    def _spot_delta_usd(self, window_ms: int = 3000) -> float:
         if len(self.spot_history) < 2:
             return 0.0
         now_ns = self.spot_history[-1][0]
@@ -118,6 +118,9 @@ class PaperSession:
         if len(pts) < 2:
             return 0.0
         return float(pts[-1][1] - pts[0][1])
+
+    def _spot_velocity_usd(self, window_ms: int = 3000) -> float:
+        return self._spot_delta_usd(window_ms)
 
     def _mid_delta(self, window_ms: int = 3000) -> float | None:
         if len(self.mid_history) < 2:
@@ -168,13 +171,14 @@ class PaperSession:
             self.cfg["_time_remaining_s"] = time_remaining_s
         self.cfg["_strike_trusted"] = bool(self.strike_trusted)
         vel_ms = int(self.cfg.get("pulse_velocity_window_ms", 3000) or 3000)
+        roll_ms = int(self.cfg.get("pulse_roll_window_ms", 8000) or 8000)
         self.cfg["_spot_velocity_usd"] = self._spot_velocity_usd(vel_ms)
-        self.cfg["_mid_delta"] = self._mid_delta(vel_ms)
+        self.cfg["_roll_lead_usd"] = self._spot_delta_usd(roll_ms)
+        self.cfg["_mid_delta"] = self._mid_delta(roll_ms)
         self.cfg["_book_imbalance"] = top_size_imbalance(
             bids or [], asks or [], n=int(self.cfg.get("pulse_book_levels", 3) or 3)
         )
-        strike = float(self.strike or spot)
-        lead = float(spot) - strike
+        roll = float(self.cfg["_roll_lead_usd"])
         vel = float(self.cfg["_spot_velocity_usd"])
         min_lead = float(self.cfg.get("min_spot_lead_usd", 12.0) or 12.0)
         min_vel = float(self.cfg.get("min_spot_velocity_usd", 4.0) or 4.0)
@@ -190,16 +194,17 @@ class PaperSession:
             mid = (float(bb) + float(ba)) / 2.0
             mid_ok = mid_lo <= mid <= mid_hi
             scale = float(self.cfg.get("pulse_fair_scale_usd", 28.0) or 28.0)
-            sf = pulse_spot_fair(spot, strike, scale)
+            # Fair de latencia sobre el move reciente (no vs open sellado).
+            sf = pulse_spot_fair(float(spot), float(spot) - roll, scale)
             if bool(self.cfg.get("pulse_blend_bs_fair", True)):
-                model_fair = max(float(fair), sf) if lead >= 0 else min(float(fair), sf)
+                model_fair = max(float(fair), sf) if roll >= 0 else min(float(fair), sf)
             else:
                 model_fair = sf
             edge = model_fair - mid
-            up_ok = lead >= min_lead and vel >= min_vel and edge >= min_edge
+            up_ok = roll >= min_lead and vel >= min_vel and edge >= min_edge
             dn_ok = (
                 symmetric
-                and lead <= -min_lead
+                and roll <= -min_lead
                 and vel <= -min_vel
                 and edge <= -min_edge
             )
@@ -858,13 +863,13 @@ class PaperSession:
                         if self.strategy_id == "maker_pulse":
                             if not self.strike_trusted:
                                 why = "wait_strike"
-                            elif abs(float(state["spot"]) - float(self.strike or state["spot"])) < float(
-                                self.cfg.get("min_spot_lead_usd", 6) or 6
+                            elif abs(float(self.cfg.get("_roll_lead_usd", 0) or 0)) < float(
+                                self.cfg.get("min_spot_lead_usd", 4) or 4
                             ):
-                                why = "wait_lead"
-                    lead_hb = None
-                    if self.strategy_id == "maker_pulse" and self.strike is not None:
-                        lead_hb = float(state["spot"]) - float(self.strike)
+                                why = "wait_roll"
+                    roll_hb = None
+                    if self.strategy_id == "maker_pulse":
+                        roll_hb = float(self.cfg.get("_roll_lead_usd", 0) or 0)
                     print(
                         f"paper {pct}% [{elapsed_min:.1f}/{minutes:.1f} min] "
                         f"decisions={self._decision_count} quotes={self.quotes_logged} "
@@ -872,9 +877,9 @@ class PaperSession:
                         f"edge={edge_hb if edge_hb is not None else 'n/a'} "
                         f"need>={self.cfg.get('min_edge')} mid={mid_hb if mid_hb is not None else 'n/a'}"
                         + (
-                            f" lead={lead_hb:.1f} trusted={self.strike_trusted} "
+                            f" roll={roll_hb:.1f} trusted={self.strike_trusted} "
                             f"streak={self._pulse_streak}"
-                            if lead_hb is not None
+                            if roll_hb is not None
                             else ""
                         ),
                         flush=True,
