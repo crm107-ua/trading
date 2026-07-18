@@ -114,20 +114,41 @@ def _cfg_path(sid: str, capital: float, round_i: int, mut: dict) -> Path:
     cfg["preserve_selectivity"] = True
     cfg["demo_label"] = f"grind_iter_{sid}_c{int(capital)}_r{round_i}"
     cfg = apply_live_clob_floors(cfg)
-    max_sz = max(5, min(12, int(capital / 0.45)))
-    sz = max(5, min(int(cfg.get("quote_size_shares") or 5), max_sz))
-    cfg["quote_size_shares"] = sz
-    cfg["max_quote_size_shares"] = sz
-    cfg["max_inventory_shares"] = sz
-    scale = capital / 10.0
-    if "lock_profit_usdc" in cfg:
-        cfg["lock_profit_usdc"] = round(
-            max(0.06, min(0.22, float(cfg["lock_profit_usdc"]) * scale)), 2
+    # WR-first grind: size micro fijo. Más capital = buffer, no más riesgo/trade.
+    grindish = bool(cfg.get("preserve_selectivity")) or "grind" in sid
+    if grindish:
+        sz = 5
+        cfg["quote_size_shares"] = sz
+        cfg["max_quote_size_shares"] = sz
+        cfg["max_inventory_shares"] = sz
+        # Lock/loss en banda grind (no escalar × capital)
+        if "lock_profit_usdc" in cfg:
+            cfg["lock_profit_usdc"] = round(
+                max(0.07, min(0.12, float(cfg["lock_profit_usdc"]))), 2
+            )
+        if "max_loss_usdc" in cfg:
+            cfg["max_loss_usdc"] = round(
+                max(0.07, min(0.12, float(cfg["max_loss_usdc"]))), 2
+            )
+        cfg["max_notional_per_side_usdc"] = round(
+            min(3.0, max(2.75, float(capital) * 0.08)), 2
         )
-    if "max_loss_usdc" in cfg:
-        cfg["max_loss_usdc"] = round(
-            max(0.06, min(0.22, float(cfg["max_loss_usdc"]) * scale)), 2
-        )
+        cfg["max_inventory_usdc"] = cfg["max_notional_per_side_usdc"]
+    else:
+        max_sz = max(5, min(12, int(capital / 0.45)))
+        sz = max(5, min(int(cfg.get("quote_size_shares") or 5), max_sz))
+        cfg["quote_size_shares"] = sz
+        cfg["max_quote_size_shares"] = sz
+        cfg["max_inventory_shares"] = sz
+        scale = capital / 10.0
+        if "lock_profit_usdc" in cfg:
+            cfg["lock_profit_usdc"] = round(
+                max(0.06, min(0.22, float(cfg["lock_profit_usdc"]) * scale)), 2
+            )
+        if "max_loss_usdc" in cfg:
+            cfg["max_loss_usdc"] = round(
+                max(0.06, min(0.22, float(cfg["max_loss_usdc"]) * scale)), 2
+            )
     for k, v in mut.items():
         cfg[k] = v
     cfg["max_entry_fills"] = 1
