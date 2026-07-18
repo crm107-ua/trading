@@ -40,6 +40,7 @@
   "edge_cheap_side_only": true,
   "fusion_enable_follow": true,
   "fusion_enable_edge": true,
+  "edge_require_momentum": true,
   "max_window_join_age_s": 90,
   "strike_stamp_max_age_s": 20,
   "pulse_require_early_strike": false,

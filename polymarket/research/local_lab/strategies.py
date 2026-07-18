@@ -220,6 +220,15 @@ def maker_edge(
     if cfg.get("cheap_side_only", False):
         allow_rich = False
 
+    # Opcional: no fadraar sin confirmación de momentum (Fusion/WR-lock).
+    if bool(cfg.get("require_momentum_align", False)):
+        roll = float(cfg.get("_roll_lead_usd", 0.0) or 0.0)
+        min_roll = float(cfg.get("min_spot_lead_usd", 2.0) or 2.0)
+        if edge >= min_edge and roll < min_roll:
+            return None  # cheap UP sin BTC subiendo → tóxico
+        if edge <= -min_edge and roll > -min_roll:
+            return None  # rich UP sin BTC bajando → tóxico
+
     if edge >= min_edge:
         bid = _clip(best_bid if cfg.get("quote_join_touch", True) else fair_up - hs - buf, 0.01, 0.98)
         if bid >= mid - 1e-9:
@@ -514,7 +523,7 @@ def maker_fusion(
                 q.bid, q.ask, q.size_shares, "maker_fusion", f"via_follow|{q.note}"
             )
 
-    # 3) Edge selectivo (DNA grind) — solo si mid en banda edge
+    # 3) Edge selectivo — solo con momentum alineado (si no, revive el fade tóxico).
     if bool(cfg.get("fusion_enable_edge", True)):
         edge_cfg = dict(cfg)
         edge_cfg["min_quote_mid"] = float(cfg.get("edge_min_quote_mid", 0.28) or 0.28)
@@ -522,6 +531,9 @@ def maker_fusion(
         edge_cfg["min_edge"] = float(cfg.get("edge_min_edge", cfg.get("min_edge", 0.028)) or 0.028)
         edge_cfg["cheap_side_only"] = bool(cfg.get("edge_cheap_side_only", True))
         edge_cfg["allow_rich_side"] = not edge_cfg["cheap_side_only"]
+        edge_cfg["require_momentum_align"] = bool(
+            cfg.get("edge_require_momentum", True)
+        )
         q = maker_edge(fair_up, best_bid, best_ask, spot, strike, edge_cfg)
         if q is not None:
             return QuoteIntent(
