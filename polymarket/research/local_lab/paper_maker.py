@@ -589,6 +589,21 @@ class PaperSession:
             now = datetime.now(timezone.utc)
             active, nxt = pick_recording_targets(markets, now)
             target = active or nxt
+            # PulseGate / régimen: no quemar sesión en ventana ya muerta o tarde.
+            # Prefiere la siguiente para pillar strike fresco al open.
+            if (
+                self.strategy_id == "maker_pulse"
+                and active is not None
+                and nxt is not None
+            ):
+                we_a = window_end(active)
+                ws_a = window_start(active)
+                rem_a = (we_a - now).total_seconds() if we_a else 0.0
+                age_a = (now - ws_a).total_seconds() if ws_a else 999.0
+                t_min = float(self.cfg.get("quote_time_min_s", 110) or 110)
+                max_join = float(self.cfg.get("max_window_join_age_s", 45) or 45)
+                if rem_a < t_min or age_a > max_join:
+                    target = nxt
             if target is None:
                 await asyncio.sleep(poll_s)
                 continue
