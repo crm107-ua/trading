@@ -649,15 +649,20 @@ class PaperSession:
             # PulseGate / régimen: no quemar sesión en ventana ya muerta o tarde.
             # Prefiere la siguiente para pillar strike fresco al open.
             if (
-                self.strategy_id == "maker_pulse"
+                self.strategy_id in ("maker_pulse", "maker_follow", "maker_fusion")
                 and active is not None
                 and nxt is not None
             ):
                 we_a = window_end(active)
                 rem_a = (we_a - now).total_seconds() if we_a else 0.0
-                t_min = float(self.cfg.get("quote_time_min_s", 110) or 110)
-                # Solo blackout settlement. Saltar por mid tóxico aparca en nxt
-                # aún cerrado (trusted=False) y pierde el pulso.
+                t_min = float(
+                    self.cfg.get(
+                        "follow_time_min_s",
+                        self.cfg.get("quote_time_min_s", 80),
+                    )
+                    or 80
+                )
+                # Solo blackout settlement. No aparcar en nxt cerrado.
                 if rem_a < t_min:
                     target = nxt
             if target is None:

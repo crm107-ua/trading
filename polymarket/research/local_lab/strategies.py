@@ -396,10 +396,146 @@ def maker_pulse(
     )
 
 
+def maker_follow(
+    fair_up: float,
+    best_bid: float | None,
+    best_ask: float | None,
+    spot: float,
+    strike: float,
+    cfg: dict[str, Any],
+) -> QuoteIntent | None:
+    """
+    FollowGate — opuesto al fade: unirse al lado que el mid YA precio
+    solo si el spot lo confirma (anti adverse-selection).
+
+    UP:  mid en [follow_up_lo, follow_up_hi] y roll/vel ≥ 0
+    DOWN: mid en banda baja y roll/vel ≤ 0
+    Evita colas (>follow_extreme) y settlement.
+    """
+    if best_bid is None or best_ask is None:
+        return None
+    # Ventana debe estar abierta (no pre-book de nxt).
+    if cfg.get("_window_open") is False:
+        return None
+
+    mid = (best_bid + best_ask) / 2.0
+    extreme_hi = float(cfg.get("follow_extreme_hi", 0.78) or 0.78)
+    extreme_lo = float(cfg.get("follow_extreme_lo", 0.22) or 0.22)
+    if mid >= extreme_hi or mid <= extreme_lo:
+        return None
+
+    t_rem = cfg.get("_time_remaining_s")
+    t_min = float(cfg.get("follow_time_min_s", cfg.get("quote_time_min_s", 80)) or 80)
+    t_max = float(cfg.get("follow_time_max_s", cfg.get("quote_time_max_s", 280)) or 280)
+    if t_rem is not None and (float(t_rem) < t_min or float(t_rem) > t_max):
+        return None
+
+    roll = float(cfg.get("_roll_lead_usd", 0.0) or 0.0)
+    vel = float(cfg.get("_spot_velocity_usd", 0.0) or 0.0)
+    min_roll = float(cfg.get("follow_min_roll_usd", 1.5) or 1.5)
+    min_vel = float(cfg.get("follow_min_vel_usd", 0.3) or 0.3)
+
+    up_lo = float(cfg.get("follow_up_lo", 0.52) or 0.52)
+    up_hi = float(cfg.get("follow_up_hi", 0.72) or 0.72)
+    dn_lo = float(cfg.get("follow_dn_lo", 0.28) or 0.28)
+    dn_hi = float(cfg.get("follow_dn_hi", 0.48) or 0.48)
+
+    side: str | None = None
+    if up_lo <= mid <= up_hi and roll >= min_roll and vel >= min_vel:
+        side = "bid"  # follow UP
+    elif dn_lo <= mid <= dn_hi and roll <= -min_roll and vel <= -min_vel:
+        side = "ask"  # follow DOWN
+    if side is None:
+        return None
+
+    # Opcional: no pelear contra fair absurdo
+    if side == "bid" and float(fair_up) + 0.08 < mid:
+        return None
+    if side == "ask" and float(fair_up) - 0.08 > mid:
+        return None
+
+    need = int(cfg.get("follow_persist_polls", 1) or 1)
+    streak = int(cfg.get("_pulse_streak", 0) or 0)
+    # Follow usa su propio agree vía roll+mid; acepta streak≥need o need≤1
+    if need > 1 and streak < need:
+        return None
+
+    size = float(cfg["quote_size_shares"])
+    size = max(1.0, round(size * float(cfg.get("_runtime_size_scale", 1.0) or 1.0), 2))
+    hard_cap = float(cfg.get("max_quote_size_shares", 0) or 0)
+    if hard_cap > 0:
+        size = min(size, hard_cap)
+
+    if side == "bid":
+        bid = _clip(
+            best_bid if cfg.get("quote_join_touch", True) else mid - 0.01,
+            0.01,
+            0.98,
+        )
+        if bid >= mid - 1e-9:
+            return None
+        return QuoteIntent(
+            bid, 0.99, size, "maker_follow", f"follow_up mid={mid:.2f} roll={roll:.1f}"
+        )
+    ask = _clip(
+        best_ask if cfg.get("quote_join_touch", True) else mid + 0.01,
+        0.02,
+        0.99,
+    )
+    if ask <= mid + 1e-9:
+        return None
+    return QuoteIntent(
+        0.01, ask, size, "maker_follow", f"follow_dn mid={mid:.2f} roll={roll:.1f}"
+    )
+
+
+def maker_fusion(
+    fair_up: float,
+    best_bid: float | None,
+    best_ask: float | None,
+    spot: float,
+    strike: float,
+    cfg: dict[str, Any],
+) -> QuoteIntent | None:
+    """
+    RegimeRouter: prueba Pulse → Follow → Edge selectivo.
+    Combina latencia, follow-the-flow y edge clásico sin forzar un solo dogma.
+    """
+    # 1) Pulse (latencia) — usa gates propios / strike trust
+    q = maker_pulse(fair_up, best_bid, best_ask, spot, strike, cfg)
+    if q is not None:
+        return QuoteIntent(q.bid, q.ask, q.size_shares, "maker_fusion", f"via_pulse|{q.note}")
+
+    # 2) Follow (unirse al mid informado + spot)
+    if bool(cfg.get("fusion_enable_follow", True)):
+        q = maker_follow(fair_up, best_bid, best_ask, spot, strike, cfg)
+        if q is not None:
+            return QuoteIntent(
+                q.bid, q.ask, q.size_shares, "maker_fusion", f"via_follow|{q.note}"
+            )
+
+    # 3) Edge selectivo (DNA grind) — solo si mid en banda edge
+    if bool(cfg.get("fusion_enable_edge", True)):
+        edge_cfg = dict(cfg)
+        edge_cfg["min_quote_mid"] = float(cfg.get("edge_min_quote_mid", 0.28) or 0.28)
+        edge_cfg["max_quote_mid"] = float(cfg.get("edge_max_quote_mid", 0.72) or 0.72)
+        edge_cfg["min_edge"] = float(cfg.get("edge_min_edge", cfg.get("min_edge", 0.028)) or 0.028)
+        edge_cfg["cheap_side_only"] = bool(cfg.get("edge_cheap_side_only", True))
+        edge_cfg["allow_rich_side"] = not edge_cfg["cheap_side_only"]
+        q = maker_edge(fair_up, best_bid, best_ask, spot, strike, edge_cfg)
+        if q is not None:
+            return QuoteIntent(
+                q.bid, q.ask, q.size_shares, "maker_fusion", f"via_edge|{q.note}"
+            )
+    return None
+
+
 STRATEGIES = {
     "maker_16": maker_16,
     "wide_spread_probe": wide_spread_only,
     "tight_mid_fade": tight_mid_fade,
     "maker_edge": maker_edge,
     "maker_pulse": maker_pulse,
+    "maker_follow": maker_follow,
+    "maker_fusion": maker_fusion,
 }
