@@ -84,6 +84,7 @@ class PaperSession:
     spot_history: list[tuple[int, float]] = field(default_factory=list)
     mid_history: list[tuple[int, float]] = field(default_factory=list)
     _pulse_streak: int = 0
+    _prefer_next_window: bool = False
     nim_decisions_used: int = 0
     nim_rule_holds: int = 0
     nim_cache_hits: int = 0
@@ -655,8 +656,8 @@ class PaperSession:
                 we_a = window_end(active)
                 rem_a = (we_a - now).total_seconds() if we_a else 0.0
                 t_min = float(self.cfg.get("quote_time_min_s", 110) or 110)
-                # Solo saltar en blackout de settlement; el roll-lead opera mid-ventana.
-                if rem_a < t_min:
+                # Settlement blackout o mid ya fuera de régimen → siguiente open.
+                if rem_a < t_min or self._prefer_next_window:
                     target = nxt
             if target is None:
                 await asyncio.sleep(poll_s)
@@ -706,6 +707,10 @@ class PaperSession:
                 self.mid_history.append((now_ns, mid_now))
                 if len(self.mid_history) > 240:
                     self.mid_history = self.mid_history[-180:]
+                if self.strategy_id == "maker_pulse":
+                    mid_lo = float(self.cfg.get("min_quote_mid", 0.36) or 0.36)
+                    mid_hi = float(self.cfg.get("max_quote_mid", 0.64) or 0.64)
+                    self._prefer_next_window = mid_now < mid_lo or mid_now > mid_hi
             self._maybe_stamp_strike(float(state["spot"]))
 
             we_ns = self.window_end_ns or time.time_ns()
