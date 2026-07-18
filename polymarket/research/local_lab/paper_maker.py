@@ -133,26 +133,31 @@ class PaperSession:
         return float(pts[-1][1] - pts[0][1])
 
     def _maybe_stamp_strike(self, spot: float) -> None:
-        """Sella strike ≈ open real en los primeros segundos de la ventana."""
+        """Marca ventana abierta y sella strike de referencia (BS blend).
+
+        Con PulseGate roll-lead, 'trusted' = ventana ya abierta (age>=0) y
+        aún fuera del blackout de settlement. El sello temprano solo mejora
+        el fair BS; no bloquea la entrada por latencia.
+        """
         if self.window_start_ns is None:
+            self.strike_trusted = False
             return
         age_s = (time.time_ns() - self.window_start_ns) / 1e9
         stamp_until = float(self.cfg.get("strike_stamp_max_age_s", 12) or 12)
         max_join = float(self.cfg.get("max_window_join_age_s", 50) or 50)
-        # Ventana aún no abre
         if age_s < 0:
             self.strike_trusted = False
+            self.cfg["_window_open"] = False
             return
-        if not self._strike_stamped and age_s <= stamp_until:
+        self.cfg["_window_open"] = True
+        if not self._strike_stamped and age_s <= max_join:
             self.strike = float(spot)
             self._strike_stamped = True
-            self.strike_trusted = True
-            return
-        if not self._strike_stamped and age_s > max_join:
-            # Llegamos tarde: no operar esta ventana
-            self.strike_trusted = False
-            return
-        if self._strike_stamped and age_s <= max_join:
+        # Roll-mode: operar si la ventana está abierta; stamp quality es informativo.
+        require_early = bool(self.cfg.get("pulse_require_early_strike", False))
+        if require_early:
+            self.strike_trusted = bool(self._strike_stamped and age_s <= stamp_until)
+        else:
             self.strike_trusted = True
 
     def _inject_pulse_runtime(
@@ -648,13 +653,10 @@ class PaperSession:
                 and nxt is not None
             ):
                 we_a = window_end(active)
-                ws_a = window_start(active)
                 rem_a = (we_a - now).total_seconds() if we_a else 0.0
-                age_a = (now - ws_a).total_seconds() if ws_a else 999.0
                 t_min = float(self.cfg.get("quote_time_min_s", 110) or 110)
-                # Solo operamos si aún podemos sellar strike≈open.
-                stamp_until = float(self.cfg.get("strike_stamp_max_age_s", 12) or 12)
-                if rem_a < t_min or age_a > stamp_until:
+                # Solo saltar en blackout de settlement; el roll-lead opera mid-ventana.
+                if rem_a < t_min:
                     target = nxt
             if target is None:
                 await asyncio.sleep(poll_s)

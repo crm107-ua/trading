@@ -36,6 +36,7 @@
   "max_quote_mid": 0.64,
   "max_window_join_age_s": 50,
   "strike_stamp_max_age_s": 12,
+  "pulse_require_early_strike": false,
   "min_spot_lead_usd": 4,
   "min_spot_velocity_usd": 1.5,
   "max_mid_catchup": 0.025,
