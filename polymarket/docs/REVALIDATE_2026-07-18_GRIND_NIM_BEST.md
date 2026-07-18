@@ -42,6 +42,18 @@ Pérdidas: el −0.28 superó el techo teórico `max_loss=0.10` (gap mid / flatt
 
 ---
 
+## WR-push post-hardening @10 EUR (2×6×5 min)
+
+| Ronda | Mutación | WR traded | Total | Worst | ¿WR≥75%? |
+|-------|----------|-----------|-------|-------|----------|
+| 0 | base | 66.7% (4W/2L) | −0.10 | −0.43 | no |
+| 1 | lock/loss 0.09 + mid 0.30–0.70 | 66.7% (2W/1L) | +0.35 | −0.05 | no |
+
+Artefacto: `iterate_20260718_190325.json`  
+**Conclusión:** aún **no** hay WR≥75% estable @10 € tras hardening. No armar live.
+
+---
+
 ## Prep hacia micro-live (aún SAFE)
 
 - Credenciales Relayer + CLOB + firma: OK (`prep_micro_live`)

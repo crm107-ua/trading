@@ -247,7 +247,12 @@ class PaperSession:
         unreal = self.inventory_shares * mark - self.cost_basis
         max_loss = float(self.cfg.get("max_loss_usdc", 0) or 0)
         if max_loss > 0:
-            soft = abs(max_loss) * (0.7 if grind_mode_enabled() else 1.0)
+            grindish = (
+                grind_mode_enabled()
+                or bool(self.cfg.get("preserve_selectivity"))
+                or "grind" in str(self.cfg.get("demo_label", "")).lower()
+            )
+            soft = abs(max_loss) * (0.7 if grindish else 1.0)
             if unreal <= -soft:
                 self._flatten_inventory_mid(mark)
                 return
@@ -627,6 +632,10 @@ class PaperSession:
                             )
                         if exit_dec.action == "flatten":
                             self._flatten_inventory_mid(mid_m)
+            # Holding inventory: skip entry NIM/quotes (latency) so stops re-check every poll.
+            if abs(self.inventory_shares) > 1e-9:
+                await asyncio.sleep(poll_s)
+                continue
             quote = self._maker_quotes(
                 fair,
                 state["best_bid"],
