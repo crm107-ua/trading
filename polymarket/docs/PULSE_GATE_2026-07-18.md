@@ -41,3 +41,11 @@ python -m polymarket.research.local_lab.pulse_gate_hunt \
 
 WR traded ≥70% con ≥2 sesiones con fills en **5€ y 10€** → promover a `grind_nim_best` (paper).  
 **No** armar live real hasta dry-E2E + checklist.
+
+## Hallazgos cloud 2026-07-18 (noche UTC)
+
+1. **Binance.US congelaba el last trade** → `lead=0` eterno. Fix: mediana Coinbase+OKX+Kraken.
+2. Sellar strike al open **anulaba** el lead vs open; PulseGate usa **roll 8s**.
+3. Saltar pronto a la siguiente ventana aparcaba el bot en mercados aún cerrados (`trusted=False`). Fix: solo blackout settlement.
+4. En la ventana de caza, muchos books en **mid 0.85–0.97** (fuera de régimen) → starve correcto (no lotería).
+5. Estado: método implementado + tests verdes; **aún sin WR≥70% medido** en fills reales de esta noche. Hunt sigue.
