@@ -656,8 +656,9 @@ class PaperSession:
                 we_a = window_end(active)
                 rem_a = (we_a - now).total_seconds() if we_a else 0.0
                 t_min = float(self.cfg.get("quote_time_min_s", 110) or 110)
-                # Settlement blackout o mid ya fuera de régimen → siguiente open.
-                if rem_a < t_min or self._prefer_next_window:
+                # Solo blackout settlement. Saltar por mid tóxico aparca en nxt
+                # aún cerrado (trusted=False) y pierde el pulso.
+                if rem_a < t_min:
                     target = nxt
             if target is None:
                 await asyncio.sleep(poll_s)
