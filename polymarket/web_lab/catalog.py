@@ -66,6 +66,17 @@ FEATURED: list[dict[str, Any]] = [
         "base_capital": 1.2,
     },
     {
+        "id": "grind_nim_best",
+        "name": "Grind NIM BEST (WR≥75%)",
+        "badge": "CHAMP",
+        "file": "maker_demo_grind_nim_best.json",
+        "default_sessions": 6,
+        "default_minutes": 6.0,
+        "blurb": "Campeón iterado: WR 80% paper (4W/1L, +0.37€ @10€) con NVIDIA hybrid+grind. Solo cheap-side.",
+        "metrics": {"total": 0.37, "wr": 0.8, "avg": 0.074},
+        "base_capital": 10.0,
+    },
+    {
         "id": "grind_nim_flow",
         "name": "Grind NIM flow (tradeable)",
         "badge": "GRIND",

@@ -1,0 +1,39 @@
+{
+  "created_utc": "2026-07-18T14:56:37.412026+00:00",
+  "title": "Grind NIM BEST champion batch",
+  "target": "WR>=0.75 on traded sessions OR grind no-red positive total",
+  "config_file": "polymarket/config/maker_demo_grind_nim_best.json",
+  "catalog_id": "grind_nim_best",
+  "nim": {
+    "mode": "hybrid",
+    "profit_assist": true,
+    "grind": true,
+    "model": "nvidia/nemotron-mini-4b-instruct",
+    "strong_edge_mult": 2.8
+  },
+  "batch": {
+    "sessions": 6,
+    "minutes": 5.0,
+    "capital_eur": 10.0,
+    "strategy_id": "grind_nim_flow"
+  },
+  "result": {
+    "wr": 0.8,
+    "sessions_with_fills": 5,
+    "wins_traded": 4,
+    "losses_traded": 1,
+    "total_eur": 0.37,
+    "worst_eur": -0.43,
+    "fills_total": 5,
+    "hit_wr75": true,
+    "hit_grind": false,
+    "session_nets_eur": [0.0, 0.43, 0.07, 0.18, 0.12, -0.43],
+    "fill_sides": [null, "bid", "bid", "bid", "bid", "bid"]
+  },
+  "oos_short_note": {
+    "eur5_4x4m": {"wr": 0.3333, "total": -0.27},
+    "eur15_4x4m": {"wr": 0.0, "total": -0.64},
+    "warning": "OOS corta no replica el 80%; revalidar antes de live"
+  },
+  "note": "Paper live-exact floors. No es PnL on-chain."
+}
