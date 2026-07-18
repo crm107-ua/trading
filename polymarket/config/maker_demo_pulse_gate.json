@@ -35,8 +35,9 @@
   "min_quote_mid": 0.38,
   "max_quote_mid": 0.62,
   "max_window_join_age_s": 45,
-  "min_spot_lead_usd": 12,
-  "min_spot_velocity_usd": 4,
+  "min_spot_lead_usd": 8,
+  "min_spot_velocity_usd": 3,
+  "pulse_symmetric": true,
   "pulse_persist_polls": 2,
   "pulse_velocity_window_ms": 3000,
   "pulse_book_levels": 3,
@@ -73,6 +74,6 @@
   "loss_size_penalty_s": 500,
   "pause_after_consecutive_losses": 1,
   "pause_entries_s": 900,
-  "allow_rich_side_live": false,
-  "cheap_side_only": true
+  "allow_rich_side_live": true,
+  "cheap_side_only": false
 }

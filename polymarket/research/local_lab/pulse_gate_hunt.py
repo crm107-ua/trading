@@ -88,8 +88,10 @@ def _cfg(capital: float, variant: str, mut: dict[str, Any]) -> Path:
     cfg["max_inventory_usdc"] = 3.0
     for k, v in mut.items():
         cfg[k] = v
-    cfg["cheap_side_only"] = True
-    cfg["allow_rich_side_live"] = False
+    # Pulse simétrico: bid UP o ask UP según momentum BTC
+    cfg["pulse_symmetric"] = bool(cfg.get("pulse_symmetric", True))
+    cfg["cheap_side_only"] = False
+    cfg["allow_rich_side_live"] = True
     cfg["max_entry_fills"] = 1
     cfg["demo_label"] = f"pulse_{variant}_c{int(capital)}"
     OUT.mkdir(parents=True, exist_ok=True)

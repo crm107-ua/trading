@@ -46,6 +46,25 @@ def test_pulse_quotes_when_all_gates_pass():
     assert q.ask == 0.99
 
 
+def test_pulse_symmetric_ask_on_down_momentum():
+    # fair 0.42, mid 0.50 → rich UP; spot below strike + vel down
+    q = maker_pulse(
+        0.42,
+        0.49,
+        0.51,
+        99_950.0,
+        100_000.0,
+        _cfg(
+            pulse_symmetric=True,
+            _spot_velocity_usd=-8.0,
+            _book_imbalance=0.35,
+        ),
+    )
+    assert q is not None
+    assert q.ask < 0.98
+    assert q.bid == 0.01
+
+
 def test_pulse_rejects_untrusted_strike():
     assert (
         maker_pulse(0.58, 0.49, 0.51, 100_050.0, 100_000.0, _cfg(_strike_trusted=False))

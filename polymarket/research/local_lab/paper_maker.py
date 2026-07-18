@@ -140,17 +140,27 @@ class PaperSession:
         )
         strike = float(self.strike or spot)
         lead = float(spot) - strike
+        vel = float(self.cfg["_spot_velocity_usd"])
         min_lead = float(self.cfg.get("min_spot_lead_usd", 12.0) or 12.0)
         min_vel = float(self.cfg.get("min_spot_velocity_usd", 4.0) or 4.0)
         min_edge = float(self.cfg.get("min_edge", 0.028) or 0.028)
         mid_lo = float(self.cfg.get("min_quote_mid", 0.38) or 0.38)
         mid_hi = float(self.cfg.get("max_quote_mid", 0.62) or 0.62)
+        symmetric = bool(self.cfg.get("pulse_symmetric", True))
         mid_ok = False
-        edge_ok = False
+        pulse_dir_ok = False
         if bb is not None and ba is not None:
             mid = (float(bb) + float(ba)) / 2.0
             mid_ok = mid_lo <= mid <= mid_hi
-            edge_ok = (float(fair) - mid) >= min_edge
+            edge = float(fair) - mid
+            up_ok = lead >= min_lead and vel >= min_vel and edge >= min_edge
+            dn_ok = (
+                symmetric
+                and lead <= -min_lead
+                and vel <= -min_vel
+                and edge <= -min_edge
+            )
+            pulse_dir_ok = up_ok or dn_ok
         t_ok = True
         if time_remaining_s is not None:
             t_min = float(self.cfg.get("quote_time_min_s", 0) or 0)
@@ -160,14 +170,7 @@ class PaperSession:
                 t_ok = False
             if t_max > 0 and tr > t_max:
                 t_ok = False
-        agree = (
-            self.strike_trusted
-            and mid_ok
-            and edge_ok
-            and t_ok
-            and lead >= min_lead
-            and float(self.cfg["_spot_velocity_usd"]) >= min_vel
-        )
+        agree = self.strike_trusted and mid_ok and pulse_dir_ok and t_ok
         self._pulse_streak = self._pulse_streak + 1 if agree else 0
         self.cfg["_pulse_streak"] = self._pulse_streak
 

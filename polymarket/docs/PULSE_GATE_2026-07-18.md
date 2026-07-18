@@ -19,10 +19,11 @@ No predecir dirección a ciegas. Capturar **latencia BTC spot → libro Polymark
 | Strike fresco | Solo si `join_age ≤ max_window_join_age_s` (~45s) |
 | Régimen mid | Banda viva ~0.38–0.62 (fuera de lotería) |
 | Blackout settlement | No entrar si `time_rem < 110s` (ni caos de apertura si `>260s`) |
-| Momentum BTC | `spot−strike ≥ lead` **y** velocidad spot ≥ umbral |
-| Edge + z | `fair−mid` en banda; no edges absurdos |
-| Imbalance | Fracción bid top-N ≥ umbral (anti flujo tóxico) |
+| Momentum BTC | UP: `spot−strike≥lead` + vel+ · DOWN simétrico: lead− + vel− |
+| Edge + z | `|fair−mid|` en banda; dirección alineada al momentum |
+| Imbalance | Bid-heavy para bids / ask-heavy para asks (anti tóxico) |
 | Persistencia | Señal estable N polls |
+| Skip ventana | Si activa está en blackout o join tarde → saltar a la siguiente |
 
 Estrategia: `maker_pulse` · config: `maker_demo_pulse_gate.json` · hunt: `pulse_gate_hunt.py`
 

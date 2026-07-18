@@ -250,12 +250,10 @@ def maker_pulse(
     """
     PulseGate — régimen + latencia BTC→libro + anti-toxicidad.
 
-    No fadra mids informados. Solo puja el lado cheap (UP) cuando:
-      1) régimen vivo (mid en banda, lejos del settlement/manip),
-      2) strike fiable (ventana fresca),
-      3) momentum BTC confirma (spot>strike + velocidad),
-      4) edge fair−mid y libro no tóxico (imbalance),
-      5) señal persistente N polls.
+    No fadra mids informados. Cotiza cuando el spot confirma y el mid rezaga:
+      UP (bid):  spot>strike + vel+ + fair>mid
+      DOWN (ask, simétrico): spot<strike + vel− + fair<mid
+    Gates comunes: strike fresco, blackout settlement, régimen mid, persistencia, imbalance.
     """
     if best_bid is None or best_ask is None:
         return None
@@ -276,29 +274,41 @@ def maker_pulse(
         if float(t_rem) < t_min or float(t_rem) > t_max:
             return None
 
-    # Latencia: spot ya gana, mid aún barato vs fair.
     lead = float(spot) - float(strike)
     min_lead = float(cfg.get("min_spot_lead_usd", 12.0) or 12.0)
-    if lead < min_lead:
-        return None
     vel = float(cfg.get("_spot_velocity_usd", 0.0) or 0.0)
     min_vel = float(cfg.get("min_spot_velocity_usd", 4.0) or 4.0)
-    if vel < min_vel:
-        return None
-
-    edge = float(fair_up) - mid
+    edge = float(fair_up) - mid  # >0 cheap UP; <0 rich UP
     min_edge = float(cfg.get("min_edge", 0.028) or 0.028)
     max_abs_edge = float(cfg.get("max_abs_edge", 0.09) or 0.09)
-    if edge < min_edge or edge > max_abs_edge:
+    abs_edge = abs(edge)
+    if abs_edge < min_edge or abs_edge > max_abs_edge:
         return None
     sigma = float(cfg.get("sigma_mid", 0.03) or 0.03)
-    if edge / max(sigma, 1e-6) < float(cfg.get("min_z", 0.9) or 0.9):
+    if abs_edge / max(sigma, 1e-6) < float(cfg.get("min_z", 0.9) or 0.9):
+        return None
+
+    symmetric = bool(cfg.get("pulse_symmetric", True))
+    side: str | None = None
+    if lead >= min_lead and vel >= min_vel and edge >= min_edge:
+        side = "bid"  # latency long UP
+    elif (
+        symmetric
+        and lead <= -min_lead
+        and vel <= -min_vel
+        and edge <= -min_edge
+    ):
+        side = "ask"  # latency short UP / confirm DOWN
+    if side is None:
         return None
 
     imb = cfg.get("_book_imbalance")
     min_imb = float(cfg.get("min_bid_imbalance", 0.52) or 0.52)
-    if imb is not None and float(imb) < min_imb:
-        return None  # ask-heavy → flujo tóxico contra nuestro bid
+    if imb is not None:
+        if side == "bid" and float(imb) < min_imb:
+            return None  # ask-heavy contra bid
+        if side == "ask" and float(imb) > (1.0 - min_imb):
+            return None  # bid-heavy contra ask
 
     need = int(cfg.get("pulse_persist_polls", 2) or 2)
     if int(cfg.get("_pulse_streak", 0) or 0) < need:
@@ -316,22 +326,39 @@ def maker_pulse(
 
     capture = float(cfg.get("expected_capture_frac", 0.5) or 0.5)
     min_ev = float(cfg.get("min_expected_pnl_usdc", 0.0) or 0.0)
-    if min_ev > 0 and edge * size * capture < min_ev:
+    if min_ev > 0 and abs_edge * size * capture < min_ev:
         return None
 
-    bid = _clip(
-        best_bid if cfg.get("quote_join_touch", True) else fair_up - float(cfg["half_spread"]),
-        0.01,
-        0.98,
+    hs = float(cfg["half_spread"])
+    if side == "bid":
+        bid = _clip(
+            best_bid if cfg.get("quote_join_touch", True) else fair_up - hs,
+            0.01,
+            0.98,
+        )
+        if bid >= mid - 1e-9 or (mid_lo > 0 and bid < mid_lo):
+            return None
+        return QuoteIntent(
+            bid,
+            0.99,
+            size,
+            "maker_pulse",
+            f"pulse_up e={abs_edge:.3f} lead={lead:.0f} vel={vel:.0f} imb={imb}",
+        )
+
+    ask = _clip(
+        best_ask if cfg.get("quote_join_touch", True) else fair_up + hs,
+        0.02,
+        0.99,
     )
-    if bid >= mid - 1e-9 or (mid_lo > 0 and bid < mid_lo):
+    if ask <= mid + 1e-9 or (mid_hi < 1 and ask > mid_hi):
         return None
     return QuoteIntent(
-        bid,
-        0.99,
+        0.01,
+        ask,
         size,
         "maker_pulse",
-        f"pulse e={edge:.3f} lead={lead:.0f} vel={vel:.0f} imb={imb}",
+        f"pulse_dn e={abs_edge:.3f} lead={lead:.0f} vel={vel:.0f} imb={imb}",
     )
 
 
