@@ -3,7 +3,7 @@
   "hypothesis": 16,
   "demo_label": "grind_nim_selective_micro_live",
   "preserve_selectivity": true,
-  "notes": "Dry-run prep selective v2 (edge/z altos, mid base). NO arma órdenes sola: POLY_LIVE_ARMED=1 + DRY_RUN=0. Capital micro ~1.5–5 USDC.",
+  "notes": "Dry-run prep del campe\u00f3n selective v2 (WR100% @10\u20ac paper). NO arma sola.",
   "live_onchain": false,
   "initial_capital_usdc": 5.0,
   "currency_label": "EUR",

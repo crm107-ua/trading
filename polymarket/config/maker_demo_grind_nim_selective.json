@@ -3,7 +3,7 @@
   "hypothesis": 16,
   "demo_label": "grind_nim_selective",
   "preserve_selectivity": true,
-  "notes": "WR-first v2: sube listón (min_edge 0.031, min_z 1.0, max_abs_edge 0.085) sin estrechar mid (0.28-0.72). v1 mid-estrecho falló WR25% @10€. Objetivo WR>=75% feeds reales. No es PnL on-chain.",
+  "notes": "Alias del DNA campe\u00f3n selective v2 (promovido a grind_nim_best). CHAMPION promoted 2026-07-18 from grind_nim_selective v2. Entry bar: min_edge 0.031, min_z 1.0, max_abs_edge 0.085, mid 0.28-0.72. Feeds reales @10 EUR 6x5: WR 100% (5W/0L) +0.86 EUR, no_red. v1 mid-estrecho rechazada (WR25%). No es PnL on-chain.",
   "initial_capital_usdc": 10.0,
   "currency_label": "EUR",
   "paper_resolution": "mid",
