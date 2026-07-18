@@ -24,10 +24,12 @@ async def run_batch(
     config: str,
     sessions: int,
     minutes: float,
+    session_prefix: str | None = None,
 ) -> dict:
     require_nvidia_api_key()
     cfg_path = resolve_config_path(config)
-    stamp = datetime.now(timezone.utc).strftime("%H%M%S")
+    stamp = datetime.now(timezone.utc).strftime("%H%M%S%f")
+    prefix = (session_prefix or "v2").replace(" ", "_")[:40]
     results: list[dict] = []
     # Tras N losses seguidas (sesiones con fills), para el batch: evita 5 rojas seguidas.
     streak_stop = int(os.getenv("BATCH_STOP_AFTER_LOSS_STREAK", "2") or 2)
@@ -38,8 +40,8 @@ async def run_batch(
     stopped_early = False
     stopped_early_starve = False
     for i in range(sessions):
-        sid = f"v2_{stamp}_{i+1:02d}"
-        print(f"\n=== session {i+1}/{sessions} ({minutes} min) ===", flush=True)
+        sid = f"{prefix}_{stamp}_{i+1:02d}"
+        print(f"\n=== [{prefix}] session {i+1}/{sessions} ({minutes} min) ===", flush=True)
         rep = await run_paper_session(
             strategy_id=strategy,
             minutes=minutes,

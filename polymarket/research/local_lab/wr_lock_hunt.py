@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Caza rápida WR>=70% @5€ y @10€ con DNA wr_lock + mutaciones.
+"""Caza WR>=70% @5€/@10€ — paralelizable por capital y variante.
 
-    python -m polymarket.research.local_lab.wr_lock_hunt
-    python -m polymarket.research.local_lab.wr_lock_hunt --capitals 5,10 --sessions 4 --minutes 3
+    python -m polymarket.research.local_lab.wr_lock_hunt --parallel 4
+    python -m polymarket.research.local_lab.wr_lock_hunt --capitals 5 --parallel 2
 """
 
 from __future__ import annotations
@@ -11,7 +11,6 @@ import argparse
 import asyncio
 import json
 import os
-from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -27,13 +26,11 @@ POLY = Path(__file__).resolve().parents[2]
 OUT = POLY / "data_local" / "local_lab" / "wr_lock_hunt"
 SID = "grind_nim_wr_lock"
 
-# Mutaciones ordenadas: de fusión base a más selectivas
 VARIANTS: list[tuple[str, dict[str, Any]]] = [
     ("wr_lock", {}),
     (
         "edge_open_mid",
         {
-            # Más edge, mid del campeón (evita starve de mid estrecho)
             "min_edge": 0.034,
             "min_z": 1.1,
             "min_quote_mid": 0.28,
@@ -57,7 +54,6 @@ VARIANTS: list[tuple[str, dict[str, Any]]] = [
     (
         "selective_v2_plus",
         {
-            # DNA que dio WR100% @10 + cortes más duros
             "min_edge": 0.031,
             "min_z": 1.0,
             "min_quote_mid": 0.28,
@@ -72,12 +68,13 @@ VARIANTS: list[tuple[str, dict[str, Any]]] = [
 
 
 def _cfg(capital: float, variant: str, mut: dict[str, Any]) -> Path:
-    # Prefer wr_lock file; fall back to selective catalog id if missing from catalog
     try:
         cfg, _ = load_scaled_config(SID, capital)
     except Exception:
         cfg, _ = load_scaled_config("grind_nim_selective", capital)
-    cfg.update(json.loads((POLY / "config" / "maker_demo_grind_nim_wr_lock.json").read_text()))
+    cfg.update(
+        json.loads((POLY / "config" / "maker_demo_grind_nim_wr_lock.json").read_text())
+    )
     cfg["initial_capital_usdc"] = float(capital)
     cfg["preserve_selectivity"] = True
     cfg = apply_live_clob_floors(cfg)
@@ -105,67 +102,113 @@ def _cfg(capital: float, variant: str, mut: dict[str, Any]) -> Path:
 
 
 async def run_one(
-    capital: float, variant: str, mut: dict, sessions: int, minutes: float
+    capital: float,
+    variant: str,
+    mut: dict,
+    sessions: int,
+    minutes: float,
+    sem: asyncio.Semaphore,
 ) -> dict[str, Any]:
-    _nim_env()
-    os.environ["NVIDIA_NIM_CONFIDENCE_MIN"] = "0.58"
-    os.environ["NVIDIA_NIM_STRONG_EDGE_MULT"] = "3.0"
-    path = _cfg(capital, variant, mut)
-    print(f"\n>>> HUNT {variant} EUR{capital:.0f} {sessions}x{minutes}m", flush=True)
-    summary = await run_batch(
-        strategy="maker_edge", config=str(path), sessions=sessions, minutes=minutes
-    )
-    m = _metrics(summary)
-    row = {
-        "variant": variant,
-        "capital": capital,
-        "cfg": str(path),
-        "mutation": mut,
-        **m,
-    }
-    # Umbral prep-inversión: WR>=70% con al menos 2 sesiones traded
-    row["hit_wr70"] = bool(
-        float(m["wr"]) >= 0.70 and int(m["sessions_with_fills"]) >= 2
-    )
-    print(
-        f"    → WR={m['wr']:.0%} traded={m['sessions_with_fills']} "
-        f"total={m['total']:+.2f} worst={m['worst']} "
-        f"{'PASS≥70%' if row['hit_wr70'] else 'FAIL'}",
-        flush=True,
-    )
-    return row
+    async with sem:
+        _nim_env()
+        os.environ["NVIDIA_NIM_CONFIDENCE_MIN"] = "0.58"
+        os.environ["NVIDIA_NIM_STRONG_EDGE_MULT"] = "3.0"
+        # Starve menos agresivo en caza paralela (queremos medir WR)
+        os.environ["BATCH_STOP_AFTER_STARVE_STREAK"] = "12"
+        os.environ["BATCH_STOP_AFTER_LOSS_STREAK"] = "4"
+        path = _cfg(capital, variant, mut)
+        tag = f"c{int(capital)}_{variant}"
+        print(f"\n>>> HUNT START {tag} {sessions}x{minutes}m", flush=True)
+        try:
+            summary = await run_batch(
+                strategy="maker_edge",
+                config=str(path),
+                sessions=sessions,
+                minutes=minutes,
+                session_prefix=tag,
+            )
+            m = _metrics(summary)
+            row: dict[str, Any] = {
+                "variant": variant,
+                "capital": capital,
+                "cfg": str(path),
+                "mutation": mut,
+                **m,
+            }
+        except Exception as e:  # noqa: BLE001
+            row = {
+                "variant": variant,
+                "capital": capital,
+                "cfg": str(path),
+                "mutation": mut,
+                "error": f"{type(e).__name__}: {e}",
+                "wr": 0.0,
+                "sessions_with_fills": 0,
+                "total": 0.0,
+                "worst": None,
+            }
+        row["hit_wr70"] = bool(
+            float(row.get("wr") or 0) >= 0.70
+            and int(row.get("sessions_with_fills") or 0) >= 2
+        )
+        print(
+            f"<<< HUNT DONE {tag} WR={float(row.get('wr') or 0):.0%} "
+            f"traded={row.get('sessions_with_fills')} total={float(row.get('total') or 0):+.2f} "
+            f"{'PASS≥70%' if row['hit_wr70'] else 'FAIL'}",
+            flush=True,
+        )
+        # Persist partial result immediately (subagent-friendly)
+        partial = OUT / f"partial_{tag}.json"
+        partial.write_text(json.dumps(row, indent=2), encoding="utf-8")
+        return row
 
 
 async def async_main(args: argparse.Namespace) -> int:
     require_nvidia_api_key()
     capitals = [float(x) for x in args.capitals.split(",") if x.strip()]
-    rows: list[dict] = []
-    winners: dict[float, dict] = {}
+    variants = VARIANTS
+    if args.variants:
+        want = {v.strip() for v in args.variants.split(",") if v.strip()}
+        variants = [(n, m) for n, m in VARIANTS if n in want]
+        if not variants:
+            raise SystemExit(f"no variants matched {want}")
 
-    for capital in capitals:
-        print(f"\n######## CAPITAL {capital:.0f} EUR — objetivo WR≥70% ########", flush=True)
-        for variant, mut in VARIANTS:
-            row = await run_one(capital, variant, mut, args.sessions, args.minutes)
-            rows.append(row)
-            if row.get("hit_wr70"):
-                prev = winners.get(capital)
-                if prev is None or float(row["wr"]) > float(prev["wr"]) or (
-                    float(row["wr"]) == float(prev["wr"])
-                    and float(row["total"]) > float(prev["total"])
-                ):
-                    winners[capital] = row
-                if not args.exhaust:
-                    print(f"    ✓ {capital:.0f}€ asegurado con {variant}", flush=True)
-                    break
-        if capital not in winners:
-            print(f"    ✗ {capital:.0f}€ sin WR≥70% en este pase", flush=True)
+    jobs = [(c, n, m) for c in capitals for n, m in variants]
+    # Early-stop mode: still launch all in parallel; pick winners after
+    sem = asyncio.Semaphore(max(1, int(args.parallel)))
+    print(
+        f"\n===== PARALLEL HUNT workers={args.parallel} jobs={len(jobs)} "
+        f"caps={capitals} variants={[n for n,_ in variants]} "
+        f"{args.sessions}x{args.minutes}m =====",
+        flush=True,
+    )
+    rows = await asyncio.gather(
+        *[
+            run_one(c, n, m, args.sessions, args.minutes, sem)
+            for c, n, m in jobs
+        ]
+    )
+    rows_l = list(rows)
+
+    winners: dict[float, dict] = {}
+    for row in rows_l:
+        if not row.get("hit_wr70"):
+            continue
+        c = float(row["capital"])
+        prev = winners.get(c)
+        if prev is None or float(row["wr"]) > float(prev["wr"]) or (
+            float(row["wr"]) == float(prev["wr"])
+            and float(row.get("total") or 0) > float(prev.get("total") or 0)
+        ):
+            winners[c] = row
 
     report = {
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "target": "WR>=0.70 @5 and @10 with traded>=2",
+        "parallel": args.parallel,
         "sessions": args.sessions,
         "minutes": args.minutes,
-        "rows": rows,
+        "rows": rows_l,
         "winners": {str(k): v for k, v in winners.items()},
         "both_ready": all(c in winners for c in capitals),
     }
@@ -177,12 +220,11 @@ async def async_main(args: argparse.Namespace) -> int:
     latest.write_text(json.dumps(report, indent=2), encoding="utf-8")
 
     if report["both_ready"]:
-        # Promover mejor DNA @10 (o @5 si solo hay uno) a wr_lock + best
         best10 = winners.get(10.0) or next(iter(winners.values()))
         champ = json.loads(Path(best10["cfg"]).read_text(encoding="utf-8"))
         champ["demo_label"] = "grind_nim_best"
         champ["notes"] = (
-            f"WR-LOCK promovido {stamp}: "
+            f"WR-LOCK paralelo {stamp}: "
             + ", ".join(
                 f"{int(c)}€ WR{winners[c]['wr']:.0%} ({winners[c]['variant']})"
                 for c in sorted(winners)
@@ -192,13 +234,32 @@ async def async_main(args: argparse.Namespace) -> int:
         dest = POLY / "config" / "maker_demo_grind_nim_best.json"
         dest.write_text(json.dumps(champ, indent=2) + "\n", encoding="utf-8")
         (POLY / "config" / "maker_demo_grind_nim_wr_lock.json").write_text(
-            json.dumps({**champ, "demo_label": "grind_nim_wr_lock"}, indent=2) + "\n",
+            json.dumps({**champ, "demo_label": "grind_nim_wr_lock"}, indent=2)
+            + "\n",
             encoding="utf-8",
         )
         print(f"\nPROMOTED -> {dest}", flush=True)
 
     print(f"\nREPORT -> {path}", flush=True)
-    print("WINNERS:", json.dumps(report["winners"], indent=2, ensure_ascii=False)[:2000])
+    for c in capitals:
+        w = winners.get(c)
+        if w:
+            print(
+                f"  ✓ {c:.0f}€ WR={w['wr']:.0%} variant={w['variant']} total={w['total']:+.2f}",
+                flush=True,
+            )
+        else:
+            best_c = max(
+                (r for r in rows_l if float(r["capital"]) == c),
+                key=lambda r: (float(r.get("wr") or 0), float(r.get("total") or 0)),
+                default=None,
+            )
+            if best_c:
+                print(
+                    f"  ✗ {c:.0f}€ best WR={float(best_c.get('wr') or 0):.0%} "
+                    f"variant={best_c.get('variant')} total={float(best_c.get('total') or 0):+.2f}",
+                    flush=True,
+                )
     print("BOTH_READY:", report["both_ready"], flush=True)
     return 0 if report["both_ready"] else 1
 
@@ -209,9 +270,15 @@ def main() -> int:
     ap.add_argument("--sessions", type=int, default=4)
     ap.add_argument("--minutes", type=float, default=3.0)
     ap.add_argument(
-        "--exhaust",
-        action="store_true",
-        help="Probar todas las variantes aunque ya haya PASS",
+        "--parallel",
+        type=int,
+        default=4,
+        help="celdas concurrentes (capital×variante)",
+    )
+    ap.add_argument(
+        "--variants",
+        default="",
+        help="subset comma: wr_lock,edge_open_mid,scalpel,selective_v2_plus",
     )
     return asyncio.run(async_main(ap.parse_args()))
 
