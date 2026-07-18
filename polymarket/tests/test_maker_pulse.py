@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from polymarket.research.local_lab.strategies import maker_pulse
+from polymarket.research.local_lab.strategies import maker_pulse, pulse_spot_fair
 from polymarket.src.data.book_utils import top_size_imbalance
 
 
@@ -38,8 +38,15 @@ def _cfg(**over):
 
 
 def test_pulse_quotes_when_all_gates_pass():
-    # fair 0.58, mid 0.50 → edge 0.08; spot lead + velocity ok
-    q = maker_pulse(0.58, 0.49, 0.51, 100_050.0, 100_000.0, _cfg())
+    # lead ~$15 → spot-fair ~0.63; mid 0.50 → edge ~0.13 capped by max_abs
+    q = maker_pulse(
+        0.55,
+        0.49,
+        0.51,
+        100_015.0,
+        100_000.0,
+        _cfg(max_abs_edge=0.20, min_edge=0.022, pulse_fair_scale_usd=28),
+    )
     assert q is not None
     assert q.strategy_id == "maker_pulse"
     assert q.bid > 0.02
@@ -47,15 +54,17 @@ def test_pulse_quotes_when_all_gates_pass():
 
 
 def test_pulse_symmetric_ask_on_down_momentum():
-    # fair 0.42, mid 0.50 → rich UP; spot below strike + vel down
+    # spot below strike + vel down; spot-fair < mid → ask
     q = maker_pulse(
-        0.42,
+        0.45,
         0.49,
         0.51,
-        99_950.0,
+        99_985.0,
         100_000.0,
         _cfg(
             pulse_symmetric=True,
+            max_abs_edge=0.20,
+            min_edge=0.022,
             _spot_velocity_usd=-8.0,
             _book_imbalance=0.35,
         ),
@@ -107,3 +116,9 @@ def test_top_size_imbalance_bid_heavy():
     asks = [{"price": "0.51", "size": "5"}, {"price": "0.52", "size": "5"}]
     imb = top_size_imbalance(bids, asks, n=2)
     assert imb is not None and imb > 0.5
+
+
+def test_pulse_spot_fair_reacts_to_lead():
+    assert pulse_spot_fair(100_028.0, 100_000.0, 28.0) > 0.55
+    assert pulse_spot_fair(99_972.0, 100_000.0, 28.0) < 0.45
+    assert abs(pulse_spot_fair(100_000.0, 100_000.0, 28.0) - 0.5) < 1e-6

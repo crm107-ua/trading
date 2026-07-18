@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -239,6 +240,16 @@ def maker_edge(
     return QuoteIntent(bid, ask, size, "maker_edge", f"rich e={abs_edge:.3f} sz={size}")
 
 
+def pulse_spot_fair(spot: float, strike: float, scale_usd: float) -> float:
+    """Latencia-fair: P(up) vía sigmoide de (spot−strike). Más reactivo que BS en 5m."""
+    scale = max(float(scale_usd), 1e-6)
+    x = (float(spot) - float(strike)) / scale
+    # clip exp for stability
+    x = max(-20.0, min(20.0, x))
+    p = 1.0 / (1.0 + math.exp(-x))
+    return max(0.05, min(0.95, p))
+
+
 def maker_pulse(
     fair_up: float,
     best_bid: float | None,
@@ -254,6 +265,7 @@ def maker_pulse(
       UP (bid):  spot>strike + vel+ + fair>mid
       DOWN (ask, simétrico): spot<strike + vel− + fair<mid
     Gates comunes: strike fresco, blackout settlement, régimen mid, persistencia, imbalance.
+    Edge primario: pulse_spot_fair (sigmoide), opcionalmente max con BS fair_up.
     """
     if best_bid is None or best_ask is None:
         return None
@@ -278,7 +290,19 @@ def maker_pulse(
     min_lead = float(cfg.get("min_spot_lead_usd", 12.0) or 12.0)
     vel = float(cfg.get("_spot_velocity_usd", 0.0) or 0.0)
     min_vel = float(cfg.get("min_spot_velocity_usd", 4.0) or 4.0)
-    edge = float(fair_up) - mid  # >0 cheap UP; <0 rich UP
+
+    scale = float(cfg.get("pulse_fair_scale_usd", 28.0) or 28.0)
+    spot_fair = pulse_spot_fair(spot, strike, scale)
+    # Mezcla: spot-fair (latencia) + BS; toma el más extremo en la dirección del lead.
+    if bool(cfg.get("pulse_blend_bs_fair", True)):
+        if lead >= 0:
+            model_fair = max(float(fair_up), spot_fair)
+        else:
+            model_fair = min(float(fair_up), spot_fair)
+    else:
+        model_fair = spot_fair
+
+    edge = model_fair - mid  # >0 cheap UP; <0 rich UP
     min_edge = float(cfg.get("min_edge", 0.028) or 0.028)
     max_abs_edge = float(cfg.get("max_abs_edge", 0.09) or 0.09)
     abs_edge = abs(edge)
@@ -332,7 +356,7 @@ def maker_pulse(
     hs = float(cfg["half_spread"])
     if side == "bid":
         bid = _clip(
-            best_bid if cfg.get("quote_join_touch", True) else fair_up - hs,
+            best_bid if cfg.get("quote_join_touch", True) else model_fair - hs,
             0.01,
             0.98,
         )
@@ -343,11 +367,11 @@ def maker_pulse(
             0.99,
             size,
             "maker_pulse",
-            f"pulse_up e={abs_edge:.3f} lead={lead:.0f} vel={vel:.0f} imb={imb}",
+            f"pulse_up e={abs_edge:.3f} sf={spot_fair:.2f} lead={lead:.0f} vel={vel:.0f}",
         )
 
     ask = _clip(
-        best_ask if cfg.get("quote_join_touch", True) else fair_up + hs,
+        best_ask if cfg.get("quote_join_touch", True) else model_fair + hs,
         0.02,
         0.99,
     )
@@ -358,7 +382,7 @@ def maker_pulse(
         ask,
         size,
         "maker_pulse",
-        f"pulse_dn e={abs_edge:.3f} lead={lead:.0f} vel={vel:.0f} imb={imb}",
+        f"pulse_dn e={abs_edge:.3f} sf={spot_fair:.2f} lead={lead:.0f} vel={vel:.0f}",
     )
 
 

@@ -150,9 +150,17 @@ class PaperSession:
         mid_ok = False
         pulse_dir_ok = False
         if bb is not None and ba is not None:
+            from polymarket.research.local_lab.strategies import pulse_spot_fair
+
             mid = (float(bb) + float(ba)) / 2.0
             mid_ok = mid_lo <= mid <= mid_hi
-            edge = float(fair) - mid
+            scale = float(self.cfg.get("pulse_fair_scale_usd", 28.0) or 28.0)
+            sf = pulse_spot_fair(spot, strike, scale)
+            if bool(self.cfg.get("pulse_blend_bs_fair", True)):
+                model_fair = max(float(fair), sf) if lead >= 0 else min(float(fair), sf)
+            else:
+                model_fair = sf
+            edge = model_fair - mid
             up_ok = lead >= min_lead and vel >= min_vel and edge >= min_edge
             dn_ok = (
                 symmetric
