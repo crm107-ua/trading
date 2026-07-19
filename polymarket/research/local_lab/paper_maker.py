@@ -26,7 +26,8 @@ from polymarket.research.collectors.market_discovery import (
     window_start,
 )
 from polymarket.research.local_lab.strategies import STRATEGIES, QuoteIntent
-from polymarket.src.data.book_utils import best_bid_ask
+from polymarket.src.data.book_utils import best_bid_ask, top_size_imbalance
+from polymarket.src.data.btc_spot import fetch_btc_spot_async
 from polymarket.src.pricing.fair_value import estimate_fair_values
 from polymarket.src.signals.features import build_market_features
 from polymarket.src.ai.decision_engine import (
@@ -76,8 +77,14 @@ class PaperSession:
     current_market_id: str | None = None
     current_question: str | None = None
     strike: float | None = None
+    strike_trusted: bool = False
+    _strike_stamped: bool = False
+    window_start_ns: int | None = None
     window_end_ns: int | None = None
     spot_history: list[tuple[int, float]] = field(default_factory=list)
+    mid_history: list[tuple[int, float]] = field(default_factory=list)
+    _pulse_streak: int = 0
+    _prefer_next_window: bool = False
     nim_decisions_used: int = 0
     nim_rule_holds: int = 0
     nim_cache_hits: int = 0
@@ -101,6 +108,210 @@ class PaperSession:
             return lambda fair, bb, ba, spot, strike: fn(fair, self.cfg, bb, ba)
         return lambda fair, bb, ba, spot, strike: fn(fair, bb, ba, spot, strike, self.cfg)
 
+    def _spot_delta_usd(self, window_ms: int = 3000) -> float:
+        if len(self.spot_history) < 2:
+            return 0.0
+        now_ns = self.spot_history[-1][0]
+        cutoff = now_ns - int(window_ms * 1e6)
+        pts = [(t, s) for t, s in self.spot_history if t >= cutoff]
+        if len(pts) < 2:
+            pts = self.spot_history[-min(5, len(self.spot_history)) :]
+        if len(pts) < 2:
+            return 0.0
+        return float(pts[-1][1] - pts[0][1])
+
+    def _spot_velocity_usd(self, window_ms: int = 3000) -> float:
+        return self._spot_delta_usd(window_ms)
+
+    def _mid_delta(self, window_ms: int = 3000) -> float | None:
+        if len(self.mid_history) < 2:
+            return None
+        now_ns = self.mid_history[-1][0]
+        cutoff = now_ns - int(window_ms * 1e6)
+        pts = [(t, m) for t, m in self.mid_history if t >= cutoff]
+        if len(pts) < 2:
+            return None
+        return float(pts[-1][1] - pts[0][1])
+
+    def _maybe_stamp_strike(self, spot: float) -> None:
+        """Marca ventana abierta y sella strike de referencia (BS blend).
+
+        Con PulseGate roll-lead, 'trusted' = ventana ya abierta (age>=0) y
+        aún fuera del blackout de settlement. El sello temprano solo mejora
+        el fair BS; no bloquea la entrada por latencia.
+        """
+        if self.window_start_ns is None:
+            self.strike_trusted = False
+            return
+        age_s = (time.time_ns() - self.window_start_ns) / 1e9
+        stamp_until = float(self.cfg.get("strike_stamp_max_age_s", 12) or 12)
+        max_join = float(self.cfg.get("max_window_join_age_s", 50) or 50)
+        if age_s < 0:
+            self.strike_trusted = False
+            self.cfg["_window_open"] = False
+            return
+        self.cfg["_window_open"] = True
+        if not self._strike_stamped and age_s <= max_join:
+            self.strike = float(spot)
+            self._strike_stamped = True
+        # Roll-mode: operar si la ventana está abierta; stamp quality es informativo.
+        require_early = bool(self.cfg.get("pulse_require_early_strike", False))
+        if require_early:
+            self.strike_trusted = bool(self._strike_stamped and age_s <= stamp_until)
+        else:
+            self.strike_trusted = True
+
+    def _inject_pulse_runtime(
+        self,
+        *,
+        fair: float,
+        spot: float,
+        bids: list,
+        asks: list,
+        bb: float | None,
+        ba: float | None,
+        time_remaining_s: float | None,
+    ) -> None:
+        """Runtime features for PulseGate (and harmless for other strats)."""
+        if time_remaining_s is not None:
+            self.cfg["_time_remaining_s"] = time_remaining_s
+        self.cfg["_strike_trusted"] = bool(self.strike_trusted)
+        vel_ms = int(self.cfg.get("pulse_velocity_window_ms", 3000) or 3000)
+        roll_ms = int(self.cfg.get("pulse_roll_window_ms", 8000) or 8000)
+        self.cfg["_spot_velocity_usd"] = self._spot_velocity_usd(vel_ms)
+        self.cfg["_roll_lead_usd"] = self._spot_delta_usd(roll_ms)
+        self.cfg["_mid_delta"] = self._mid_delta(roll_ms)
+        self.cfg["_book_imbalance"] = top_size_imbalance(
+            bids or [], asks or [], n=int(self.cfg.get("pulse_book_levels", 3) or 3)
+        )
+        roll = float(self.cfg["_roll_lead_usd"])
+        vel = float(self.cfg["_spot_velocity_usd"])
+        min_lead = float(self.cfg.get("min_spot_lead_usd", 12.0) or 12.0)
+        min_vel = float(self.cfg.get("min_spot_velocity_usd", 4.0) or 4.0)
+        min_edge = float(self.cfg.get("min_edge", 0.028) or 0.028)
+        mid_lo = float(self.cfg.get("min_quote_mid", 0.38) or 0.38)
+        mid_hi = float(self.cfg.get("max_quote_mid", 0.62) or 0.62)
+        symmetric = bool(self.cfg.get("pulse_symmetric", True))
+        mid_ok = False
+        pulse_dir_ok = False
+        if bb is not None and ba is not None:
+            from polymarket.research.local_lab.strategies import pulse_spot_fair
+
+            mid = (float(bb) + float(ba)) / 2.0
+            mid_ok = mid_lo <= mid <= mid_hi
+            scale = float(self.cfg.get("pulse_fair_scale_usd", 28.0) or 28.0)
+            # Fair de latencia sobre el move reciente (no vs open sellado).
+            sf = pulse_spot_fair(float(spot), float(spot) - roll, scale)
+            if bool(self.cfg.get("pulse_blend_bs_fair", True)):
+                model_fair = max(float(fair), sf) if roll >= 0 else min(float(fair), sf)
+            else:
+                model_fair = sf
+            edge = model_fair - mid
+            up_ok = roll >= min_lead and vel >= min_vel and edge >= min_edge
+            dn_ok = (
+                symmetric
+                and roll <= -min_lead
+                and vel <= -min_vel
+                and edge <= -min_edge
+            )
+            pulse_dir_ok = up_ok or dn_ok
+        t_ok = True
+        if time_remaining_s is not None:
+            t_min = float(self.cfg.get("quote_time_min_s", 0) or 0)
+            t_max = float(self.cfg.get("quote_time_max_s", 0) or 0)
+            tr = float(time_remaining_s)
+            if t_min > 0 and tr < t_min:
+                t_ok = False
+            if t_max > 0 and tr > t_max:
+                t_ok = False
+        pulse_agree = self.strike_trusted and mid_ok and pulse_dir_ok and t_ok
+        # Follow streak: no mezclar con gates de pulse (si no, persist≥2 nunca sube).
+        follow_agree = False
+        if bb is not None and ba is not None:
+            mid_f = (float(bb) + float(ba)) / 2.0
+            f_roll = float(self.cfg.get("follow_min_roll_usd", 1.5) or 1.5)
+            f_vel = float(self.cfg.get("follow_min_vel_usd", 0.3) or 0.3)
+            up_lo = float(self.cfg.get("follow_up_lo", 0.52) or 0.52)
+            up_hi = float(self.cfg.get("follow_up_hi", 0.72) or 0.72)
+            dn_lo = float(self.cfg.get("follow_dn_lo", 0.28) or 0.28)
+            dn_hi = float(self.cfg.get("follow_dn_hi", 0.48) or 0.48)
+            t_f_ok = True
+            if time_remaining_s is not None:
+                ft_min = float(self.cfg.get("follow_time_min_s", 80) or 80)
+                ft_max = float(self.cfg.get("follow_time_max_s", 280) or 280)
+                trf = float(time_remaining_s)
+                if trf < ft_min or trf > ft_max:
+                    t_f_ok = False
+            if t_f_ok and up_lo <= mid_f <= up_hi and roll >= f_roll and vel >= f_vel:
+                follow_agree = True
+            elif t_f_ok and dn_lo <= mid_f <= dn_hi and roll <= -f_roll and vel <= -f_vel:
+                follow_agree = True
+        # Shadow OFIR agree: lead + mid-lag residual + imbalance alineado.
+        shadow_agree = False
+        if bb is not None and ba is not None and (
+            bool(self.cfg.get("fusion_enable_shadow", False))
+            or self.strategy_id == "maker_shadow_ofir"
+        ):
+            mid_s = (float(bb) + float(ba)) / 2.0
+            mid_d = self.cfg.get("_mid_delta")
+            imb = self.cfg.get("_book_imbalance")
+            s_lead = float(
+                self.cfg.get("shadow_min_lead_usd", self.cfg.get("min_spot_lead_usd", 2.5))
+                or 2.5
+            )
+            s_vel = float(
+                self.cfg.get("shadow_min_vel_usd", self.cfg.get("min_spot_velocity_usd", 0.7))
+                or 0.7
+            )
+            max_md = float(self.cfg.get("shadow_max_mid_catchup", 0.018) or 0.018)
+            min_imb = float(self.cfg.get("shadow_min_imbalance", 0.55) or 0.55)
+            t_s_ok = True
+            if time_remaining_s is not None:
+                st_min = float(self.cfg.get("shadow_time_min_s", 90) or 90)
+                st_max = float(self.cfg.get("shadow_time_max_s", 270) or 270)
+                trs = float(time_remaining_s)
+                if trs < st_min or trs > st_max:
+                    t_s_ok = False
+            if (
+                t_s_ok
+                and mid_s is not None
+                and mid_d is not None
+                and imb is not None
+                and self.strike_trusted
+            ):
+                up_s = (
+                    roll >= s_lead
+                    and vel >= s_vel
+                    and float(mid_d) <= max_md
+                    and float(imb) >= min_imb
+                )
+                dn_s = (
+                    roll <= -s_lead
+                    and vel <= -s_vel
+                    and float(mid_d) >= -max_md
+                    and float(imb) <= (1.0 - min_imb)
+                )
+                shadow_agree = up_s or dn_s
+
+        if self.strategy_id == "maker_shadow_ofir" or (
+            self.strategy_id == "maker_fusion"
+            and bool(self.cfg.get("fusion_enable_shadow", False))
+            and not bool(self.cfg.get("fusion_enable_pulse", True))
+            and not bool(self.cfg.get("fusion_enable_follow", True))
+        ):
+            agree = shadow_agree
+        elif self.strategy_id == "maker_follow" or (
+            self.strategy_id == "maker_fusion"
+            and not bool(self.cfg.get("fusion_enable_pulse", True))
+        ):
+            agree = follow_agree
+        elif self.strategy_id == "maker_fusion":
+            agree = pulse_agree or follow_agree or shadow_agree
+        else:
+            agree = pulse_agree
+        self._pulse_streak = self._pulse_streak + 1 if agree else 0
+        self.cfg["_pulse_streak"] = self._pulse_streak
+
     def _maker_quotes(
         self,
         fair: float,
@@ -109,11 +320,20 @@ class PaperSession:
         spot: float,
         *,
         time_remaining_s: float | None = None,
+        bids: list | None = None,
+        asks: list | None = None,
     ) -> QuoteIntent | None:
         from polymarket.research.local_lab.strategies import apply_inventory_skew
 
-        if time_remaining_s is not None:
-            self.cfg["_time_remaining_s"] = time_remaining_s
+        self._inject_pulse_runtime(
+            fair=fair,
+            spot=spot,
+            bids=bids or [],
+            asks=asks or [],
+            bb=bb,
+            ba=ba,
+            time_remaining_s=time_remaining_s,
+        )
         now = time.monotonic()
         if now >= self._size_scale_until:
             self._size_scale = 1.0
@@ -210,7 +430,13 @@ class PaperSession:
         target = max(base, frac * edge_now, base + scale * max(0.0, edge_now - base))
         return max(base, min(cap, target))
 
-    def _manage_inventory_exits(self, mid: float, fair: float) -> None:
+    def _manage_inventory_exits(
+        self,
+        mid: float,
+        fair: float,
+        *,
+        exit_mark: float | None = None,
+    ) -> None:
         if abs(self.inventory_shares) < 1e-9:
             return
         # Session kill on mark-to-mid equity — para YA (flatten + no más entries).
@@ -219,6 +445,8 @@ class PaperSession:
         avg = self.cost_basis / self.inventory_shares
         tp = self._dynamic_tp(fair, avg)
         stop = float(self.cfg.get("stop_loss_mid", 0.0) or 0.0)
+        # Conservative mark for stops: bid if long, ask if short (exitable price).
+        mark = mid if exit_mark is None else float(exit_mark)
         if self.cfg.get("take_profit_mid", True):
             if self.inventory_shares > 0 and mid >= avg + tp:
                 self._flatten_inventory_mid(mid)
@@ -234,19 +462,71 @@ class PaperSession:
             if self.inventory_shares < 0 and fair > mid + 1e-9 and mid > avg:
                 self._flatten_inventory_mid(mid)
                 return
-        # Corte duro por PnL no realizado (no depende de saltos de mid entre polls)
-        unreal = self.inventory_shares * mid - self.cost_basis
-        max_loss = float(self.cfg.get("max_loss_usdc", 0) or 0)
-        if max_loss > 0 and unreal <= -abs(max_loss):
-            self._flatten_inventory_mid(mid)
+        # Corte por PnL no realizado usando precio ejecutable (no mid optimista).
+        unreal = self.inventory_shares * mark - self.cost_basis
+        label_l = str(self.cfg.get("demo_label", "")).lower()
+        # Promo/paralelo usan labels tipo promo_flow_c5_L1 — deben bankear igual
+        # que fusion/follow (si no, WR paralelo colapsa vs confirm).
+        fusionish = bool(self.cfg.get("preserve_selectivity")) or any(
+            x in label_l
+            for x in (
+                "fusion",
+                "follow",
+                "flow",
+                "pulse",
+                "bank",
+                "promo",
+                "shadow",
+                "ofir",
+            )
+        )
+        # Fusion/follow/promo: cualquier rojo material se corta YA (no esperar NIM 8s).
+        # Umbral -0.01; si el mid salta, el flatten al mark limita el daño.
+        if fusionish and unreal <= -0.01:
+            self._flatten_inventory_mid(mark)
             return
+        # Corte absoluto de seguridad (evita -0.20 por gap de poll).
+        if fusionish and unreal <= -0.05:
+            self._flatten_inventory_mid(mark)
+            return
+        # Fusion/follow: bankear verde YA cada poll (evita loterías +1.00 sin exit).
+        bank_at = float(self.cfg.get("grind_bank_usdc", 0) or 0)
+        lock_at = float(self.cfg.get("lock_profit_usdc", 0) or 0)
+        green_at = 0.0
+        if bank_at > 0 and lock_at > 0:
+            green_at = min(bank_at, lock_at)
+        else:
+            green_at = bank_at or lock_at
+        if fusionish and green_at > 0 and unreal >= green_at:
+            self._flatten_inventory_mid(mark)
+            return
+        # Techo duro: si el mid salta entre polls, no dejar correr a +0.40+ (lotería).
+        hard_bank = float(self.cfg.get("hard_bank_usdc", 0) or 0)
+        if fusionish and hard_bank <= 0:
+            hard_bank = max(green_at * 2.5, 0.08) if green_at > 0 else 0.08
+        if fusionish and hard_bank > 0 and unreal >= hard_bank:
+            self._flatten_inventory_mid(mark)
+            return
+        max_loss = float(self.cfg.get("max_loss_usdc", 0) or 0)
+        if max_loss > 0:
+            grindish = (
+                grind_mode_enabled()
+                or bool(self.cfg.get("preserve_selectivity"))
+                or "grind" in str(self.cfg.get("demo_label", "")).lower()
+            )
+            # Fusion: corte al 35% del max_loss.
+            frac = 0.35 if fusionish else (0.7 if grindish else 1.0)
+            soft = abs(max_loss) * frac
+            if unreal <= -soft:
+                self._flatten_inventory_mid(mark)
+                return
         if stop > 0:
             if max_loss > 0 and abs(self.inventory_shares) > 1e-9:
                 stop = min(stop, max_loss / abs(self.inventory_shares))
-            if self.inventory_shares > 0 and mid <= avg - stop:
-                self._flatten_inventory_mid(mid)
-            elif self.inventory_shares < 0 and mid >= avg + stop:
-                self._flatten_inventory_mid(mid)
+            if self.inventory_shares > 0 and mark <= avg - stop:
+                self._flatten_inventory_mid(mark)
+            elif self.inventory_shares < 0 and mark >= avg + stop:
+                self._flatten_inventory_mid(mark)
 
     def _smart_flatten(self, mid: float, fair: float) -> float:
         """
@@ -439,11 +719,11 @@ class PaperSession:
             self.last_trade_seen = prev
 
     async def _fetch_state(self, token_id: str) -> dict[str, Any] | None:
-        async with httpx.AsyncClient(timeout=12.0) as client:
-            br = await client.get(
-                "https://api.binance.com/api/v3/ticker/price",
-                params={"symbol": "BTCUSDT"},
-            )
+        async with httpx.AsyncClient(timeout=25.0) as client:
+            try:
+                spot, _src = await fetch_btc_spot_async(client)
+            except RuntimeError:
+                return None
             cr = await client.get(
                 "https://clob.polymarket.com/book",
                 params={"token_id": token_id},
@@ -451,7 +731,6 @@ class PaperSession:
         if cr.status_code != 200:
             return None
         book = cr.json()
-        spot = float(br.json()["price"])
         bids = book.get("bids") or []
         asks = book.get("asks") or []
         bb, ba = best_bid_ask(bids, asks)
@@ -496,6 +775,25 @@ class PaperSession:
             now = datetime.now(timezone.utc)
             active, nxt = pick_recording_targets(markets, now)
             target = active or nxt
+            # PulseGate / régimen: no quemar sesión en ventana ya muerta o tarde.
+            # Prefiere la siguiente para pillar strike fresco al open.
+            if (
+                self.strategy_id in ("maker_pulse", "maker_follow", "maker_fusion")
+                and active is not None
+                and nxt is not None
+            ):
+                we_a = window_end(active)
+                rem_a = (we_a - now).total_seconds() if we_a else 0.0
+                t_min = float(
+                    self.cfg.get(
+                        "follow_time_min_s",
+                        self.cfg.get("quote_time_min_s", 80),
+                    )
+                    or 80
+                )
+                # Solo blackout settlement. No aparcar en nxt cerrado.
+                if rem_a < t_min:
+                    target = nxt
             if target is None:
                 await asyncio.sleep(poll_s)
                 continue
@@ -516,20 +814,39 @@ class PaperSession:
                 self.current_question = target.question
                 ws = window_start(target)
                 we = window_end(target)
+                self.window_start_ns = int(ws.timestamp() * 1e9) if ws else None
                 self.window_end_ns = int(we.timestamp() * 1e9) if we else None
-                async with httpx.AsyncClient(timeout=12.0) as c:
-                    r = await c.get(
-                        "https://api.binance.com/api/v3/ticker/price",
-                        params={"symbol": "BTCUSDT"},
-                    )
-                    self.strike = float(r.json()["price"])
+                async with httpx.AsyncClient(timeout=25.0) as c:
+                    self.strike, _src = await fetch_btc_spot_async(c)
+                # Strike se sella al open real (ver _maybe_stamp_strike). Placeholder ahora.
+                self._strike_stamped = False
+                self.strike_trusted = False
+                self._pulse_streak = 0
+                self.mid_history.clear()
                 self.last_trade_seen = None
                 self.last_quote_spot = None
+                self._maybe_stamp_strike(float(self.strike))
 
             state = await self._fetch_state(target.token_id_up)
             if state is None:
                 await asyncio.sleep(poll_s)
                 continue
+
+            # Track spot/mid every poll (PulseGate velocity + mid-lag).
+            now_ns = time.time_ns()
+            self.spot_history.append((now_ns, float(state["spot"])))
+            if len(self.spot_history) > 240:
+                self.spot_history = self.spot_history[-180:]
+            if state.get("best_bid") is not None and state.get("best_ask") is not None:
+                mid_now = (float(state["best_bid"]) + float(state["best_ask"])) / 2.0
+                self.mid_history.append((now_ns, mid_now))
+                if len(self.mid_history) > 240:
+                    self.mid_history = self.mid_history[-180:]
+                if self.strategy_id == "maker_pulse":
+                    mid_lo = float(self.cfg.get("min_quote_mid", 0.36) or 0.36)
+                    mid_hi = float(self.cfg.get("max_quote_mid", 0.64) or 0.64)
+                    self._prefer_next_window = mid_now < mid_lo or mid_now > mid_hi
+            self._maybe_stamp_strike(float(state["spot"]))
 
             we_ns = self.window_end_ns or time.time_ns()
             time_rem = max((we_ns - time.time_ns()) / 1e9, 1.0)
@@ -545,25 +862,21 @@ class PaperSession:
             fair = estimate_fair_values(
                 feats, sigma_annual=float(self.cfg.get("sigma_annual", 0.55))
             )["up"]
-            flatten_s = float(self.cfg.get("flatten_before_window_s", 0))
-            if (
-                flatten_s > 0
-                and time_rem <= flatten_s
-                and abs(self.inventory_shares) > 1e-9
-                and state["best_bid"] is not None
-                and state["best_ask"] is not None
-            ):
-                self._smart_flatten((state["best_bid"] + state["best_ask"]) / 2, fair)
             if self.last_quote_spot is None or abs(state["spot"] - self.last_quote_spot) >= requote_move:
                 self.last_quote_spot = state["spot"]
-            # Manage open inventory every tick (TP / stop at observable mid).
+            # Manage open inventory every tick BEFORE window flatten (stops first).
             if (
                 abs(self.inventory_shares) > 1e-9
                 and state["best_bid"] is not None
                 and state["best_ask"] is not None
             ):
                 mid_m = (state["best_bid"] + state["best_ask"]) / 2.0
-                self._manage_inventory_exits(mid_m, fair)
+                exit_mark = (
+                    float(state["best_bid"])
+                    if self.inventory_shares > 0
+                    else float(state["best_ask"])
+                )
+                self._manage_inventory_exits(mid_m, fair, exit_mark=exit_mark)
                 # NIM profit-assist: ¿dejar correr TP o flatten ya?
                 if (
                     profit_assist_enabled() or grind_mode_enabled()
@@ -573,12 +886,13 @@ class PaperSession:
                     if now_e - self._last_exit_nim_mono >= every:
                         self._last_exit_nim_mono = now_e
                         avg_e = self.cost_basis / self.inventory_shares
-                        unreal = self.inventory_shares * mid_m - self.cost_basis
+                        # PnL al precio ejecutable (bid long / ask short) — WR-lock
+                        unreal = self.inventory_shares * exit_mark - self.cost_basis
                         exit_dec, exit_nim = decide_inventory_exit(
                             snapshot={
                                 "inventory_shares": self.inventory_shares,
                                 "avg_entry": avg_e,
-                                "mark_price": mid_m,
+                                "mark_price": exit_mark,
                                 "fair_up": fair,
                                 "unrealized_pnl_usdc": round(unreal, 4),
                                 "time_remaining_s": time_rem,
@@ -587,6 +901,12 @@ class PaperSession:
                                 "best_ask": state["best_ask"],
                                 "lock_profit_usdc": float(
                                     self.cfg.get("lock_profit_usdc", 1.25) or 1.25
+                                ),
+                                "max_loss_usdc": float(
+                                    self.cfg.get("max_loss_usdc", 0) or 0
+                                ),
+                                "grind_bank_usdc": float(
+                                    self.cfg.get("grind_bank_usdc", 0.055) or 0.055
                                 ),
                             },
                             latency_budget_ms=2500,
@@ -614,14 +934,46 @@ class PaperSession:
                                 )
                                 + "\n"
                             )
-                        if exit_dec.action == "flatten":
-                            self._flatten_inventory_mid(mid_m)
+                        # Nunca "hold" en rojo en grind/fusion — NIM no puede anular el corte.
+                        if exit_dec.action == "flatten" or (
+                            unreal < -1e-9
+                            and (
+                                grind_mode_enabled()
+                                or bool(self.cfg.get("preserve_selectivity"))
+                                or "fusion" in str(self.cfg.get("demo_label", "")).lower()
+                                or "follow" in str(self.cfg.get("demo_label", "")).lower()
+                            )
+                        ):
+                            self._flatten_inventory_mid(exit_mark)
+            # Window flatten only if stops/NIM did not already cut.
+            # Usar precio ejecutable (bid long / ask short) — mid inflaba PnL y
+            # dejaba gaps de soft-cut en -0.10 con size=5.
+            flatten_s = float(self.cfg.get("flatten_before_window_s", 0))
+            if (
+                flatten_s > 0
+                and time_rem <= flatten_s
+                and abs(self.inventory_shares) > 1e-9
+                and state["best_bid"] is not None
+                and state["best_ask"] is not None
+            ):
+                exec_mark = (
+                    float(state["best_bid"])
+                    if self.inventory_shares > 0
+                    else float(state["best_ask"])
+                )
+                self._flatten_inventory_mid(exec_mark)
+            # Holding inventory: skip entry NIM/quotes (latency) so stops re-check every poll.
+            if abs(self.inventory_shares) > 1e-9:
+                await asyncio.sleep(poll_s)
+                continue
             quote = self._maker_quotes(
                 fair,
                 state["best_bid"],
                 state["best_ask"],
                 state["spot"],
                 time_remaining_s=time_rem,
+                bids=state.get("bids") or [],
+                asks=state.get("asks") or [],
             )
             # Risk gates for NEW entries only (inventory skew still exits).
             cd = float(self.cfg.get("cooldown_after_fill_s", 0) or 0)
@@ -666,12 +1018,40 @@ class PaperSession:
                             why = "wait_edge"
                         else:
                             why = "wait_filter"  # z / EV / time / spread
+                        if self.strategy_id in ("maker_pulse", "maker_follow", "maker_fusion"):
+                            if (
+                                not self.strike_trusted
+                                and self.strategy_id == "maker_pulse"
+                            ):
+                                why = "wait_strike"
+                            elif why in ("wait_filter", "wait_edge"):
+                                need_roll = float(
+                                    self.cfg.get(
+                                        "follow_min_roll_usd"
+                                        if self.strategy_id
+                                        in ("maker_follow", "maker_fusion")
+                                        else "min_spot_lead_usd",
+                                        1.5,
+                                    )
+                                    or 1.5
+                                )
+                                if abs(float(self.cfg.get("_roll_lead_usd", 0) or 0)) < need_roll:
+                                    why = "wait_roll"
+                    roll_hb = None
+                    if self.strategy_id in ("maker_pulse", "maker_follow", "maker_fusion"):
+                        roll_hb = float(self.cfg.get("_roll_lead_usd", 0) or 0)
                     print(
                         f"paper {pct}% [{elapsed_min:.1f}/{minutes:.1f} min] "
                         f"decisions={self._decision_count} quotes={self.quotes_logged} "
                         f"fills={len(self.fills)} last={why} (rule) "
                         f"edge={edge_hb if edge_hb is not None else 'n/a'} "
-                        f"need>={self.cfg.get('min_edge')} mid={mid_hb if mid_hb is not None else 'n/a'}",
+                        f"need>={self.cfg.get('min_edge')} mid={mid_hb if mid_hb is not None else 'n/a'}"
+                        + (
+                            f" roll={roll_hb:.1f} trusted={self.strike_trusted} "
+                            f"streak={self._pulse_streak}"
+                            if roll_hb is not None
+                            else ""
+                        ),
                         flush=True,
                     )
                 await asyncio.sleep(poll_s)
@@ -743,6 +1123,7 @@ class PaperSession:
             if decision.action == "cancel_replace":
                 self.last_quote_spot = state["spot"]
             self.quotes_logged += 1
+            fills_before = len(self.fills)
             self._check_fill(
                 state["last_trade"],
                 quote,
@@ -761,6 +1142,14 @@ class PaperSession:
             if state["best_bid"] is not None and state["best_ask"] is not None:
                 mid_now = (state["best_bid"] + state["best_ask"]) / 2
                 self._maybe_hazard_tp_exit(mid_now, fair, dt_s=poll_s)
+                # Immediate stop check on the fill tick (don't wait another poll).
+                if len(self.fills) > fills_before and abs(self.inventory_shares) > 1e-9:
+                    exit_mark = (
+                        float(state["best_bid"])
+                        if self.inventory_shares > 0
+                        else float(state["best_ask"])
+                    )
+                    self._manage_inventory_exits(mid_now, fair, exit_mark=exit_mark)
             await asyncio.sleep(poll_s)
 
         # Resolve open inventory at session end

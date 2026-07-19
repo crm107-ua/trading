@@ -28,3 +28,23 @@ def truncate_book(levels: list[dict], n: int, *, side: str) -> list[dict]:
         return []
     reverse = side == "bid"
     return sorted(levels, key=_price, reverse=reverse)[:n]
+
+
+def _size(level: dict[str, Any]) -> float:
+    try:
+        return float(level.get("size") or level.get("amount") or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def top_size_imbalance(
+    bids: list[dict], asks: list[dict], n: int = 3
+) -> float | None:
+    """Bid-size fraction in top-n levels. 0.5 = balanced; >0.5 = bid-heavy."""
+    sb, sa = top_levels(bids, asks, n)
+    bid_sz = sum(_size(b) for b in sb)
+    ask_sz = sum(_size(a) for a in sa)
+    tot = bid_sz + ask_sz
+    if tot <= 1e-12:
+        return None
+    return bid_sz / tot

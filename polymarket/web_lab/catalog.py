@@ -71,10 +71,153 @@ FEATURED: list[dict[str, Any]] = [
         "badge": "CHAMP",
         "file": "maker_demo_grind_nim_best.json",
         "default_sessions": 6,
-        "default_minutes": 6.0,
-        "blurb": "Campeón iterado: WR 80% paper (4W/1L, +0.37€ @10€) con NVIDIA hybrid+grind. Solo cheap-side.",
-        "metrics": {"total": 0.37, "wr": 0.8, "avg": 0.074},
+        "default_minutes": 5.0,
+        "blurb": "Campeón selective v2 @10€ feeds reales: WR 100% (5W/0L, +0.86€). min_edge 0.031 / min_z 1.0.",
+        "metrics": {"total": 0.86, "wr": 1.0, "avg": 0.172},
         "base_capital": 10.0,
+    },
+    {
+        "id": "grind_nim_selective",
+        "name": "Grind NIM Selective (entry bar↑)",
+        "badge": "CHAMP",
+        "file": "maker_demo_grind_nim_selective.json",
+        "default_sessions": 6,
+        "default_minutes": 5.0,
+        "blurb": "DNA del campeón (alias). WR 100% @10€ 6×5 (+0.86). v1 mid-estrecho WR25% rechazada.",
+        "metrics": {"total": 0.86, "wr": 1.0, "avg": 0.172},
+        "base_capital": 10.0,
+    },
+    {
+        "id": "grind_nim_wr_lock",
+        "name": "Grind NIM WR-LOCK (prep inversión)",
+        "badge": "LOCK",
+        "file": "maker_demo_grind_nim_wr_lock.json",
+        "default_sessions": 4,
+        "default_minutes": 3.0,
+        "blurb": "Fusión entry+stops duros. Objetivo WR≥70% @5/10€ antes de capital real.",
+        "metrics": {"total": None, "wr": None, "avg": None},
+        "base_capital": 10.0,
+    },
+    {
+        "id": "pulse_gate",
+        "name": "PulseGate (latencia+régimen)",
+        "badge": "PIONEER",
+        "file": "maker_demo_pulse_gate.json",
+        "default_sessions": 4,
+        "default_minutes": 3.0,
+        "blurb": "Nuevo DNA: strike fresco + momentum BTC + blackout settlement + imbalance. No fade mid informado.",
+        "metrics": {"total": None, "wr": None, "avg": None},
+        "base_capital": 10.0,
+    },
+    {
+        "id": "fusion_router",
+        "name": "Fusion Router (pulse+follow+edge)",
+        "badge": "ROUTER",
+        "file": "maker_demo_fusion_router.json",
+        "default_sessions": 4,
+        "default_minutes": 4.0,
+        "blurb": "RegimeRouter: latencia → follow mid+spot → edge selectivo. Caza WR≥70%.",
+        "metrics": {"total": None, "wr": None, "avg": None},
+        "base_capital": 10.0,
+    },
+    {
+        "id": "fusion_follow_heavy",
+        "name": "Fusion Follow-Heavy (champ candidate)",
+        "badge": "CHAMP",
+        "file": "maker_demo_fusion_follow_heavy.json",
+        "default_sessions": 6,
+        "default_minutes": 5.0,
+        "blurb": "Follow-only (pulse OFF), fair-edge + soft-cut duro. @5 PASS; @10 retighten.",
+        "metrics": {"total": 0.34, "wr": 1.0, "avg": 0.17},
+        "base_capital": 10.0,
+    },
+    {
+        "id": "fusion_follow_flow",
+        "name": "Fusion Follow-Flow (anti-starve)",
+        "badge": "HUNT",
+        "file": "maker_demo_fusion_follow_flow.json",
+        "default_sessions": 6,
+        "default_minutes": 5.0,
+        "blurb": "Follow-only. v5 @5 WR100% (+0.40). @10 en hunt v6.",
+        "metrics": {"total": 0.40, "wr": 1.0, "avg": 0.057},
+        "base_capital": 10.0,
+    },
+    {
+        "id": "promo_flow_c5",
+        "name": "Promo Flow @5 (locked champ)",
+        "badge": "CHAMP",
+        "file": "maker_demo_promo_flow_c5.json",
+        "default_sessions": 6,
+        "default_minutes": 5.0,
+        "blurb": "DNA v5 locked: WR100% 7W +0.40 @5€. Paralelo multi-línea.",
+        "metrics": {"total": 0.40, "wr": 1.0, "avg": 0.057},
+        "base_capital": 5.0,
+    },
+    {
+        "id": "promo_shadow_ofir",
+        "name": "Shadow OFIR (desk privado 2026)",
+        "badge": "RESEARCH",
+        "file": "maker_demo_promo_shadow_c10.json",
+        "default_sessions": 6,
+        "default_minutes": 5.0,
+        "blurb": "Lead spot + toxicity imbalance + mid-lag guard. Síntesis edge privado.",
+        "metrics": {"total": None, "wr": None, "avg": None},
+        "base_capital": 10.0,
+    },
+    {
+        "id": "promo_pulse_c5",
+        "name": "Promo Pulse @5 (READY_STRICT champ)",
+        "badge": "CHAMP",
+        "file": "maker_demo_promo_pulse_c5.json",
+        "default_sessions": 6,
+        "default_minutes": 5.0,
+        "blurb": "Champ fresco READY_STRICT @5. Paralelo WR~82%.",
+        "metrics": {"total": 1.12, "wr": 0.82, "avg": 0.066},
+        "base_capital": 5.0,
+    },
+    {
+        "id": "selective_mom",
+        "name": "Selective + Momentum align",
+        "badge": "CHAMP",
+        "file": "maker_demo_selective_mom.json",
+        "default_sessions": 6,
+        "default_minutes": 5.0,
+        "blurb": "Edge selectivo solo con roll BTC. Scout @10€ WR 75% (3W/1L +0.37, traded=4).",
+        "metrics": {"total": 0.37, "wr": 0.75, "avg": 0.0925},
+        "base_capital": 10.0,
+    },
+    {
+        "id": "follow_gate",
+        "name": "FollowGate (anti-fade)",
+        "badge": "PIONEER",
+        "file": "maker_demo_follow_gate.json",
+        "default_sessions": 4,
+        "default_minutes": 4.0,
+        "blurb": "Unirse al mid informado solo si BTC confirma. Opuesto al fade tóxico.",
+        "metrics": {"total": None, "wr": None, "avg": None},
+        "base_capital": 10.0,
+    },
+    {
+        "id": "grind_nim_best_c5",
+        "name": "Grind NIM BEST @5€ (reval)",
+        "badge": "CHAMP",
+        "file": "maker_demo_grind_nim_best_c5.json",
+        "default_sessions": 6,
+        "default_minutes": 5.0,
+        "blurb": "Snapshot escalado reval 2026-07-18: WR 100% paper (5W/0L, +1.25€).",
+        "metrics": {"total": 1.25, "wr": 1.0, "avg": 0.25},
+        "base_capital": 5.0,
+    },
+    {
+        "id": "grind_nim_best_c15",
+        "name": "Grind NIM BEST @15€ (reval)",
+        "badge": "CHAMP",
+        "file": "maker_demo_grind_nim_best_c15.json",
+        "default_sessions": 6,
+        "default_minutes": 5.0,
+        "blurb": "Snapshot escalado reval 2026-07-18: WR 100% paper (5W/0L, +2.04€).",
+        "metrics": {"total": 2.04, "wr": 1.0, "avg": 0.408},
+        "base_capital": 15.0,
     },
     {
         "id": "grind_nim_flow",
@@ -185,8 +328,12 @@ def scale_cfg_to_capital(cfg: dict, capital: float, *, base_capital: float = 100
 def apply_live_clob_floors(cfg: dict) -> dict:
     """CLOB floors + boost de oportunidad (más fills sin abrir lotería extrema)."""
     c = deepcopy(cfg)
-    min_shares = 5
-    size = max(min_shares, int(c.get("quote_size_shares") or min_shares))
+    label = str(c.get("demo_label") or "")
+    preserve = bool(c.get("preserve_selectivity")) or label.startswith("grind")
+    # Paper WR-first: respetar size del DNA (3–4). Live CLOB min 5 solo fuera de preserve.
+    min_shares = 1 if preserve else 5
+    raw_size = int(c.get("quote_size_shares") or (3 if preserve else min_shares))
+    size = max(min_shares, raw_size)
     c["quote_size_shares"] = size
     c["max_quote_size_shares"] = max(size, int(c.get("max_quote_size_shares") or size))
     c["max_inventory_shares"] = max(size, int(c.get("max_inventory_shares") or size))
@@ -196,8 +343,6 @@ def apply_live_clob_floors(cfg: dict) -> dict:
     c["max_inventory_usdc"] = round(min(max(capital, c["max_notional_per_side_usdc"]), 5.0), 2)
     # Con size 5 el hurdle EV antiguo bloqueaba casi todo
     c["min_expected_pnl_usdc"] = min(float(c.get("min_expected_pnl_usdc") or 0.05), 0.05)
-    label = str(c.get("demo_label") or "")
-    preserve = bool(c.get("preserve_selectivity")) or label.startswith("grind")
     if not preserve:
         # Más oportunidades vs paper-100: banda mid más ancha, edge/z algo más bajos
         c["min_quote_mid"] = min(float(c.get("min_quote_mid") or 0.24), 0.18)
@@ -211,9 +356,18 @@ def apply_live_clob_floors(cfg: dict) -> dict:
     # No forzar +entradas en configs strict/grind (max_entry_fills=1)
     if int(c.get("max_entry_fills") or 2) >= 2:
         c["max_entry_fills"] = max(int(c.get("max_entry_fills") or 2), 3)
-    # Live micro: TP/SL con suelo (scale a 1–2€ dejaba 0.05/0.10 → ruido)
-    # Grind/preserve: NO subir el suelo — anula lock temprano y WR-first.
-    if preserve:
+    # Live micro: TP/SL. Fusion/follow/promo WR-first: NUNCA subir suelos (anula soft-cut).
+    wr_first = any(
+        x in label.lower()
+        for x in ("fusion", "follow", "flow", "pulse", "bank", "promo", "shadow", "ofir")
+    )
+    if preserve and wr_first:
+        c["lock_profit_usdc"] = min(float(c.get("lock_profit_usdc") or 0.08), 0.25)
+        c["max_loss_usdc"] = min(float(c.get("max_loss_usdc") or 0.08), 0.28)
+        c["flatten_before_window_s"] = max(
+            float(c.get("flatten_before_window_s") or 45), 70
+        )
+    elif preserve:
         c["lock_profit_usdc"] = max(
             0.06, min(float(c.get("lock_profit_usdc") or 0.12), 0.25)
         )

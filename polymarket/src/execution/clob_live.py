@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 import os
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -175,12 +176,19 @@ class ClobLiveClient:
         from py_clob_client_v2 import AssetType, BalanceAllowanceParams
 
         params = BalanceAllowanceParams(asset_type=AssetType.COLLATERAL)
-        try:
-            self.client.update_balance_allowance(params)
-        except Exception:
-            pass
-        bal = self.client.get_balance_allowance(params)
-        return int(bal.get("balance") or "0") / 1e6
+        last_err: Exception | None = None
+        for attempt in range(3):
+            try:
+                try:
+                    self.client.update_balance_allowance(params)
+                except Exception:
+                    pass
+                bal = self.client.get_balance_allowance(params)
+                return int(bal.get("balance") or "0") / 1e6
+            except Exception as e:
+                last_err = e
+                time.sleep(0.35 * (attempt + 1))
+        raise RuntimeError(f"balance_collateral_usdc failed: {last_err}")
 
     def balance_conditional_shares(self, token_id: str) -> float:
         """Shares del token condicional (tras update allowance)."""

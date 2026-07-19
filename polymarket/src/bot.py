@@ -35,11 +35,13 @@ def screen_passed() -> bool:
 async def fetch_market_state(token_id: str) -> dict | None:
     import httpx
 
+    from polymarket.src.data.btc_spot import fetch_btc_spot_async
+
     async with httpx.AsyncClient(timeout=15.0) as client:
-        br = await client.get(
-            "https://api.binance.com/api/v3/ticker/price",
-            params={"symbol": "BTCUSDT"},
-        )
+        try:
+            spot, _src = await fetch_btc_spot_async(client)
+        except RuntimeError:
+            return None
         cr = await client.get(
             "https://clob.polymarket.com/book",
             params={"token_id": token_id},
@@ -47,7 +49,6 @@ async def fetch_market_state(token_id: str) -> dict | None:
     if cr.status_code != 200:
         return None
     book = cr.json()
-    spot = float(br.json()["price"])
     return {
         "spot": spot,
         "strike": spot,  # placeholder — real strike from Gamma metadata
