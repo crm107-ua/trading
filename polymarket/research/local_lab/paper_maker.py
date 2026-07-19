@@ -224,7 +224,38 @@ class PaperSession:
                 t_ok = False
             if t_max > 0 and tr > t_max:
                 t_ok = False
-        agree = self.strike_trusted and mid_ok and pulse_dir_ok and t_ok
+        pulse_agree = self.strike_trusted and mid_ok and pulse_dir_ok and t_ok
+        # Follow streak: no mezclar con gates de pulse (si no, persist≥2 nunca sube).
+        follow_agree = False
+        if bb is not None and ba is not None:
+            mid_f = (float(bb) + float(ba)) / 2.0
+            f_roll = float(self.cfg.get("follow_min_roll_usd", 1.5) or 1.5)
+            f_vel = float(self.cfg.get("follow_min_vel_usd", 0.3) or 0.3)
+            f_edge = float(self.cfg.get("follow_min_fair_edge", 0.02) or 0.02)
+            up_lo = float(self.cfg.get("follow_up_lo", 0.52) or 0.52)
+            up_hi = float(self.cfg.get("follow_up_hi", 0.72) or 0.72)
+            dn_lo = float(self.cfg.get("follow_dn_lo", 0.28) or 0.28)
+            dn_hi = float(self.cfg.get("follow_dn_hi", 0.48) or 0.48)
+            t_f_ok = True
+            if time_remaining_s is not None:
+                ft_min = float(self.cfg.get("follow_time_min_s", 80) or 80)
+                ft_max = float(self.cfg.get("follow_time_max_s", 280) or 280)
+                trf = float(time_remaining_s)
+                if trf < ft_min or trf > ft_max:
+                    t_f_ok = False
+            if t_f_ok and up_lo <= mid_f <= up_hi and roll >= f_roll and vel >= f_vel:
+                follow_agree = float(fair) >= mid_f + f_edge
+            elif t_f_ok and dn_lo <= mid_f <= dn_hi and roll <= -f_roll and vel <= -f_vel:
+                follow_agree = float(fair) <= mid_f - f_edge
+        if self.strategy_id == "maker_follow" or (
+            self.strategy_id == "maker_fusion"
+            and not bool(self.cfg.get("fusion_enable_pulse", True))
+        ):
+            agree = follow_agree
+        elif self.strategy_id == "maker_fusion":
+            agree = pulse_agree or follow_agree
+        else:
+            agree = pulse_agree
         self._pulse_streak = self._pulse_streak + 1 if agree else 0
         self.cfg["_pulse_streak"] = self._pulse_streak
 
@@ -896,15 +927,27 @@ class PaperSession:
                             why = "wait_edge"
                         else:
                             why = "wait_filter"  # z / EV / time / spread
-                        if self.strategy_id == "maker_pulse":
-                            if not self.strike_trusted:
-                                why = "wait_strike"
-                            elif abs(float(self.cfg.get("_roll_lead_usd", 0) or 0)) < float(
-                                self.cfg.get("min_spot_lead_usd", 4) or 4
+                        if self.strategy_id in ("maker_pulse", "maker_follow", "maker_fusion"):
+                            if (
+                                not self.strike_trusted
+                                and self.strategy_id == "maker_pulse"
                             ):
-                                why = "wait_roll"
+                                why = "wait_strike"
+                            elif why in ("wait_filter", "wait_edge"):
+                                need_roll = float(
+                                    self.cfg.get(
+                                        "follow_min_roll_usd"
+                                        if self.strategy_id
+                                        in ("maker_follow", "maker_fusion")
+                                        else "min_spot_lead_usd",
+                                        1.5,
+                                    )
+                                    or 1.5
+                                )
+                                if abs(float(self.cfg.get("_roll_lead_usd", 0) or 0)) < need_roll:
+                                    why = "wait_roll"
                     roll_hb = None
-                    if self.strategy_id == "maker_pulse":
+                    if self.strategy_id in ("maker_pulse", "maker_follow", "maker_fusion"):
                         roll_hb = float(self.cfg.get("_roll_lead_usd", 0) or 0)
                     print(
                         f"paper {pct}% [{elapsed_min:.1f}/{minutes:.1f} min] "
