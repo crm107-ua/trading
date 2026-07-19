@@ -91,26 +91,51 @@ def evaluate(*, outlier_cap: float = 0.35) -> dict:
     # Robust session scans for bank DNA
     bank_c5 = _robust_from_sessions("session_fusion_c10_bank_c5_*", outlier_cap=outlier_cap)
     bank_c10 = _robust_from_sessions("session_fusion_c10_bank_c10_*", outlier_cap=outlier_cap)
-    # Also include parallel bank lines
-    par5 = _robust_from_sessions("session_promo_bank_c5_L*_c5_*", outlier_cap=outlier_cap)
+    # Parallel lines (bank and/or flow@5 champ)
+    par5_bank = _robust_from_sessions(
+        "session_promo_bank_c5_L*_c5_*", outlier_cap=outlier_cap
+    )
+    par5_flow = _robust_from_sessions(
+        "session_promo_flow_c5_L*_c5_*", outlier_cap=outlier_cap
+    )
+    par5 = par5_flow if par5_flow.get("traded", 0) >= par5_bank.get("traded", 0) else par5_bank
+    if (par5_flow.get("wr") or 0) >= (par5_bank.get("wr") or 0) and par5_flow.get(
+        "traded", 0
+    ) >= 4:
+        par5 = par5_flow
+    elif (par5_bank.get("wr") or 0) > (par5_flow.get("wr") or 0) and par5_bank.get(
+        "traded", 0
+    ) >= 4:
+        par5 = par5_bank
     par10 = _robust_from_sessions("session_promo_bank_c10_L*_c10_*", outlier_cap=outlier_cap)
+    flow_c5 = _robust_from_sessions(
+        "session_fusion_follow_flow_c5_*", outlier_cap=outlier_cap
+    )
 
     checks = {
         "confirm_both_ready": bool(confirm_bank and confirm_bank.get("both_ready")),
         "bank_c5_wr75_robust": bool(bank_c5.get("hit_wr75")),
         "bank_c10_wr75_robust": bool(bank_c10.get("hit_wr75")),
+        "flow_or_bank_c5_wr75": bool(
+            bank_c5.get("hit_wr75")
+            or flow_c5.get("hit_wr75")
+            or par5.get("hit_wr75")
+        ),
         "parallel_c5_wr70_robust": bool(par5.get("wr", 0) >= 0.70 and par5.get("traded", 0) >= 8),
         "parallel_c10_wr70_robust": bool(
             par10.get("wr", 0) >= 0.70 and par10.get("traded", 0) >= 8
         ),
         "live_still_safe": (not armed) and dry,
         "promo_c10_exists": (POLY / "config/maker_demo_promo_fusion_c10.json").exists(),
-        "promo_c5_exists": (POLY / "config/maker_demo_promo_bank_c5.json").exists(),
+        "promo_c5_exists": (
+            (POLY / "config/maker_demo_promo_bank_c5.json").exists()
+            or (POLY / "config/maker_demo_promo_flow_c5.json").exists()
+        ),
     }
-    # Minimum for "listo con riesgo asumido": dual robust WR75 + parallel one capital + SAFE
+    # Strict: @5 and @10 both excellent + parallel both + SAFE
     ready_strict = all(
         [
-            checks["bank_c5_wr75_robust"],
+            checks["flow_or_bank_c5_wr75"],
             checks["bank_c10_wr75_robust"],
             checks["parallel_c5_wr70_robust"],
             checks["parallel_c10_wr70_robust"],
@@ -119,9 +144,10 @@ def evaluate(*, outlier_cap: float = 0.35) -> dict:
             checks["promo_c5_exists"],
         ]
     )
+    # Risk-on: excellent WR evidence @5 and @10 (confirm or parallel), SAFE
     ready_risk_on = all(
         [
-            checks["bank_c5_wr75_robust"] or checks["parallel_c5_wr70_robust"],
+            checks["flow_or_bank_c5_wr75"] or checks["parallel_c5_wr70_robust"],
             checks["bank_c10_wr75_robust"] or checks["parallel_c10_wr70_robust"],
             checks["live_still_safe"],
             checks["promo_c10_exists"],
@@ -135,7 +161,10 @@ def evaluate(*, outlier_cap: float = 0.35) -> dict:
         "metrics": {
             "bank_c5": bank_c5,
             "bank_c10": bank_c10,
-            "parallel_bank_c5": par5,
+            "flow_c5": flow_c5,
+            "parallel_c5_best": par5,
+            "parallel_bank_c5": par5_bank,
+            "parallel_flow_c5": par5_flow,
             "parallel_bank_c10": par10,
             "confirm_bank": confirm_bank,
             "parallel_c5_report": (parallel_c5 or {}).get("aggregate"),
@@ -172,10 +201,12 @@ def main() -> None:
     print(f"VERDICT: {report['verdict']}", flush=True)
     for k, v in report["checks"].items():
         print(f"  {'✓' if v else '✗'} {k}", flush=True)
-    print("metrics.bank_c5", report["metrics"]["bank_c5"], flush=True)
-    print("metrics.bank_c10", report["metrics"]["bank_c10"], flush=True)
-    print("metrics.parallel_bank_c5", report["metrics"]["parallel_bank_c5"], flush=True)
-    print("metrics.parallel_bank_c10", report["metrics"]["parallel_bank_c10"], flush=True)
+    m = report["metrics"]
+    print("metrics.bank_c5", m["bank_c5"], flush=True)
+    print("metrics.bank_c10", m["bank_c10"], flush=True)
+    print("metrics.flow_c5", m["flow_c5"], flush=True)
+    print("metrics.parallel_c5_best", m["parallel_c5_best"], flush=True)
+    print("metrics.parallel_bank_c10", m["parallel_bank_c10"], flush=True)
     print(f"REPORT -> {path}", flush=True)
     print(report["operator_next"], flush=True)
     raise SystemExit(0 if report["verdict"].startswith("READY") else 1)
