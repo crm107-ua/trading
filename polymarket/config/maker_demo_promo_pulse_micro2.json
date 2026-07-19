@@ -81,11 +81,13 @@
   "max_open_orders_per_market": 1,
   "fast_path_min_spread_cents": 1.0,
   "min_market_spread": 0.008,
-  "stop_loss_mid": 0.006,
-  "max_loss_usdc": 0.04,
-  "session_kill_net_usdc": 0.15,
-  "pause_after_consecutive_losses": 1,
-  "pause_entries_s": 900,
+  "stop_loss_mid": 0.012,
+  "soft_cut_usdc": 0.04,
+  "abs_cut_usdc": 0.08,
+  "max_loss_usdc": 0.08,
+  "session_kill_net_usdc": 0.20,
+  "pause_after_consecutive_losses": 2,
+  "pause_entries_s": 180,
   "allow_rich_side_live": false,
   "cheap_side_only": true
 }

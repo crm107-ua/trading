@@ -35,6 +35,9 @@ def test_loss_triggers_cooldown_and_halt():
     assert s.cooldown_left >= 1
     apply_round_result(s, net=0.0, fills=0)  # cooldown tick
     apply_round_result(s, net=-0.05, fills=2)
+    assert not s.halted  # 2 losses: aún no kill (MAX_CONSEC=3)
+    apply_round_result(s, net=0.0, fills=0)  # cooldown
+    apply_round_result(s, net=-0.05, fills=2)
     assert s.halted
     assert s.halt_reason == "max_consec_losses"
 

@@ -1151,8 +1151,17 @@ class LiveSession:
             hard_bank = max(green_at * 2.5, 0.08) if green_at > 0 else 0.08
         take = unreal >= (green_at if self._fusionish() and green_at > 0 else lock)
         hard_take = self._fusionish() and hard_bank > 0 and unreal >= hard_bank
-        soft_cut = self._fusionish() and unreal <= -0.01
-        abs_cut = self._fusionish() and unreal <= -0.05
+        # soft/abs cut en USDC — el viejo -0.01 mataba micros de 5sh al primer tick
+        # (5 × −0.002 mid = −0.01). Escalar por inventario o cfg.
+        inv_abs = max(abs(self.inventory_shares), 1.0)
+        soft_cut_usdc = float(self.cfg.get("soft_cut_usdc") or 0)
+        if soft_cut_usdc <= 0:
+            soft_cut_usdc = max(0.03, 0.008 * inv_abs)
+        abs_cut_usdc = float(self.cfg.get("abs_cut_usdc") or 0)
+        if abs_cut_usdc <= 0:
+            abs_cut_usdc = max(0.06, 0.012 * inv_abs)
+        soft_cut = self._fusionish() and unreal <= -soft_cut_usdc
+        abs_cut = self._fusionish() and unreal <= -abs_cut_usdc
         stop = unreal <= -max_loss * (0.35 if self._fusionish() else 1.0)
         fade = fair < avg - 0.015
         # No “quick” por debajo del bank fusionish — mataba PnL al escalar size.
