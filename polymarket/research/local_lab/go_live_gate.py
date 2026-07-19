@@ -117,6 +117,9 @@ def evaluate(*, outlier_cap: float = 0.35, max_age_hours: float = 3.0) -> dict:
     pulse_c5 = _robust_from_sessions("session_fusion_c10_pulse_c5_*", **kw)
     pulse_c10 = _robust_from_sessions("session_fusion_c10_pulse_c10_*", **kw)
 
+    shadow_c5 = _robust_from_sessions("session_promo_shadow_c5_L*_c5_*", **kw)
+    shadow_c10 = _robust_from_sessions("session_promo_shadow_c10_L*_c10_*", **kw)
+
     par5 = _best(
         _robust_from_sessions("session_promo_flow_c5_L*_c5_*", **kw),
         _robust_from_sessions("session_promo_bank_c5_L*_c5_*", **kw),
@@ -125,16 +128,20 @@ def evaluate(*, outlier_cap: float = 0.35, max_age_hours: float = 3.0) -> dict:
         par5,
         _robust_from_sessions("session_promo_pulse_c5_L*_c5_*", **kw),
     )
+    par5 = _best(par5, shadow_c5)
     par10 = _best(
         _robust_from_sessions("session_promo_pulse_c10_L*_c10_*", **kw),
         _robust_from_sessions("session_promo_bank_c10_L*_c10_*", **kw),
     )
+    par10 = _best(par10, shadow_c10)
 
     c5 = _best(flow_c5, bank_c5)
     c5 = _best(c5, pulse_c5)
     c5 = _best(c5, par5)
+    c5 = _best(c5, shadow_c5)
     c10 = _best(bank_c10, pulse_c10)
     c10 = _best(c10, par10)
+    c10 = _best(c10, shadow_c10)
 
     confirm_bank = _read_json(
         POLY / "data_local/local_lab/confirm_fusion_c10_bank/confirm_latest.json"
@@ -197,6 +204,8 @@ def evaluate(*, outlier_cap: float = 0.35, max_age_hours: float = 3.0) -> dict:
             "bank_c10": bank_c10,
             "pulse_c5": pulse_c5,
             "pulse_c10": pulse_c10,
+            "shadow_c5": shadow_c5,
+            "shadow_c10": shadow_c10,
             "parallel_c5": par5,
             "parallel_c10": par10,
         },

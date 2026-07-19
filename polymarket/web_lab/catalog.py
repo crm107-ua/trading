@@ -154,6 +154,28 @@ FEATURED: list[dict[str, Any]] = [
         "base_capital": 5.0,
     },
     {
+        "id": "promo_shadow_ofir",
+        "name": "Shadow OFIR (desk privado 2026)",
+        "badge": "RESEARCH",
+        "file": "maker_demo_promo_shadow_c10.json",
+        "default_sessions": 6,
+        "default_minutes": 5.0,
+        "blurb": "Lead spot + toxicity imbalance + mid-lag guard. Síntesis edge privado.",
+        "metrics": {"total": None, "wr": None, "avg": None},
+        "base_capital": 10.0,
+    },
+    {
+        "id": "promo_pulse_c5",
+        "name": "Promo Pulse @5 (READY_STRICT champ)",
+        "badge": "CHAMP",
+        "file": "maker_demo_promo_pulse_c5.json",
+        "default_sessions": 6,
+        "default_minutes": 5.0,
+        "blurb": "Champ fresco READY_STRICT @5. Paralelo WR~82%.",
+        "metrics": {"total": 1.12, "wr": 0.82, "avg": 0.066},
+        "base_capital": 5.0,
+    },
+    {
         "id": "selective_mom",
         "name": "Selective + Momentum align",
         "badge": "CHAMP",
@@ -337,7 +359,7 @@ def apply_live_clob_floors(cfg: dict) -> dict:
     # Live micro: TP/SL. Fusion/follow/promo WR-first: NUNCA subir suelos (anula soft-cut).
     wr_first = any(
         x in label.lower()
-        for x in ("fusion", "follow", "flow", "pulse", "bank", "promo")
+        for x in ("fusion", "follow", "flow", "pulse", "bank", "promo", "shadow", "ofir")
     )
     if preserve and wr_first:
         c["lock_profit_usdc"] = min(float(c.get("lock_profit_usdc") or 0.08), 0.25)

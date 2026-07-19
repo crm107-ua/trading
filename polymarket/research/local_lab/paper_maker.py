@@ -246,13 +246,67 @@ class PaperSession:
                 follow_agree = True
             elif t_f_ok and dn_lo <= mid_f <= dn_hi and roll <= -f_roll and vel <= -f_vel:
                 follow_agree = True
-        if self.strategy_id == "maker_follow" or (
+        # Shadow OFIR agree: lead + mid-lag residual + imbalance alineado.
+        shadow_agree = False
+        if bb is not None and ba is not None and (
+            bool(self.cfg.get("fusion_enable_shadow", False))
+            or self.strategy_id == "maker_shadow_ofir"
+        ):
+            mid_s = (float(bb) + float(ba)) / 2.0
+            mid_d = self.cfg.get("_mid_delta")
+            imb = self.cfg.get("_book_imbalance")
+            s_lead = float(
+                self.cfg.get("shadow_min_lead_usd", self.cfg.get("min_spot_lead_usd", 2.5))
+                or 2.5
+            )
+            s_vel = float(
+                self.cfg.get("shadow_min_vel_usd", self.cfg.get("min_spot_velocity_usd", 0.7))
+                or 0.7
+            )
+            max_md = float(self.cfg.get("shadow_max_mid_catchup", 0.018) or 0.018)
+            min_imb = float(self.cfg.get("shadow_min_imbalance", 0.55) or 0.55)
+            t_s_ok = True
+            if time_remaining_s is not None:
+                st_min = float(self.cfg.get("shadow_time_min_s", 90) or 90)
+                st_max = float(self.cfg.get("shadow_time_max_s", 270) or 270)
+                trs = float(time_remaining_s)
+                if trs < st_min or trs > st_max:
+                    t_s_ok = False
+            if (
+                t_s_ok
+                and mid_s is not None
+                and mid_d is not None
+                and imb is not None
+                and self.strike_trusted
+            ):
+                up_s = (
+                    roll >= s_lead
+                    and vel >= s_vel
+                    and float(mid_d) <= max_md
+                    and float(imb) >= min_imb
+                )
+                dn_s = (
+                    roll <= -s_lead
+                    and vel <= -s_vel
+                    and float(mid_d) >= -max_md
+                    and float(imb) <= (1.0 - min_imb)
+                )
+                shadow_agree = up_s or dn_s
+
+        if self.strategy_id == "maker_shadow_ofir" or (
+            self.strategy_id == "maker_fusion"
+            and bool(self.cfg.get("fusion_enable_shadow", False))
+            and not bool(self.cfg.get("fusion_enable_pulse", True))
+            and not bool(self.cfg.get("fusion_enable_follow", True))
+        ):
+            agree = shadow_agree
+        elif self.strategy_id == "maker_follow" or (
             self.strategy_id == "maker_fusion"
             and not bool(self.cfg.get("fusion_enable_pulse", True))
         ):
             agree = follow_agree
         elif self.strategy_id == "maker_fusion":
-            agree = pulse_agree or follow_agree
+            agree = pulse_agree or follow_agree or shadow_agree
         else:
             agree = pulse_agree
         self._pulse_streak = self._pulse_streak + 1 if agree else 0
@@ -422,6 +476,8 @@ class PaperSession:
                 "pulse",
                 "bank",
                 "promo",
+                "shadow",
+                "ofir",
             )
         )
         # Fusion/follow/promo: cualquier rojo material se corta YA (no esperar NIM 8s).
