@@ -54,8 +54,10 @@ def test_capital_cap_fase_d(tmp_path, monkeypatch):
     monkeypatch.setenv("POLY_LIVE_CHECKLIST_PATH", str(path))
     monkeypatch.setattr(pol, "DAY_PNL_PATH", tmp_path / "day.json")
     ok, msg = pol.validate_real_start(3.0, 10.0)
-    assert ok is False
-    assert "1.5" in msg
+    assert ok is True, msg
+    ok2, msg2 = pol.validate_real_start(6.0, 10.0)
+    assert ok2 is False
+    assert "5.0" in msg2
 
 
 def test_kill_line_reason():

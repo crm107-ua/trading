@@ -110,5 +110,6 @@ def test_micro_config_exists_and_capital():
     import json
 
     cfg = json.loads(p.read_text(encoding="utf-8"))
-    assert float(cfg["initial_capital_usdc"]) <= 1.5
+    assert float(cfg["initial_capital_usdc"]) == 5.0
+    assert float(cfg["max_notional_per_side_usdc"]) >= 5.0
     assert cfg.get("strategy_id") == "maker_fusion"

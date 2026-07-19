@@ -36,9 +36,9 @@ def test_risk_budget_caps_desk():
 
 
 def test_ladder_next():
-    s = ladder_stage(1.5)
-    assert s["next_stage"] == 2.0
-    assert 1.5 in s["ladder_usdc"]
+    s = ladder_stage(5.0)
+    assert s["next_stage"] is None
+    assert 5.0 in s["ladder_usdc"]
 
 
 def test_collision_rate():

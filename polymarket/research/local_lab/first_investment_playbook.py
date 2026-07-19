@@ -100,15 +100,15 @@ def main() -> int:
     print("\n--- Previsión de ganancia (orientativa, no garantía) ---", flush=True)
     print(json.dumps({"1_linea": fc, "2_lineas_corr": fc2}, indent=2), flush=True)
     print("\n--- Ladder capital ---", flush=True)
-    print(json.dumps(ladder_stage(1.5), indent=2), flush=True)
+    print(json.dumps(ladder_stage(5.0), indent=2), flush=True)
 
     print("\n--- Pasos (manual) ---", flush=True)
     steps = [
         "1) SAFE: POLY_LIVE_ARMED=0 POLY_LIVE_DRY_RUN=1",
         "2) Dry 30–60m con maker_demo_promo_pulse_c10_micro_live.json --strategy maker_fusion",
-        "3) Si dry sano: POLY_LIVE_DRY_RUN=0 POLY_LIVE_MAX_CAPITAL_USDC=1.5 → 1ª sesión 30m",
+        "3) Si dry sano: POLY_LIVE_DRY_RUN=0 POLY_LIVE_MAX_CAPITAL_USDC=5 → 1ª sesión 30m",
         "4) Matar si FLATTEN_WRONG_TOKEN / DUST / residual / WR vivo cae",
-        "5) SAFE al terminar; escalar 1.5→2→3→5 solo tras ≥3 sesiones limpias",
+        "5) SAFE al terminar; no subir de 5 hasta ≥3 sesiones limpias",
         "6) Paralelismo: máx 2 líneas, stagger≥45s; EV usa haircut rho=0.85",
     ]
     for s in steps:
@@ -129,7 +129,7 @@ def main() -> int:
         print("PELIGRO: ya estás en LIVE real. Vuelve a SAFE si no es intencional.", flush=True)
         return 2
     print(
-        f"\nPrimera inversión: capital={CAPITAL_LADDER_USDC[0]} USDC · "
+        f"\nPrimera inversión: capital={CAPITAL_LADDER_USDC[0]} USDC (mín CLOB) · "
         f"EV≈{fc['pnl_corr_adjusted_usdc']:+.3f} USDC / {args.hours}h (1 línea, corr-adj)",
         flush=True,
     )

@@ -24,7 +24,8 @@ DAY_PNL_PATH = LAB / "live_day_pnl.json"
 # Plan: no live_real con saldo bajo; depósito mínimo recomendado
 MIN_REAL_BALANCE_PUSD = 5.0
 MIN_REAL_CAPITAL = 1.0
-MAX_REAL_CAPITAL = 1.5
+# CLOB floor = 5 shares → notional típico ~2–3.5 USDC; micro real viable = 5.
+MAX_REAL_CAPITAL = 5.0
 MAX_SESSION_LOSS_USDC = 0.40
 MAX_DAY_LOSS_USDC = 1.0
 DRY_SESSIONS_REQUIRED = 10

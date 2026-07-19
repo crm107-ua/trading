@@ -76,7 +76,7 @@ def _first_investment_block(*, forecast: dict, certified: bool) -> dict:
                 "title": "Preflight SAFE",
                 "cmd": (
                     "export POLY_LIVE_ARMED=0 POLY_LIVE_DRY_RUN=1 "
-                    "POLY_LIVE_MAX_CAPITAL_USDC=1.5 && "
+                    "POLY_LIVE_MAX_CAPITAL_USDC=5 && "
                     "python3 -m polymarket.research.local_lab.go_live_arm_check "
                     "--pulse-only"
                 ),
@@ -103,10 +103,10 @@ def _first_investment_block(*, forecast: dict, certified: bool) -> dict:
             },
             {
                 "n": 4,
-                "title": "Primera inversión MICRO real (1.5 USDC)",
+                "title": "Primera inversión MICRO real (5 USDC — mínimo CLOB-viable)",
                 "cmd": (
                     "export POLY_LIVE_ARMED=1 POLY_LIVE_DRY_RUN=0 "
-                    "POLY_LIVE_MAX_CAPITAL_USDC=1.5 && "
+                    "POLY_LIVE_MAX_CAPITAL_USDC=5 && "
                     "python3 -m polymarket.research.local_lab.live_maker "
                     "--config polymarket/config/maker_demo_promo_pulse_c10_micro_live.json "
                     "--strategy maker_fusion --minutes 30"
@@ -126,15 +126,16 @@ def _first_investment_block(*, forecast: dict, certified: bool) -> dict:
             },
             {
                 "n": 6,
-                "title": "Escalar ladder 1.5→2→3→5 (nunca 10 de golpe)",
-                "cmd": "Subir MAX_CAPITAL solo tras ≥3 sesiones live limpias.",
+                "title": "Escalar solo tras ≥3 sesiones live limpias (nunca 10 de golpe)",
+                "cmd": "Mantener MAX_CAPITAL=5 hasta estabilidad; luego re-certificar.",
             },
         ],
         "forecast": forecast,
         "notes": [
             "Solo pulse@10. NO armar @5 ni Shadow.",
-            "Paralelismo correlacionado (rho≈0.85): usa EV corr-adjusted, no N×.",
+            "Paralelismo correlacionado (rho≈0.85): máx 2 líneas live, stagger≥45s.",
             "Paper ≠ live. Previsión orientativa, no garantía.",
+            "Capital micro=5 USDC (floor CLOB 5 shares); 1.5 USDC no es operable.",
         ],
     }
 
@@ -238,13 +239,24 @@ async def async_main(args: argparse.Namespace) -> int:
     m_promo = _robust_from_sessions(
         "session_promo_pulse_c10*", outlier_cap=0.35, max_age_hours=MAX_AGE_H
     )
-    final = m_label if _pass_paper(m_label) else (
-        m_promo if _pass_paper(m_promo) else m_label
-    )
+    # Paper: aceptar promo fresco si el label pro aún es corto; nunca bajar barra.
+    final = m_promo if (int(m_promo.get("decisive") or 0) >= int(m_label.get("decisive") or 0)) else m_label
+    if _pass_paper(m_label):
+        final = m_label
+    elif _pass_paper(m_promo):
+        final = m_promo
     paper_ok = _pass_paper(final)
-    parallel_ok = _pass_parallel(m_label) or _pass_parallel(m_promo)
+    # Paralelo: SOLO métricas del label staggered (no mezclar con promo mono).
+    parallel_ok = _pass_parallel(m_label)
     dry_ok = True if dry is None else dry.get("verdict") == "DRY_PARALLEL_OK"
     parity_ok = True if dry is None else bool(dry.get("parity_ok", True))
+    # Dry con 0 fills por SKIP_BUDGET no cuenta como dry operativo.
+    if dry is not None:
+        fills_n = sum(int(r.get("fills") or 0) for r in (dry.get("rows") or []))
+        if fills_n < 1:
+            dry_ok = False
+            dry["ok_fills"] = False
+            dry["note"] = "Dry sin fills — revisar max_notional/capital vs floor CLOB 5sh"
     certified = bool(paper_ok and parallel_ok and dry_ok and parity_ok)
 
     prox = metrics_from_robust(final)
@@ -274,13 +286,13 @@ async def async_main(args: argparse.Namespace) -> int:
         avg_loss=float(prox["avg_loss_usdc"]),
         capital_scale=1.0,
     )
-    budget = build_risk_budget(lines=2, capital_per_line=1.5, stagger_s=45.0)
+    budget = build_risk_budget(lines=2, capital_per_line=5.0, stagger_s=45.0)
     playbook = _first_investment_block(
         forecast={
             "1h_1line": fc_1h,
             "1h_2lines_corr": fc_1h_2L,
             "8h_1line": fc_day,
-            "ladder": ladder_stage(1.5),
+            "ladder": ladder_stage(5.0),
             "risk_budget": budget.to_dict(),
         },
         certified=certified,

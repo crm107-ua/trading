@@ -13,8 +13,8 @@ from typing import Any
 # Correlación empírica conservadora mismo mercado BTC 5m / mismo DNA.
 DEFAULT_SAME_MARKET_RHO = 0.85
 
-# Ladder micro real (USDC). No saltar peldaños.
-CAPITAL_LADDER_USDC: tuple[float, ...] = (1.5, 2.0, 3.0, 5.0)
+# Ladder micro real (USDC). Primer peldaño = 5 (mínimo CLOB-viable con 5 shares).
+CAPITAL_LADDER_USDC: tuple[float, ...] = (5.0,)
 
 # EV medido paper pulse@10 (sesión con fill, excl. outliers) — baseline.
 # Se recalcula si hay métricas frescas.
