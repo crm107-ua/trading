@@ -101,7 +101,12 @@ def _blend_prices(
         kept = [(s, p) for s, p, _a in tracked]
 
     mid = _center([p for _, p in kept])
-    if _LAST_BLEND is not None and abs(mid - _LAST_BLEND) > _MAX_BLEND_JUMP_USD:
+    # Clamp solo si queda 1 venue (evita salto falso); 2+ frescos pueden moverse.
+    if (
+        len(kept) == 1
+        and _LAST_BLEND is not None
+        and abs(mid - _LAST_BLEND) > _MAX_BLEND_JUMP_USD
+    ):
         mid = 0.55 * mid + 0.45 * _LAST_BLEND
     _LAST_BLEND = mid
     tag = "+".join(s for s, _ in kept)
