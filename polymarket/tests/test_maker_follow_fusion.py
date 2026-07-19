@@ -105,7 +105,7 @@ def test_fusion_can_disable_pulse():
     assert "via_pulse" not in q.note
 
 
-def test_follow_rejects_opposing_fair():
+def test_follow_optional_fair_veto():
     cfg = {
         "quote_size_shares": 5,
         "quote_join_touch": True,
@@ -117,11 +117,11 @@ def test_follow_rejects_opposing_fair():
         "follow_min_vel_usd": 0.2,
         "follow_up_lo": 0.52,
         "follow_up_hi": 0.72,
+        "follow_use_fair_veto": True,
         "follow_fair_oppose_max": 0.04,
         "follow_persist_polls": 1,
     }
-    # fair muy por debajo del mid UP → veto
     assert maker_follow(0.50, 0.59, 0.61, 100_010.0, 100_000.0, cfg) is None
-    # fair un poco por debajo (mid ya precio) → ok
-    q = maker_follow(0.58, 0.59, 0.61, 100_010.0, 100_000.0, cfg)
+    cfg["follow_use_fair_veto"] = False
+    q = maker_follow(0.50, 0.59, 0.61, 100_010.0, 100_000.0, cfg)
     assert q is not None

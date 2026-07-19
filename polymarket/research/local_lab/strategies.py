@@ -457,16 +457,17 @@ def maker_follow(
     if side is None:
         return None
 
-    # BS-fair suele ir DETRÁS del mid en BTC 5m. Follow solo veta si el modelo
-    # se opone con fuerza (anti adverse-selection), no exige edge positivo.
-    oppose = float(
-        cfg.get("follow_fair_oppose_max", cfg.get("follow_min_fair_edge", 0.04))
-        or 0.04
-    )
-    if side == "bid" and float(fair_up) < mid - oppose:
-        return None
-    if side == "ask" and float(fair_up) > mid + oppose:
-        return None
+    # BS-fair va detrás del mid en BTC 5m y vetaba entradas buenas.
+    # Opt-in: follow_use_fair_veto=true + follow_fair_oppose_max.
+    if bool(cfg.get("follow_use_fair_veto", False)):
+        oppose = float(
+            cfg.get("follow_fair_oppose_max", cfg.get("follow_min_fair_edge", 0.08))
+            or 0.08
+        )
+        if side == "bid" and float(fair_up) < mid - oppose:
+            return None
+        if side == "ask" and float(fair_up) > mid + oppose:
+            return None
 
     need = int(cfg.get("follow_persist_polls", 1) or 1)
     streak = int(cfg.get("_pulse_streak", 0) or 0)
