@@ -1,32 +1,31 @@
-# Decisión go-live (2026-07-19) — feedback simulación realista
+# Decisión go-live (2026-07-19) — feedback final simulación
 
-## Qué se comparó (paper, feeds/CLOB reales, dinero simulado)
-| DNA | Capital | WR decisivo (3h) | Decisive | PnL robusto | Estado |
-|-----|---------|------------------|----------|-------------|--------|
-| **promo_pulse_c10** | 10 | **~87%** | 31 | +2.21 | **LISTO micro real** |
-| promo_pulse_c5 | 5 | ~64% | 39 | +1.76 | NO (regime dip) |
-| promo_shadow_c5 | 5 | 100%* | 2 | +0.26 | Experimental (n bajo) |
-| promo_shadow_c10 | 10 | n/a | 0 | 0 | Starve / no operativo aún |
+## Confrontación Shadow OFIR vs Pulse (paper, mercado real)
 
-\*muestra insuficiente (decisive < 4).
+| DNA | Cap | WR decisivo | Decisive | PnL robusto | ¿Lista dinero real? |
+|-----|-----|-------------|----------|-------------|---------------------|
+| **promo_pulse_c10** | 10 | **87.5%** | 32 | **+2.37** | **SÍ — micro** |
+| promo_shadow_c10 | 10 | 100%* | 3 | +0.15 | NO (n&lt;4) |
+| promo_shadow_c5 | 5 | 63.6% | 11 | +0.24 | NO |
+| promo_pulse_c5 | 5 | 62.3% | 53 | +1.58 | NO (dip de régimen) |
 
-## Shadow OFIR (método “desk privado”)
-Síntesis (no leak de un bot concreto): latency lead + toxicity imbalance + mid-lag guard + blackout settlement.
-Código: `maker_shadow_ofir` + configs `promo_shadow_c5/c10`. Catálogo FEATURED.
-Aún no supera a Pulse en operatividad; cuando llena, va limpio (2W/0L @5).
+\*muestra insuficiente.
 
-## Veredicto definitivo para dinero real
-1. **Única lista ahora: `maker_demo_promo_pulse_c10.json` @10€**  
-   - Gate fresco: WR75 + paralelo70 @10 en verde  
-   - Empezar: dry-run → `DRY_RUN=0` con `MAX_CAPITAL≤5` (micro), no 10 de golpe
-2. **@5 Pulse: NO armar** hasta recuperar WR≥75% fresco (tight restore en curso)
-3. **Shadow: NO armar** hasta decisive≥8 y WR≥75% en paralelo
+Gate dual `READY_STRICT`: **NO** (falla @5).  
+`@10` solo: WR75 + paralelo70 en verde.
 
-## Secuencia operador
-```bash
-python3 -m polymarket.research.local_lab.go_live_arm_check
-# Solo si READY_* y DNA=@10 pulse:
-# ARMED=1 DRY_RUN=1 → dry
-# luego DRY_RUN=0 MAX_CAPITAL=2..5
-```
-Live flags deben volver a SAFE tras pruebas.
+## Shadow OFIR (añadido al catálogo)
+Stack desk privado 2026 (síntesis, no leak): latency lead + toxicity imbalance + mid-lag + blackout.
+- Código: `maker_shadow_ofir` / `fusion_enable_shadow`
+- Configs: `maker_demo_promo_shadow_c5.json`, `maker_demo_promo_shadow_c10.json`
+- Cuando llena @10 va limpio (3W/0L) pero aún poco volumen → experimental
+
+## Veredicto definitivo
+**La única estrategia lista para inversión real ahora es `maker_demo_promo_pulse_c10.json` (@10), en modo micro.**
+
+Secuencia:
+1. `POLY_LIVE_ARMED=1` `POLY_LIVE_DRY_RUN=1` `MAX_CAPITAL=5` — dry CLOB
+2. Si dry sano: `DRY_RUN=0` con `MAX_CAPITAL=2..5` (no 10 de entrada)
+3. No armar @5 ni Shadow hasta WR≥75% fresco decisive≥8
+
+Live debe permanecer SAFE salvo armado explícito.
