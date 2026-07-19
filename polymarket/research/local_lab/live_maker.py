@@ -976,12 +976,17 @@ class LiveSession:
         if clob_bal < 0.01:
             # Dry: no hay tokens reales — sintetizar SELL y limpiar inventario simulado.
             if self.clob.gates.dry_run and abs(self.inventory_shares) > 1e-9:
-                px_dry = (
-                    float(best_bid)
-                    if best_bid is not None
-                    else (float(best_ask) - 0.01 if best_ask is not None else 0.40)
-                )
-                px_dry = max(0.01, min(0.99, px_dry))
+                # Mid ejecutable (no worst bid) — el soft_cut ya usó mark=bid;
+                # liquidar otra vez a bid peor dobla el slippage simulado.
+                if best_bid is not None and best_ask is not None:
+                    px_dry = 0.5 * (float(best_bid) + float(best_ask))
+                elif best_bid is not None:
+                    px_dry = float(best_bid)
+                elif best_ask is not None:
+                    px_dry = max(0.01, float(best_ask) - 0.01)
+                else:
+                    px_dry = 0.40
+                px_dry = max(0.01, min(0.99, round(px_dry, 2)))
                 print(
                     f"FLATTEN_DRY_CLEAR inv={self.inventory_shares:.4f} "
                     f"px={px_dry:.2f} (sin tokens reales)",
@@ -1160,7 +1165,15 @@ class LiveSession:
         abs_cut_usdc = float(self.cfg.get("abs_cut_usdc") or 0)
         if abs_cut_usdc <= 0:
             abs_cut_usdc = max(0.06, 0.012 * inv_abs)
+        hold_s = (
+            (time.monotonic() - self._last_fill_mono)
+            if self._last_fill_mono
+            else 999.0
+        )
+        min_hold_soft = float(self.cfg.get("min_hold_before_soft_cut_s") or 0)
         soft_cut = self._fusionish() and unreal <= -soft_cut_usdc
+        if soft_cut and min_hold_soft > 0 and hold_s < min_hold_soft:
+            soft_cut = False  # no cortar ruido de los primeros segundos
         abs_cut = self._fusionish() and unreal <= -abs_cut_usdc
         stop = unreal <= -max_loss * (0.35 if self._fusionish() else 1.0)
         fade = fair < avg - 0.015
