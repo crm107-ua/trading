@@ -62,9 +62,12 @@ def _robust_from_sessions(
             losses += 1
         else:
             flats += 1
-    wr = (wins / traded) if traded else 0.0
+    # WR = wins/(wins+losses); flats no cuentan (ni a favor ni en contra).
+    decisive = wins + losses
+    wr = (wins / decisive) if decisive else 0.0
     return {
         "traded": traded,
+        "decisive": decisive,
         "wins": wins,
         "losses": losses,
         "flats": flats,
@@ -73,9 +76,10 @@ def _robust_from_sessions(
         "wr": round(wr, 4),
         "total_raw": round(total, 4),
         "total_robust": round(robust_total, 4),
-        "hit_wr75": bool(wr >= 0.75 and traded >= 4),
-        "hit_wr70": bool(wr >= 0.70 and traded >= 4),
-        "hit_parallel70": bool(wr >= 0.70 and traded >= 8),
+        # Umbrales sobre trades decisivos (excl. flat / outlier).
+        "hit_wr75": bool(wr >= 0.75 and decisive >= 4),
+        "hit_wr70": bool(wr >= 0.70 and decisive >= 4),
+        "hit_parallel70": bool(wr >= 0.70 and decisive >= 8),
     }
 
 

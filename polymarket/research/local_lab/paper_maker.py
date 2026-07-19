@@ -425,7 +425,12 @@ class PaperSession:
             )
         )
         # Fusion/follow/promo: cualquier rojo material se corta YA (no esperar NIM 8s).
+        # Umbral -0.01; si el mid salta, el flatten al mark limita el daño.
         if fusionish and unreal <= -0.01:
+            self._flatten_inventory_mid(mark)
+            return
+        # Corte absoluto de seguridad (evita -0.20 por gap de poll).
+        if fusionish and unreal <= -0.05:
             self._flatten_inventory_mid(mark)
             return
         # Fusion/follow: bankear verde YA cada poll (evita loterías +1.00 sin exit).
