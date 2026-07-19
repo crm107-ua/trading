@@ -150,10 +150,27 @@ class LiveSession:
             and (now - self._cash_bal_mono) < 5.0
         ):
             return float(self._cash_bal)
-        bal = await asyncio.to_thread(self.clob.balance_collateral_usdc)
-        self._cash_bal = float(bal)
-        self._cash_bal_mono = now
-        return float(bal)
+        try:
+            bal = await asyncio.to_thread(self.clob.balance_collateral_usdc)
+            self._cash_bal = float(bal)
+            self._cash_bal_mono = now
+            return float(bal)
+        except Exception as e:
+            # Dry / blips de red: no tumbar la sesión; usa cache o capital cfg.
+            fallback = self._cash_bal
+            if fallback is None:
+                fallback = float(
+                    self.cfg.get("initial_capital_usdc") or self.bankroll or 0.0
+                )
+            print(
+                f"CASH_REFRESH_ERR {type(e).__name__}: {e} "
+                f"fallback={float(fallback):.4f} dry={self.clob.gates.dry_run}",
+                flush=True,
+            )
+            if self._cash_bal is None:
+                self._cash_bal = float(fallback)
+                self._cash_bal_mono = now
+            return float(self._cash_bal)
 
     async def _cancel_stale_open_orders(self) -> None:
         """Cancela órdenes huérfanas (p.ej. SELL dust @0.01 de sesiones previas)."""
@@ -270,8 +287,9 @@ class LiveSession:
         if side_u == "BUY" and px * sz < MIN_BUY_NOTIONAL_USDC:
             print(f"SKIP_MIN_NOTIONAL {px * sz:.2f} < {MIN_BUY_NOTIONAL_USDC}", flush=True)
             return
-        if side_u == "BUY":
-            # CLOB: notional BUY <= collateral libre (pUSD)
+        if side_u == "BUY" and not self.clob.gates.dry_run:
+            # CLOB real: notional BUY <= collateral libre (pUSD).
+            # En DRY_RUN no bloqueamos por balance (no hay gasto real).
             now_m = time.monotonic()
             if now_m < self._skip_cash_until:
                 return
