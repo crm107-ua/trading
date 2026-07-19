@@ -115,9 +115,11 @@ class LiveSession:
     position_leg: str | None = None  # "up" | "down" — qué token tenemos
     held_token_id: str | None = None  # token con inventario (persiste tras fill)
     realized_pnl: float = 0.0
+    desk_line_id: int = 1
     _cash_bal: float | None = None
     _cash_bal_mono: float = 0.0
     _skip_cash_until: float = 0.0
+    _coord_blocks: int = 0
 
     def _spot_delta_usd(self, window_ms: int = 3000) -> float:
         if len(self.spot_history) < 2:
@@ -381,6 +383,16 @@ class LiveSession:
             and (now - self._cash_bal_mono) < 5.0
         ):
             return float(self._cash_bal)
+        # Sim CLOB con dinero ficticio: libro/red reales, caja virtual.
+        if self.clob.gates.dry_run:
+            virt = os.getenv("POLY_LIVE_DRY_VIRTUAL_BALANCE_USDC")
+            if virt:
+                try:
+                    self._cash_bal = float(virt)
+                    self._cash_bal_mono = now
+                    return float(self._cash_bal)
+                except ValueError:
+                    pass
         try:
             bal = await asyncio.to_thread(self.clob.balance_collateral_usdc)
             self._cash_bal = float(bal)
@@ -597,6 +609,41 @@ class LiveSession:
             and (quote.bid is None or float(quote.bid) <= 0.02)
         )
 
+    def _desk_role(self) -> str:
+        return str(self.cfg.get("desk_role") or "pulse").strip().lower()
+
+    def _coord_mode(self) -> str:
+        return str(
+            self.cfg.get("desk_coord_mode")
+            or os.getenv("POLY_DESK_COORD_MODE")
+            or "mutex_market"
+        ).strip().lower()
+
+    def _try_desk_claim(self, target: Any, direction: str) -> bool:
+        """Anti-colisión: veto central antes de postear entrada."""
+        if not bool(self.cfg.get("desk_coord_enable", True)):
+            return True
+        from polymarket.research.local_lab.desk_coordinator import try_claim
+
+        mid = str(getattr(target, "market_id", None) or self.current_market_id or "")
+        res = try_claim(
+            line_id=int(self.desk_line_id),
+            market_id=mid,
+            direction=direction,
+            mode=self._coord_mode(),
+            role=self._desk_role(),
+            window_start_ns=self.window_start_ns,
+        )
+        if not res.ok:
+            self._coord_blocks += 1
+            print(
+                f"COORD_BLOCK mode={self._coord_mode()} reason={res.reason} "
+                f"line={self.desk_line_id} mid={mid[:18]}…",
+                flush=True,
+            )
+            return False
+        return True
+
     async def _post_entry(
         self,
         target: Any,
@@ -607,7 +654,31 @@ class LiveSession:
         fair_up: float,
     ) -> str:
         """Entra BUY Up (cheap) o BUY Down (rich). Devuelve last= tag."""
+        # Ensemble role: restringe qué familia de señal puede entrar.
+        role = self._desk_role()
+        note = str(getattr(quote, "note", "") or "").lower()
+        if role == "pulse" and "follow" in note and "pulse" not in note:
+            return "role_skip_follow"
+        if role == "follow" and "pulse" in note and "follow" not in note:
+            return "role_skip_pulse"
+        if role == "shadow" and "shadow" not in note:
+            return "role_skip_noshadow"
+
+        direction = "up" if self._is_cheap_quote(quote) else "down"
+        if not self._try_desk_claim(target, direction):
+            return "coord_block"
+
         sz = max(float(quote.size_shares), MIN_ORDER_SHARES)
+        # Cluster sizing: N clones correlacionados ⇒ size_scale = N_eff/N
+        try:
+            from polymarket.research.local_lab.desk_coordinator import size_scale_for_cluster
+
+            n_lines = int(self.cfg.get("desk_cluster_lines") or 1)
+            rho = float(self.cfg.get("desk_cluster_rho") or 0.85)
+            if n_lines > 1 and self._coord_mode() not in ("mutex_market", "window_slot"):
+                sz = max(MIN_ORDER_SHARES, round(sz * size_scale_for_cluster(n_lines, rho), 2))
+        except Exception:
+            pass
         allow_rich = bool(self.cfg.get("allow_rich_side_live", True))
         if self._is_cheap_quote(quote):
             await self._post_quote(
@@ -1393,6 +1464,14 @@ class LiveSession:
                     self._progress(minutes, "resting")
                 await asyncio.sleep(poll_s)
         finally:
+            # Liberar claim de desk
+            try:
+                from polymarket.research.local_lab.desk_coordinator import release
+
+                if self.current_market_id:
+                    release(line_id=self.desk_line_id, market_id=self.current_market_id)
+            except Exception:
+                pass
             # Último intento de flatten + sync fills
             try:
                 if abs(self.inventory_shares) > 1e-9 and self.open_token_id:
@@ -1447,6 +1526,10 @@ class LiveSession:
             "dry_run": gates.dry_run,
             "armed": gates.armed,
             "inventory_residual": self.inventory_shares,
+            "desk_line_id": self.desk_line_id,
+            "desk_coord_mode": self._coord_mode(),
+            "desk_role": self._desk_role(),
+            "coord_blocks": self._coord_blocks,
         }
         (self.out_dir / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
         with fills_path.open("w", encoding="utf-8") as fh:
@@ -1469,6 +1552,7 @@ async def run_live_session(
     config_path: Path,
     session_id: str | None = None,
     strategy: str | None = None,
+    desk_line_id: int = 1,
 ) -> dict[str, Any]:
     gates = read_gates()
     if not gates.armed:
@@ -1492,11 +1576,21 @@ async def run_live_session(
         raise ValueError(f"Unknown strategy: {sid_strat}")
     clob = ClobLiveClient()
     clob.connect()
+    # Dry + saldo virtual: no exigir capital ≤ balance real CLOB.
+    if gates.dry_run and os.getenv("POLY_LIVE_DRY_VIRTUAL_BALANCE_USDC"):
+        try:
+            virt = float(os.environ["POLY_LIVE_DRY_VIRTUAL_BALANCE_USDC"])
+            os.environ["POLY_LIVE_MAX_CAPITAL_USDC"] = str(
+                max(float(os.getenv("POLY_LIVE_MAX_CAPITAL_USDC") or 0), capital, virt)
+            )
+        except ValueError:
+            pass
     clob.assert_can_trade(capital=capital, allow_dry=True)
     sid = session_id or datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     out = OUT_BASE / "live_maker" / f"session_{sid}"
     print(
-        f"LIVE_STRAT={sid_strat} label={cfg.get('demo_label')} capital={capital}",
+        f"LIVE_STRAT={sid_strat} label={cfg.get('demo_label')} capital={capital} "
+        f"line={desk_line_id} coord={cfg.get('desk_coord_mode') or os.getenv('POLY_DESK_COORD_MODE')}",
         flush=True,
     )
     session = LiveSession(
@@ -1505,6 +1599,7 @@ async def run_live_session(
         clob=clob,
         bankroll=capital,
         strategy_id=str(sid_strat),
+        desk_line_id=int(desk_line_id),
     )
     return await session.run(minutes=minutes)
 
