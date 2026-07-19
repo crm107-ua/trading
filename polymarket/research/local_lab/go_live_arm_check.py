@@ -49,9 +49,9 @@ def main() -> int:
         flush=True,
     )
     print("\nDNA canónico:", flush=True)
-    print("  @5  → polymarket/config/maker_demo_promo_flow_c5.json", flush=True)
+    print("  @5  → polymarket/config/maker_demo_promo_pulse_c5.json", flush=True)
     print("  @10 → polymarket/config/maker_demo_promo_pulse_c10.json", flush=True)
-    print("  backup @5 → maker_demo_promo_pulse_c5.json", flush=True)
+    print("  backup @5 → maker_demo_promo_flow_c5.json", flush=True)
 
     if not ok:
         print(

@@ -210,7 +210,7 @@ def evaluate(*, outlier_cap: float = 0.35, max_age_hours: float = 3.0) -> dict:
         "live_flags": {"POLY_LIVE_ARMED": armed, "POLY_LIVE_DRY_RUN": dry},
         "operator_next": (
             "READY: 1) micro DRY_RUN=1 2) DRY_RUN=0 con MAX_CAPITAL bajo. "
-            "DNA @5=promo_flow_c5 · @10=promo_pulse_c10 o promo_fusion_c10."
+            "DNA @5=promo_pulse_c5 · @10=promo_pulse_c10."
             if (ready_strict or ready_risk_on)
             else "NOT_READY: falta WR75 fresco @5/@10 y/o paralelo≥70 traded≥8 (ventana fresca)."
         ),
