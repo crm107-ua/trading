@@ -418,6 +418,17 @@ class PaperSession:
         if fusionish and unreal <= -0.01:
             self._flatten_inventory_mid(mark)
             return
+        # Fusion/follow: bankear verde YA cada poll (evita loterías +1.00 sin exit).
+        bank_at = float(self.cfg.get("grind_bank_usdc", 0) or 0)
+        lock_at = float(self.cfg.get("lock_profit_usdc", 0) or 0)
+        green_at = 0.0
+        if bank_at > 0 and lock_at > 0:
+            green_at = min(bank_at, lock_at)
+        else:
+            green_at = bank_at or lock_at
+        if fusionish and green_at > 0 and unreal >= green_at:
+            self._flatten_inventory_mid(mark)
+            return
         max_loss = float(self.cfg.get("max_loss_usdc", 0) or 0)
         if max_loss > 0:
             grindish = (

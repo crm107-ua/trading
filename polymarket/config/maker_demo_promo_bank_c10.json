@@ -1,9 +1,9 @@
 {
   "mode": "paper-maker",
   "hypothesis": 16,
-  "demo_label": "fusion_c10_bank",
+  "demo_label": "promo_bank_c10",
   "preserve_selectivity": true,
-  "notes": "C10 CHAMP 20260719_024457: WR75% traded=4 tot=+1.02 | instant green bank every poll",
+  "notes": "Bank DNA @10 for parallel accumulation. Instant green bank enabled in runtime. | instant green bank every poll",
   "initial_capital_usdc": 10.0,
   "currency_label": "EUR",
   "paper_resolution": "mid",
