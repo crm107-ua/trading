@@ -45,12 +45,17 @@ def _force_dry(virt: float) -> dict[str, str]:
             "POLY_LIVE_DRY_VIRTUAL_BALANCE_USDC", ""
         ),
         "POLY_LIVE_DRY_SMOKE_POST": os.environ.get("POLY_LIVE_DRY_SMOKE_POST", "0"),
+        "NVIDIA_NIM_MODE": os.environ.get("NVIDIA_NIM_MODE", ""),
+        "NVIDIA_NIM_GRIND": os.environ.get("NVIDIA_NIM_GRIND", ""),
     }
     os.environ["POLY_LIVE_ARMED"] = "1"
     os.environ["POLY_LIVE_DRY_RUN"] = "1"
     os.environ["POLY_LIVE_DRY_SMOKE_POST"] = "0"
     os.environ["POLY_LIVE_DRY_VIRTUAL_BALANCE_USDC"] = str(virt)
     os.environ["POLY_LIVE_MAX_CAPITAL_USDC"] = str(max(virt, HARD_CAP_USDC))
+    # Micro: path determinista (fast) — evita starve por nim_error/timeout.
+    os.environ["NVIDIA_NIM_MODE"] = "fast"
+    os.environ["NVIDIA_NIM_GRIND"] = "0"
     return prev
 
 
@@ -62,6 +67,7 @@ def _restore(prev: dict[str, str]) -> None:
             os.environ[k] = v
     os.environ["POLY_LIVE_ARMED"] = "0"
     os.environ["POLY_LIVE_DRY_RUN"] = "1"
+    # no dejar ARMED real accidentalmente
 
 
 async def _run_session(

@@ -88,6 +88,52 @@ def test_fast_path_quotes_without_nim(monkeypatch):
     assert nim is None
 
 
+def test_rule_guard_respects_min_spread_cents():
+    # 0.5¢ book allowed when snapshot umbral=0.5
+    d = rule_guard(
+        _base_snapshot(
+            best_bid=0.48,
+            best_ask=0.485,
+            fast_path_min_spread_cents=0.5,
+        )
+    )
+    assert d is None
+    d2 = rule_guard(
+        _base_snapshot(
+            best_bid=0.48,
+            best_ask=0.485,
+            fast_path_min_spread_cents=1.0,
+        )
+    )
+    assert d2 is not None
+    assert d2.reason == "rule_tight_market_spread"
+
+
+def test_nim_error_falls_back_to_quote_on_edge(monkeypatch):
+    monkeypatch.setenv("NVIDIA_NIM_MODE", "hybrid")
+    monkeypatch.setenv("NVIDIA_NIM_GRIND", "1")
+    monkeypatch.setenv("NVIDIA_NIM_PROFIT_ASSIST", "0")
+
+    def _boom(*_a, **_k):
+        raise TimeoutError("nim down")
+
+    monkeypatch.setattr(
+        "polymarket.src.ai.decision_engine.robust_chat_completion",
+        _boom,
+    )
+    snap = _base_snapshot(
+        edge_abs=0.05,
+        min_edge=0.02,
+        fast_path_min_spread_cents=1.0,
+        best_bid=0.48,
+        best_ask=0.52,
+    )
+    decision, nim = decide_quote_action(snapshot=snap, use_cache=False)
+    assert decision.action == "quote"
+    assert decision.reason == "rule_nim_fallback_edge"
+    assert nim is None
+
+
 def test_decide_uses_rules_without_network(monkeypatch):
     snap = _base_snapshot(best_ask=None)
     decision, nim = decide_quote_action(snapshot=snap, use_cache=False)

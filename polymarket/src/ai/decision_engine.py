@@ -131,7 +131,9 @@ def rule_guard(snapshot: dict[str, Any]) -> Decision | None:
         return Decision("cancel_replace", "rule_spot_moved", 1.0, "rule")
 
     spread = _market_spread_cents(snapshot)
-    if spread is not None and spread < 1.0:
+    # Respetar umbral del snapshot (micro/BTC-5m suele cotizar a 1¢ exacto).
+    min_spread = float(snapshot.get("fast_path_min_spread_cents", 1.0) or 1.0)
+    if spread is not None and spread + 1e-9 < min_spread:
         return Decision("hold", "rule_tight_market_spread", 1.0, "rule")
 
     return None
@@ -253,6 +255,14 @@ def decide_quote_action(
             use_cache=use_cache,
         )
     except Exception:
+        # Fallback: si hay edge y spread, no quedar ciegos en hold por timeout NIM.
+        if (
+            edge_abs is not None
+            and float(edge_abs) >= min_edge
+            and spread is not None
+            and spread + 1e-9 >= min_cents
+        ):
+            return Decision("quote", "rule_nim_fallback_edge", 0.7, "rule"), None
         return Decision("hold", "nim_error_or_timeout", 0.0, "rule"), None
 
     data = _extract_json(resp.content) or {}

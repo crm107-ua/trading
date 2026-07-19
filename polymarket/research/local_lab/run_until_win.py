@@ -175,6 +175,12 @@ async def _real_once(*, minutes: float) -> dict:
 async def async_main(args: argparse.Namespace) -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     _safe()
+    # Micro fill-rate: reglas fast; NIM timeout no debe tumbar entradas.
+    os.environ.setdefault("NVIDIA_NIM_MODE", "fast")
+    if (os.environ.get("NVIDIA_NIM_MODE") or "").strip().lower() == "hybrid":
+        # En until-win preferimos fills > NIM; override hybrid del .env.
+        os.environ["NVIDIA_NIM_MODE"] = "fast"
+    os.environ["NVIDIA_NIM_GRIND"] = "0"
     geo = check_geoblock()
     blocked, geo_msg = geoblock_blocks_real()
     print(
