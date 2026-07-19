@@ -19,11 +19,24 @@
 | 5€ | fusion_base | 1 | 100% | +0.22 |
 | 10€ | fusion_base | 1 | 100% | +0.22 |
 
-## Confirm
+## Multi-DNA scout (cerrado)
+
+| Capital | Mejor DNA | Traded | WR | Total | ¿PASS? |
+|---------|-----------|--------|----|-------|--------|
+| 5€ | fusion_follow_heavy | 2 | 100% | +0.34 | sí |
+| 10€ | selective_mom | 4 | 75% | +0.37 | sí (DNA distinto) |
+| 10€ | fusion_follow_heavy | 1 | 100% | +0.12 | falta traded≥2 |
+
+**No** promover mezcla de DNAs. Confirm por DNA:
 
 ```bash
-python -m polymarket.research.local_lab.confirm_fusion_wr \
-  --capitals 5,10 --sessions 6 --minutes 5
+python -m polymarket.research.local_lab.confirm_dna_pair \
+  --label fusion_follow_heavy --strategy maker_fusion \
+  --config maker_demo_fusion_follow_heavy.json --sessions 8 --minutes 5
+
+python -m polymarket.research.local_lab.confirm_dna_pair \
+  --label selective_mom --strategy maker_edge \
+  --config maker_demo_selective_mom.json --sessions 8 --minutes 5
 ```
 
-Criterio promo: WR≥70% traded≥2 en **ambos** capitals.
+Criterio promo: WR≥70% traded≥2 en **ambos** capitals con el **mismo** DNA.
