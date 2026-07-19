@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import json
 import os
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -29,6 +31,77 @@ MAX_REAL_CAPITAL = 5.0
 MAX_SESSION_LOSS_USDC = 0.40
 MAX_DAY_LOSS_USDC = 1.0
 DRY_SESSIONS_REQUIRED = 10
+GEOBLOCK_URL = "https://polymarket.com/api/geoblock"
+
+
+@dataclass(frozen=True)
+class GeoBlockStatus:
+    blocked: bool
+    ip: str | None = None
+    country: str | None = None
+    region: str | None = None
+    error: str | None = None
+    raw: dict[str, Any] | None = None
+
+    @property
+    def ok_to_trade(self) -> bool:
+        return (not self.blocked) and self.error is None
+
+
+def check_geoblock(*, timeout_s: float = 8.0) -> GeoBlockStatus:
+    """Consulta el endpoint oficial de geoblock antes de postear órdenes reales.
+
+    EE.UU. (y otras jurisdicciones) rechazan POST /order con 403. Fallar aquí
+    evita sesiones de 15 min con señales OK pero 0 fills.
+    """
+    if _flag("POLY_LIVE_SKIP_GEOBLOCK", "0"):
+        return GeoBlockStatus(blocked=False, error=None)
+    try:
+        req = urllib.request.Request(
+            GEOBLOCK_URL,
+            headers={"User-Agent": "polymarket-local-lab/1.0", "Accept": "application/json"},
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=float(timeout_s)) as resp:
+            body = resp.read().decode("utf-8", errors="replace")
+        raw = json.loads(body) if body.strip() else {}
+        if not isinstance(raw, dict):
+            return GeoBlockStatus(blocked=True, error="geoblock_bad_payload", raw={"body": body[:200]})
+        blocked = bool(raw.get("blocked"))
+        return GeoBlockStatus(
+            blocked=blocked,
+            ip=str(raw.get("ip") or "") or None,
+            country=str(raw.get("country") or "") or None,
+            region=str(raw.get("region") or "") or None,
+            raw=raw,
+        )
+    except urllib.error.HTTPError as e:
+        # Algunos edges responden 403 al propio geoblock desde IPs US — tratar como blocked.
+        if int(getattr(e, "code", 0) or 0) == 403:
+            return GeoBlockStatus(
+                blocked=True,
+                error="geoblock_http_403",
+                country="US?",
+            )
+        return GeoBlockStatus(blocked=True, error=f"geoblock_http_{e.code}")
+    except Exception as e:
+        return GeoBlockStatus(blocked=True, error=f"{type(e).__name__}: {e}")
+
+
+def geoblock_blocks_real() -> tuple[bool, str]:
+    """True, msg si NO se puede operar REAL desde esta IP."""
+    st = check_geoblock()
+    if st.ok_to_trade:
+        return False, "ok"
+    where = ",".join(x for x in (st.country, st.region) if x) or "?"
+    ip = st.ip or "?"
+    detail = st.error or "blocked=true"
+    return (
+        True,
+        f"GEOBLOCK ip={ip} where={where} ({detail}). "
+        "Polymarket rechaza órdenes desde esta región — lanza REAL desde egress permitido "
+        "(docs: eu-west-1 / jurisdicción no restringida). No usar VPN para evadir ToS.",
+    )
 
 
 @dataclass(frozen=True)
@@ -180,6 +253,9 @@ def validate_real_start(capital: float, balance_pusd: float | None) -> tuple[boo
         )
     if balance_pusd is not None and cap > float(balance_pusd) + 0.05:
         return False, f"Capital {cap:.2f} > saldo {balance_pusd:.2f} pUSD"
+    blocked, geo_msg = geoblock_blocks_real()
+    if blocked:
+        return False, geo_msg
     return True, "ok"
 
 
@@ -194,6 +270,8 @@ def kill_line_reason(line: str) -> str | None:
         return "kill_session"
     if "KILL_DAY" in u:
         return "kill_day"
+    if "GEOBLOCK" in u or "Trading restricted in your region" in u:
+        return "geoblock"
     if "FILL BUY" in u and "POST_ERR" in u and "balance" in u.lower():
         return "fill_exit_balance"
     return None

@@ -564,6 +564,18 @@ class LiveSession:
             if "balance is not enough" in msg.lower() or "not enough balance" in msg.lower():
                 await self._refresh_cash(force=True)
                 self._skip_cash_until = time.monotonic() + 12.0
+            # Geoblock: no tiene sentido seguir 15 min con señales y 0 posts.
+            if (
+                "trading restricted in your region" in msg.lower()
+                or "geoblock" in msg.lower()
+                or ("status_code=403" in msg and "region" in msg.lower())
+            ):
+                self._halt_new_entries = True
+                print(
+                    "GEOBLOCK_KILL — IP/región bloqueada por Polymarket; "
+                    "abortando nuevas entradas (SAFE al salir).",
+                    flush=True,
+                )
             return
         oid = resp.get("orderID")
         st = resp.get("status")

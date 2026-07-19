@@ -26,6 +26,8 @@ KILL_MARKERS = (
     "KILL_SESSION",
     "KILL_DAY",
     "POST_ERR",
+    "GEOBLOCK",
+    "Trading restricted in your region",
     "balance is not enough",
 )
 
@@ -60,7 +62,7 @@ async def async_main(args: argparse.Namespace) -> int:
     os.environ.pop("POLY_LIVE_DRY_VIRTUAL_BALANCE_USDC", None)
 
     from polymarket.src.execution.clob_live import read_gates
-    from polymarket.src.execution.live_policy import validate_real_start
+    from polymarket.src.execution.live_policy import geoblock_blocks_real, validate_real_start
 
     g = read_gates()
     print(
@@ -70,6 +72,33 @@ async def async_main(args: argparse.Namespace) -> int:
     if g.dry_run or not g.armed:
         _force_safe()
         raise RuntimeError("ABORT: no se armó REAL (dry aún activo o no ARMED)")
+
+    geo_blocked, geo_msg = geoblock_blocks_real()
+    print(f"GEOBLOCK_CHECK blocked={geo_blocked} {geo_msg}", flush=True)
+    if geo_blocked:
+        _force_safe()
+        # Escribir reporte para el loop until-win
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        out = {
+            "created_utc": datetime.now(timezone.utc).isoformat(),
+            "sid": f"REAL_micro25_{stamp}",
+            "minutes": float(args.minutes),
+            "balance_before_pusd": bal_before,
+            "balance_after_pusd": bal_before,
+            "balance_delta": 0.0,
+            "report": {"verdict": "GEOBLOCK_ABORT", "fills": 0, "net_session_usdc": 0.0},
+            "danger": ["geoblock"],
+            "live_flags_now": {
+                "POLY_LIVE_ARMED": os.environ.get("POLY_LIVE_ARMED"),
+                "POLY_LIVE_DRY_RUN": os.environ.get("POLY_LIVE_DRY_RUN"),
+            },
+            "ok": False,
+            "abort": geo_msg,
+        }
+        OUT.mkdir(parents=True, exist_ok=True)
+        (OUT / f"real_{stamp}.json").write_text(json.dumps(out, indent=2), encoding="utf-8")
+        (OUT / "real_latest.json").write_text(json.dumps(out, indent=2), encoding="utf-8")
+        raise RuntimeError(f"ABORT geoblock: {geo_msg}")
 
     ok, msg = validate_real_start(2.5, bal_before)
     print(f"VALIDATE {ok} {msg}", flush=True)
