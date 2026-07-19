@@ -135,6 +135,10 @@ def evaluate(*, outlier_cap: float = 0.35, max_age_hours: float = 3.0) -> dict:
         _robust_from_sessions("session_promo_pulse_c10_L*_c10_*", **kw),
         _robust_from_sessions("session_promo_bank_c10_L*_c10_*", **kw),
     )
+    par10 = _best(
+        par10,
+        _robust_from_sessions("session_promo_pulse_c10_live_L*_c10_*", **kw),
+    )
     par10 = _best(par10, shadow_c10)
 
     c5 = _best(flow_c5, bank_c5)
