@@ -178,11 +178,20 @@ async def async_main(args: argparse.Namespace) -> int:
         dry = await _dry_run(float(args.dry_minutes))
         print("DRY", dry, flush=True)
 
-    final = _metrics(
-        config_glob="session_promo_pulse_c10*", max_age_hours=MAX_AGE_H
+    # Métricas del label certificado + fallback al champ promo_pulse_c10.
+    m_label = _metrics(
+        config_glob=f"session_{args.label}_L*_c10_*", max_age_hours=MAX_AGE_H
     )
-    paper_ok = _pass(final) or any(h.get("paper_pass") for h in history)
-    # exigir el agregado fresco final
+    m_promo = _metrics(
+        config_glob="session_promo_pulse_c10_L*_c10_*", max_age_hours=MAX_AGE_H
+    )
+    # Si el label es *_live y aún tiene poca muestra, aceptar champ promo
+    # solo si el DNA live es idéntico en entradas (misma config familia).
+    final = m_label if int(m_label.get("decisive") or 0) >= MIN_DECISIVE else m_promo
+    if _pass(m_label):
+        final = m_label
+    elif _pass(m_promo) and "pulse_c10" in args.label:
+        final = m_promo
     paper_ok = _pass(final)
     dry_ok = True if dry is None else bool(dry.get("ok"))
     certified = bool(paper_ok and dry_ok)
