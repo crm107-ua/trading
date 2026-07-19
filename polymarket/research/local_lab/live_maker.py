@@ -654,15 +654,17 @@ class LiveSession:
         fair_up: float,
     ) -> str:
         """Entra BUY Up (cheap) o BUY Down (rich). Devuelve last= tag."""
-        # Ensemble role: restringe qué familia de señal puede entrar.
+        # Ensemble role: solo filtra si role ∈ {pulse,follow,shadow}.
+        # "fusion"/"any"/"" → deja pasar pulse+follow (micro compound).
         role = self._desk_role()
         note = str(getattr(quote, "note", "") or "").lower()
-        if role == "pulse" and "follow" in note and "pulse" not in note:
-            return "role_skip_follow"
-        if role == "follow" and "pulse" in note and "follow" not in note:
-            return "role_skip_pulse"
-        if role == "shadow" and "shadow" not in note:
-            return "role_skip_noshadow"
+        if role in ("pulse", "follow", "shadow"):
+            if role == "pulse" and "follow" in note and "pulse" not in note:
+                return "role_skip_follow"
+            if role == "follow" and "pulse" in note and "follow" not in note:
+                return "role_skip_pulse"
+            if role == "shadow" and "shadow" not in note:
+                return "role_skip_noshadow"
 
         direction = "up" if self._is_cheap_quote(quote) else "down"
         if not self._try_desk_claim(target, direction):
