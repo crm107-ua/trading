@@ -1,29 +1,26 @@
-# Fusion Follow-Heavy — WR-first (2026-07-18/19)
+# Fusion Follow — WR hunt (2026-07-19)
 
-**Estado:** @5 confirm PASS (WR100%) · @10 FAIL (WR33%) → follow-only retighten · **no** on-chain  
-**Estrategia runtime:** `maker_fusion`  
-**Config:** `maker_demo_fusion_follow_heavy.json`
+**Estado:** confirm v5 cerrado · **no** BOTH_READY · live SAFE  
+**Mejor DNA:** `fusion_follow_flow` (`maker_fusion`, pulse OFF)
 
-## DNA (v2 follow-only)
+## Confirm v5 (8×5 min, feeds reales)
 
-1. **Pulse OFF** (`fusion_enable_pulse=false`) — evita asks tóxicos mid-ventana  
-2. **Follow** con `follow_min_fair_edge`, roll/vel más altos, banda estrecha, persist≥2  
-3. **Edge OFF** — el fade barato sin momentum era la fuente de rojas  
-4. Size 4 + `max_loss` 0.04 + soft-cut 40% + flatten a bid/ask ejecutable
+| DNA | @5 | @10 | BOTH |
+|-----|----|-----|------|
+| **fusion_follow_flow** | **WR 100%** (7W, +0.40) ✓ | WR 40% (2W/2F/1L, −0.14) ✗ | False |
+| fusion_follow_heavy | WR 43% (−0.15) ✗ | WR 29% (−0.52) ✗ | False |
 
-## Confirm pair (pre-retighten)
+### Lectura
+- `@5` flow banca +0.05 casi siempre vía `rule_grind_bank` — DNA válido ahí.
+- `@10` rompe en follows tardíos (ask ~0.40–0.43) con gaps de 1 poll → −0.22/−0.28.
+- Heavy demasiado agresivo tras el unfreeze de spot.
 
-| Capital | Traded | WR | Total | ¿PASS? |
-|---------|--------|----|-------|--------|
-| 5€ | 2 | **100%** | +0.13 | sí |
-| 10€ | 3 | 33% (1W/1L/1F) | +0.07 | no (worst −0.10) |
-
-## Re-confirm
+## v6 (en curso)
+- Flow: banda dn más alta (0.38–0.48), roll≥1.6, size 3, max_loss 0.03
+- Corte rojo inmediato ≤ −0.01 usdc cada poll (fusion/follow)
 
 ```bash
 python3 -m polymarket.research.local_lab.confirm_dna_pair \
-  --label fusion_follow_heavy --strategy maker_fusion \
-  --config maker_demo_fusion_follow_heavy.json --sessions 8 --minutes 5
+  --label fusion_follow_flow --strategy maker_fusion \
+  --config maker_demo_fusion_follow_flow.json --sessions 8 --minutes 5
 ```
-
-Criterio promo: WR≥70% traded≥2 en **ambos** capitals con el **mismo** DNA.

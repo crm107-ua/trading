@@ -410,6 +410,14 @@ class PaperSession:
                 return
         # Corte por PnL no realizado usando precio ejecutable (no mid optimista).
         unreal = self.inventory_shares * mark - self.cost_basis
+        fusionish = (
+            "fusion" in str(self.cfg.get("demo_label", "")).lower()
+            or "follow" in str(self.cfg.get("demo_label", "")).lower()
+        )
+        # Fusion/follow: cualquier rojo material se corta YA (no esperar NIM 8s).
+        if fusionish and unreal <= -0.01:
+            self._flatten_inventory_mid(mark)
+            return
         max_loss = float(self.cfg.get("max_loss_usdc", 0) or 0)
         if max_loss > 0:
             grindish = (
@@ -417,13 +425,8 @@ class PaperSession:
                 or bool(self.cfg.get("preserve_selectivity"))
                 or "grind" in str(self.cfg.get("demo_label", "")).lower()
             )
-            # Fusion/follow: corte más temprano (50%) — gaps de 1 poll mataban WR.
-            fusionish = (
-                "fusion" in str(self.cfg.get("demo_label", "")).lower()
-                or "follow" in str(self.cfg.get("demo_label", "")).lower()
-            )
-            # Fusion: corte al 40% — gaps de 1 poll con size=5 mataban WR@10.
-            frac = 0.4 if fusionish else (0.7 if grindish else 1.0)
+            # Fusion: corte al 35% del max_loss.
+            frac = 0.35 if fusionish else (0.7 if grindish else 1.0)
             soft = abs(max_loss) * frac
             if unreal <= -soft:
                 self._flatten_inventory_mid(mark)
