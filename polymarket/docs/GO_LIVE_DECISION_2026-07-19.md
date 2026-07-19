@@ -1,31 +1,30 @@
-# Decisión go-live (2026-07-19) — feedback final simulación
+# Decisión go-live — actualizado 2026-07-19 (PRO desk)
 
-## Confrontación Shadow OFIR vs Pulse (paper, mercado real)
+## Veredicto actual
+| Camino | Estado |
+|--------|--------|
+| **PRO_CERTIFIED** pulse@10 | **NO** — WR fresco ~72% (barra ≥80%) |
+| Dry CLOB paralelo `maker_fusion` | **OK** — 2×2 fills, residual 0, balance intacto, paridad paper↔live |
+| pulse@5 / Shadow | **NO armar** |
 
-| DNA | Cap | WR decisivo | Decisive | PnL robusto | ¿Lista dinero real? |
-|-----|-----|-------------|----------|-------------|---------------------|
-| **promo_pulse_c10** | 10 | **87.5%** | 32 | **+2.37** | **SÍ — micro** |
-| promo_shadow_c10 | 10 | 100%* | 3 | +0.15 | NO (n&lt;4) |
-| promo_shadow_c5 | 5 | 63.6% | 11 | +0.24 | NO |
-| promo_pulse_c5 | 5 | 62.3% | 53 | +1.58 | NO (dip de régimen) |
+## Por qué no invertir aún
+El DNA y el motor PRO están listos, pero la **evidencia paper fresca (≤3h)** bajó del pico 83% a ~72% en régimen de mids extremos. No se arma capital real hasta recuperar WR≥80%.
 
-\*muestra insuficiente.
+## Qué ya está “pionero” y listo
+1. `live_maker` ejecuta **`maker_fusion`** (misma ruta que paper)
+2. Micro config CLOB-viable: **5 USDC** (`maker_demo_promo_pulse_c10_micro_live.json`)
+3. Desk risk: ρ=0.85, stagger, ladder, EV corr-adjusted
+4. Dry multi-línea real sin mover saldo (~10.93 pUSD intacto)
+5. Playbook: `docs/PRO_DESK_PLAYBOOK.md` + `first_investment_playbook`
 
-Gate dual `READY_STRICT`: **NO** (falla @5).  
-`@10` solo: WR75 + paralelo70 en verde.
+## Paralelo
+Colisión misma market medida ~67% → **máx 2 líneas live**, stagger ≥45–90s. EV ≈ 1.15× una línea, no 2×.
 
-## Shadow OFIR (añadido al catálogo)
-Stack desk privado 2026 (síntesis, no leak): latency lead + toxicity imbalance + mid-lag + blackout.
-- Código: `maker_shadow_ofir` / `fusion_enable_shadow`
-- Configs: `maker_demo_promo_shadow_c5.json`, `maker_demo_promo_shadow_c10.json`
-- Cuando llena @10 va limpio (3W/0L) pero aún poco volumen → experimental
+## Re-certificar
+```bash
+python3 -m polymarket.research.local_lab.certify_pro_desk \
+  --waves 1 --sessions 8 --lines 2 --stagger-s 90 --dry-lines 2 --dry-minutes 8
+python3 -m polymarket.research.local_lab.first_investment_playbook
+```
 
-## Veredicto definitivo
-**La única estrategia lista para inversión real ahora es `maker_demo_promo_pulse_c10.json` (@10), en modo micro.**
-
-Secuencia:
-1. `POLY_LIVE_ARMED=1` `POLY_LIVE_DRY_RUN=1` `MAX_CAPITAL=5` — dry CLOB
-2. Si dry sano: `DRY_RUN=0` con `MAX_CAPITAL=2..5` (no 10 de entrada)
-3. No armar @5 ni Shadow hasta WR≥75% fresco decisive≥8
-
-Live debe permanecer SAFE salvo armado explícito.
+Cuando salga `PRO_CERTIFIED`, primera inversión = dry 45m → real 30m con capital **5**, luego SAFE.

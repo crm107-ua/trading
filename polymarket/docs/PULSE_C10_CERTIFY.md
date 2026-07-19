@@ -1,14 +1,14 @@
 # Certificación pulse@10 — CERTIFIED (2026-07-19)
 
-## Veredicto: CERTIFIED (+ camino PRO)
-Listo para **micro inversión real** con este DNA únicamente.
+## Veredicto: CERTIFIED histórico · PRO pendiente de WR fresco
+El DNA y el motor PRO están listos; **no armar real** hasta `PRO_CERTIFIED` (WR fresco ≥80%).
 
 | Check | Resultado |
 |-------|-----------|
-| Paper WR decisivo (≤3h) | **83.3%** (30W/6L, decisive=36) |
-| PnL robusto | **+2.33** |
-| Dry-run CLOB | `LIVE_DRY_RUN` · balance intacto |
-| Flags | `ARMED=0` `DRY_RUN=1` (SAFE hasta que armes) |
+| Paper WR decisivo (pico) | **83.3%** (cert anterior) |
+| Paper WR fresco (ahora) | **~72%** → bloquea PRO |
+| Dry CLOB paralelo fusion | **OK** · fills dry · residual 0 · balance intacto |
+| Flags | `ARMED=0` `DRY_RUN=1` (SAFE) |
 
 ## Upgrade PRO (2026-07-19)
 Ver **`docs/PRO_DESK_PLAYBOOK.md`** y:
