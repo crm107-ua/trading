@@ -138,9 +138,20 @@ FEATURED: list[dict[str, Any]] = [
         "file": "maker_demo_fusion_follow_flow.json",
         "default_sessions": 6,
         "default_minutes": 5.0,
-        "blurb": "Follow-only con banda media: más fills que heavy, mismos exits duros.",
-        "metrics": {"total": None, "wr": None, "avg": None},
+        "blurb": "Follow-only. v5 @5 WR100% (+0.40). @10 en hunt v6.",
+        "metrics": {"total": 0.40, "wr": 1.0, "avg": 0.057},
         "base_capital": 10.0,
+    },
+    {
+        "id": "promo_flow_c5",
+        "name": "Promo Flow @5 (locked champ)",
+        "badge": "CHAMP",
+        "file": "maker_demo_promo_flow_c5.json",
+        "default_sessions": 6,
+        "default_minutes": 5.0,
+        "blurb": "DNA v5 locked: WR100% 7W +0.40 @5€. Paralelo multi-línea.",
+        "metrics": {"total": 0.40, "wr": 1.0, "avg": 0.057},
+        "base_capital": 5.0,
     },
     {
         "id": "selective_mom",
@@ -321,9 +332,18 @@ def apply_live_clob_floors(cfg: dict) -> dict:
     # No forzar +entradas en configs strict/grind (max_entry_fills=1)
     if int(c.get("max_entry_fills") or 2) >= 2:
         c["max_entry_fills"] = max(int(c.get("max_entry_fills") or 2), 3)
-    # Live micro: TP/SL con suelo (scale a 1–2€ dejaba 0.05/0.10 → ruido)
-    # Grind/preserve: NO subir el suelo — anula lock temprano y WR-first.
-    if preserve:
+    # Live micro: TP/SL. Fusion/follow WR-first: NUNCA subir suelos (anula soft-cut).
+    wr_first = any(
+        x in label.lower()
+        for x in ("fusion", "follow", "flow", "pulse", "promo_flow")
+    )
+    if preserve and wr_first:
+        c["lock_profit_usdc"] = min(float(c.get("lock_profit_usdc") or 0.08), 0.25)
+        c["max_loss_usdc"] = min(float(c.get("max_loss_usdc") or 0.08), 0.28)
+        c["flatten_before_window_s"] = max(
+            float(c.get("flatten_before_window_s") or 45), 70
+        )
+    elif preserve:
         c["lock_profit_usdc"] = max(
             0.06, min(float(c.get("lock_profit_usdc") or 0.12), 0.25)
         )
