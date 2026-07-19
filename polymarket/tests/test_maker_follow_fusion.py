@@ -18,9 +18,10 @@ def test_follow_bids_when_mid_and_spot_agree_up():
         "follow_min_vel_usd": 0.2,
         "follow_up_lo": 0.52,
         "follow_up_hi": 0.72,
+        "follow_min_fair_edge": 0.01,
         "follow_persist_polls": 1,
     }
-    q = maker_follow(0.60, 0.59, 0.61, 100_010.0, 100_000.0, cfg)
+    q = maker_follow(0.62, 0.59, 0.61, 100_010.0, 100_000.0, cfg)
     assert q is not None
     assert q.strategy_id == "maker_follow"
     assert q.bid > 0.02
@@ -51,6 +52,7 @@ def test_fusion_edge_requires_momentum():
         "min_z": 1.0,
         "sigma_mid": 0.03,
         "cheap_side_only": True,
+        "fusion_enable_pulse": False,
         "fusion_enable_follow": False,
         "fusion_enable_edge": True,
         "edge_require_momentum": True,
@@ -72,3 +74,54 @@ def test_fusion_edge_requires_momentum():
     q = maker_fusion(0.55, 0.48, 0.50, 100_010.0, 100_000.0, cfg)
     assert q is not None
     assert "via_edge" in q.note
+
+
+def test_fusion_can_disable_pulse():
+    cfg = {
+        "quote_size_shares": 5,
+        "max_quote_size_shares": 5,
+        "quote_join_touch": True,
+        "fusion_enable_pulse": False,
+        "fusion_enable_follow": True,
+        "fusion_enable_edge": False,
+        "_window_open": True,
+        "_time_remaining_s": 180,
+        "_roll_lead_usd": 3.0,
+        "_spot_velocity_usd": 1.0,
+        "_pulse_streak": 2,
+        "_strike_trusted": True,
+        "follow_min_roll_usd": 1.0,
+        "follow_min_vel_usd": 0.2,
+        "follow_up_lo": 0.52,
+        "follow_up_hi": 0.72,
+        "follow_min_fair_edge": 0.01,
+        "follow_persist_polls": 1,
+        "min_spot_lead_usd": 1.0,
+        "min_spot_velocity_usd": 0.2,
+    }
+    q = maker_fusion(0.62, 0.59, 0.61, 100_010.0, 100_000.0, cfg)
+    assert q is not None
+    assert "via_follow" in q.note
+    assert "via_pulse" not in q.note
+
+
+def test_follow_requires_fair_edge():
+    cfg = {
+        "quote_size_shares": 5,
+        "quote_join_touch": True,
+        "_window_open": True,
+        "_time_remaining_s": 180,
+        "_roll_lead_usd": 3.0,
+        "_spot_velocity_usd": 1.0,
+        "follow_min_roll_usd": 1.0,
+        "follow_min_vel_usd": 0.2,
+        "follow_up_lo": 0.52,
+        "follow_up_hi": 0.72,
+        "follow_min_fair_edge": 0.03,
+        "follow_persist_polls": 1,
+    }
+    # fair ≈ mid → rechazar
+    assert maker_follow(0.60, 0.59, 0.61, 100_010.0, 100_000.0, cfg) is None
+    # fair con edge → ok
+    q = maker_follow(0.64, 0.59, 0.61, 100_010.0, 100_000.0, cfg)
+    assert q is not None

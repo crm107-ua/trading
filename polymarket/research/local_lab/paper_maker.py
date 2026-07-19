@@ -392,7 +392,8 @@ class PaperSession:
                 "fusion" in str(self.cfg.get("demo_label", "")).lower()
                 or "follow" in str(self.cfg.get("demo_label", "")).lower()
             )
-            frac = 0.5 if fusionish else (0.7 if grindish else 1.0)
+            # Fusion: corte al 40% — gaps de 1 poll con size=5 mataban WR@10.
+            frac = 0.4 if fusionish else (0.7 if grindish else 1.0)
             soft = abs(max_loss) * frac
             if unreal <= -soft:
                 self._flatten_inventory_mid(mark)
@@ -823,6 +824,8 @@ class PaperSession:
                         ):
                             self._flatten_inventory_mid(exit_mark)
             # Window flatten only if stops/NIM did not already cut.
+            # Usar precio ejecutable (bid long / ask short) — mid inflaba PnL y
+            # dejaba gaps de soft-cut en -0.10 con size=5.
             flatten_s = float(self.cfg.get("flatten_before_window_s", 0))
             if (
                 flatten_s > 0
@@ -831,7 +834,12 @@ class PaperSession:
                 and state["best_bid"] is not None
                 and state["best_ask"] is not None
             ):
-                self._smart_flatten((state["best_bid"] + state["best_ask"]) / 2, fair)
+                exec_mark = (
+                    float(state["best_bid"])
+                    if self.inventory_shares > 0
+                    else float(state["best_ask"])
+                )
+                self._flatten_inventory_mid(exec_mark)
             # Holding inventory: skip entry NIM/quotes (latency) so stops re-check every poll.
             if abs(self.inventory_shares) > 1e-9:
                 await asyncio.sleep(poll_s)

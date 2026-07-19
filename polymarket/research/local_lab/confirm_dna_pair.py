@@ -43,11 +43,16 @@ async def run_cap(
     cfg["initial_capital_usdc"] = float(capital)
     cfg["preserve_selectivity"] = True
     cfg = apply_live_clob_floors(cfg)
-    cfg["quote_size_shares"] = 5
-    cfg["max_quote_size_shares"] = 5
-    cfg["max_inventory_shares"] = 5
-    cfg["max_notional_per_side_usdc"] = 3.0
-    cfg["max_inventory_usdc"] = 3.0
+    # Respetar size del DNA (follow-heavy usa 4 para acotar gaps de soft-cut).
+    size = float(cfg.get("quote_size_shares", 5) or 5)
+    size = max(1.0, min(size, float(cfg.get("max_quote_size_shares", size) or size)))
+    cfg["quote_size_shares"] = size
+    cfg["max_quote_size_shares"] = size
+    cfg["max_inventory_shares"] = size
+    cfg["max_notional_per_side_usdc"] = min(
+        float(cfg.get("max_notional_per_side_usdc", 3.0) or 3.0), 3.0
+    )
+    cfg["max_inventory_usdc"] = min(float(cfg.get("max_inventory_usdc", 3.0) or 3.0), 3.0)
     cfg["demo_label"] = f"{label}_c{int(capital)}"
     out.mkdir(parents=True, exist_ok=True)
     path = out / f"cfg_{label}_c{int(capital)}.json"

@@ -457,10 +457,11 @@ def maker_follow(
     if side is None:
         return None
 
-    # Opcional: no pelear contra fair absurdo
-    if side == "bid" and float(fair_up) + 0.08 < mid:
+    # Fair debe aportar edge a favor del follow (no basta con "no pelear").
+    min_fair_edge = float(cfg.get("follow_min_fair_edge", 0.02) or 0.02)
+    if side == "bid" and float(fair_up) < mid + min_fair_edge:
         return None
-    if side == "ask" and float(fair_up) - 0.08 > mid:
+    if side == "ask" and float(fair_up) > mid - min_fair_edge:
         return None
 
     need = int(cfg.get("follow_persist_polls", 1) or 1)
@@ -510,10 +511,13 @@ def maker_fusion(
     RegimeRouter: prueba Pulse → Follow → Edge selectivo.
     Combina latencia, follow-the-flow y edge clásico sin forzar un solo dogma.
     """
-    # 1) Pulse (latencia) — usa gates propios / strike trust
-    q = maker_pulse(fair_up, best_bid, best_ask, spot, strike, cfg)
-    if q is not None:
-        return QuoteIntent(q.bid, q.ask, q.size_shares, "maker_fusion", f"via_pulse|{q.note}")
+    # 1) Pulse (latencia) — opcional; follow-heavy lo apaga (menos adverse @10).
+    if bool(cfg.get("fusion_enable_pulse", True)):
+        q = maker_pulse(fair_up, best_bid, best_ask, spot, strike, cfg)
+        if q is not None:
+            return QuoteIntent(
+                q.bid, q.ask, q.size_shares, "maker_fusion", f"via_pulse|{q.note}"
+            )
 
     # 2) Follow (unirse al mid informado + spot)
     if bool(cfg.get("fusion_enable_follow", True)):
