@@ -107,7 +107,12 @@ def evaluate(*, outlier_cap: float = 0.35) -> dict:
         "traded", 0
     ) >= 4:
         par5 = par5_bank
-    par10 = _robust_from_sessions("session_promo_bank_c10_L*_c10_*", outlier_cap=outlier_cap)
+    par10_bank = _robust_from_sessions("session_promo_bank_c10_L*_c10_*", outlier_cap=outlier_cap)
+    par10_pulse = _robust_from_sessions("session_promo_pulse_c10_L*_c10_*", outlier_cap=outlier_cap)
+    par10 = par10_pulse if (par10_pulse.get("wr") or 0) >= (par10_bank.get("wr") or 0) else par10_bank
+    if par10_pulse.get("traded", 0) >= 4 and (par10_pulse.get("wr") or 0) >= (par10_bank.get("wr") or 0):
+        par10 = par10_pulse
+    pulse_c10 = _robust_from_sessions("session_fusion_c10_pulse_c10_*", outlier_cap=outlier_cap)
     flow_c5 = _robust_from_sessions(
         "session_fusion_follow_flow_c5_*", outlier_cap=outlier_cap
     )
@@ -116,6 +121,7 @@ def evaluate(*, outlier_cap: float = 0.35) -> dict:
         "confirm_both_ready": bool(confirm_bank and confirm_bank.get("both_ready")),
         "bank_c5_wr75_robust": bool(bank_c5.get("hit_wr75")),
         "bank_c10_wr75_robust": bool(bank_c10.get("hit_wr75")),
+        "pulse_c10_wr75_robust": bool(pulse_c10.get("hit_wr75")),
         "flow_or_bank_c5_wr75": bool(
             bank_c5.get("hit_wr75")
             or flow_c5.get("hit_wr75")
@@ -136,7 +142,7 @@ def evaluate(*, outlier_cap: float = 0.35) -> dict:
     ready_strict = all(
         [
             checks["flow_or_bank_c5_wr75"],
-            checks["bank_c10_wr75_robust"],
+            checks["bank_c10_wr75_robust"] or checks.get("pulse_c10_wr75_robust"),
             checks["parallel_c5_wr70_robust"],
             checks["parallel_c10_wr70_robust"],
             checks["live_still_safe"],
@@ -148,7 +154,7 @@ def evaluate(*, outlier_cap: float = 0.35) -> dict:
     ready_risk_on = all(
         [
             checks["flow_or_bank_c5_wr75"] or checks["parallel_c5_wr70_robust"],
-            checks["bank_c10_wr75_robust"] or checks["parallel_c10_wr70_robust"],
+            checks["bank_c10_wr75_robust"] or checks.get("pulse_c10_wr75_robust") or checks["parallel_c10_wr70_robust"],
             checks["live_still_safe"],
             checks["promo_c10_exists"],
         ]
@@ -161,6 +167,7 @@ def evaluate(*, outlier_cap: float = 0.35) -> dict:
         "metrics": {
             "bank_c5": bank_c5,
             "bank_c10": bank_c10,
+            "pulse_c10": pulse_c10,
             "flow_c5": flow_c5,
             "parallel_c5_best": par5,
             "parallel_bank_c5": par5_bank,
