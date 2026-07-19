@@ -88,12 +88,14 @@ def _best(a: dict, b: dict) -> dict:
 
     def key(m: dict) -> tuple:
         # Prefer samples that actually clear gate bars over tiny perfect WR.
+        decisive = int(m.get("decisive") or 0)
         return (
             int(bool(m.get("hit_wr75"))),
             int(bool(m.get("hit_parallel70"))),
             int(bool(m.get("hit_wr70"))),
+            int(decisive >= 4),  # evita WR100% con n=1 ganando a n=20
             float(m.get("wr") or 0),
-            int(m.get("traded") or 0),
+            decisive,
             float(m.get("total_robust") or 0),
         )
 
