@@ -80,9 +80,18 @@ def _robust_from_sessions(
 
 
 def _best(a: dict, b: dict) -> dict:
-    """Pick better of two robust metrics (WR then traded then total)."""
+    """Pick better evidence for gate (thresholds first, then WR/sample)."""
+
     def key(m: dict) -> tuple:
-        return (float(m.get("wr") or 0), int(m.get("traded") or 0), float(m.get("total_robust") or 0))
+        # Prefer samples that actually clear gate bars over tiny perfect WR.
+        return (
+            int(bool(m.get("hit_wr75"))),
+            int(bool(m.get("hit_parallel70"))),
+            int(bool(m.get("hit_wr70"))),
+            float(m.get("wr") or 0),
+            int(m.get("traded") or 0),
+            float(m.get("total_robust") or 0),
+        )
 
     return a if key(a) >= key(b) else b
 
@@ -101,11 +110,16 @@ def evaluate(*, outlier_cap: float = 0.35, max_age_hours: float = 3.0) -> dict:
     flow_c5 = _robust_from_sessions("session_fusion_follow_flow_c5_*", **kw)
     bank_c5 = _robust_from_sessions("session_fusion_c10_bank_c5_*", **kw)
     bank_c10 = _robust_from_sessions("session_fusion_c10_bank_c10_*", **kw)
+    pulse_c5 = _robust_from_sessions("session_fusion_c10_pulse_c5_*", **kw)
     pulse_c10 = _robust_from_sessions("session_fusion_c10_pulse_c10_*", **kw)
 
     par5 = _best(
         _robust_from_sessions("session_promo_flow_c5_L*_c5_*", **kw),
         _robust_from_sessions("session_promo_bank_c5_L*_c5_*", **kw),
+    )
+    par5 = _best(
+        par5,
+        _robust_from_sessions("session_promo_pulse_c5_L*_c5_*", **kw),
     )
     par10 = _best(
         _robust_from_sessions("session_promo_pulse_c10_L*_c10_*", **kw),
@@ -113,6 +127,7 @@ def evaluate(*, outlier_cap: float = 0.35, max_age_hours: float = 3.0) -> dict:
     )
 
     c5 = _best(flow_c5, bank_c5)
+    c5 = _best(c5, pulse_c5)
     c5 = _best(c5, par5)
     c10 = _best(bank_c10, pulse_c10)
     c10 = _best(c10, par10)
@@ -176,6 +191,7 @@ def evaluate(*, outlier_cap: float = 0.35, max_age_hours: float = 3.0) -> dict:
             "flow_c5": flow_c5,
             "bank_c5": bank_c5,
             "bank_c10": bank_c10,
+            "pulse_c5": pulse_c5,
             "pulse_c10": pulse_c10,
             "parallel_c5": par5,
             "parallel_c10": par10,

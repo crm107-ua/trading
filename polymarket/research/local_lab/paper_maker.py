@@ -410,11 +410,21 @@ class PaperSession:
                 return
         # Corte por PnL no realizado usando precio ejecutable (no mid optimista).
         unreal = self.inventory_shares * mark - self.cost_basis
-        fusionish = (
-            "fusion" in str(self.cfg.get("demo_label", "")).lower()
-            or "follow" in str(self.cfg.get("demo_label", "")).lower()
+        label_l = str(self.cfg.get("demo_label", "")).lower()
+        # Promo/paralelo usan labels tipo promo_flow_c5_L1 — deben bankear igual
+        # que fusion/follow (si no, WR paralelo colapsa vs confirm).
+        fusionish = bool(self.cfg.get("preserve_selectivity")) or any(
+            x in label_l
+            for x in (
+                "fusion",
+                "follow",
+                "flow",
+                "pulse",
+                "bank",
+                "promo",
+            )
         )
-        # Fusion/follow: cualquier rojo material se corta YA (no esperar NIM 8s).
+        # Fusion/follow/promo: cualquier rojo material se corta YA (no esperar NIM 8s).
         if fusionish and unreal <= -0.01:
             self._flatten_inventory_mid(mark)
             return

@@ -306,8 +306,12 @@ def scale_cfg_to_capital(cfg: dict, capital: float, *, base_capital: float = 100
 def apply_live_clob_floors(cfg: dict) -> dict:
     """CLOB floors + boost de oportunidad (más fills sin abrir lotería extrema)."""
     c = deepcopy(cfg)
-    min_shares = 5
-    size = max(min_shares, int(c.get("quote_size_shares") or min_shares))
+    label = str(c.get("demo_label") or "")
+    preserve = bool(c.get("preserve_selectivity")) or label.startswith("grind")
+    # Paper WR-first: respetar size del DNA (3–4). Live CLOB min 5 solo fuera de preserve.
+    min_shares = 1 if preserve else 5
+    raw_size = int(c.get("quote_size_shares") or (3 if preserve else min_shares))
+    size = max(min_shares, raw_size)
     c["quote_size_shares"] = size
     c["max_quote_size_shares"] = max(size, int(c.get("max_quote_size_shares") or size))
     c["max_inventory_shares"] = max(size, int(c.get("max_inventory_shares") or size))
@@ -317,8 +321,6 @@ def apply_live_clob_floors(cfg: dict) -> dict:
     c["max_inventory_usdc"] = round(min(max(capital, c["max_notional_per_side_usdc"]), 5.0), 2)
     # Con size 5 el hurdle EV antiguo bloqueaba casi todo
     c["min_expected_pnl_usdc"] = min(float(c.get("min_expected_pnl_usdc") or 0.05), 0.05)
-    label = str(c.get("demo_label") or "")
-    preserve = bool(c.get("preserve_selectivity")) or label.startswith("grind")
     if not preserve:
         # Más oportunidades vs paper-100: banda mid más ancha, edge/z algo más bajos
         c["min_quote_mid"] = min(float(c.get("min_quote_mid") or 0.24), 0.18)
@@ -332,10 +334,10 @@ def apply_live_clob_floors(cfg: dict) -> dict:
     # No forzar +entradas en configs strict/grind (max_entry_fills=1)
     if int(c.get("max_entry_fills") or 2) >= 2:
         c["max_entry_fills"] = max(int(c.get("max_entry_fills") or 2), 3)
-    # Live micro: TP/SL. Fusion/follow WR-first: NUNCA subir suelos (anula soft-cut).
+    # Live micro: TP/SL. Fusion/follow/promo WR-first: NUNCA subir suelos (anula soft-cut).
     wr_first = any(
         x in label.lower()
-        for x in ("fusion", "follow", "flow", "pulse", "promo_flow")
+        for x in ("fusion", "follow", "flow", "pulse", "bank", "promo")
     )
     if preserve and wr_first:
         c["lock_profit_usdc"] = min(float(c.get("lock_profit_usdc") or 0.08), 0.25)
