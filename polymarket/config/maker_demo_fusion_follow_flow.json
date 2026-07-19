@@ -64,7 +64,7 @@
   "follow_extreme_lo": 0.3,
   "follow_min_roll_usd": 1.0,
   "follow_min_vel_usd": 0.2,
-  "follow_min_fair_edge": 0.015,
+  "follow_fair_oppose_max": 0.06,
   "follow_time_min_s": 70,
   "follow_time_max_s": 280,
   "follow_persist_polls": 1,

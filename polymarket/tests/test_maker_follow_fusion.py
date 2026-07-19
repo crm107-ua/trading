@@ -18,10 +18,10 @@ def test_follow_bids_when_mid_and_spot_agree_up():
         "follow_min_vel_usd": 0.2,
         "follow_up_lo": 0.52,
         "follow_up_hi": 0.72,
-        "follow_min_fair_edge": 0.01,
+        "follow_fair_oppose_max": 0.05,
         "follow_persist_polls": 1,
     }
-    q = maker_follow(0.62, 0.59, 0.61, 100_010.0, 100_000.0, cfg)
+    q = maker_follow(0.58, 0.59, 0.61, 100_010.0, 100_000.0, cfg)
     assert q is not None
     assert q.strategy_id == "maker_follow"
     assert q.bid > 0.02
@@ -94,18 +94,18 @@ def test_fusion_can_disable_pulse():
         "follow_min_vel_usd": 0.2,
         "follow_up_lo": 0.52,
         "follow_up_hi": 0.72,
-        "follow_min_fair_edge": 0.01,
+        "follow_fair_oppose_max": 0.05,
         "follow_persist_polls": 1,
         "min_spot_lead_usd": 1.0,
         "min_spot_velocity_usd": 0.2,
     }
-    q = maker_fusion(0.62, 0.59, 0.61, 100_010.0, 100_000.0, cfg)
+    q = maker_fusion(0.58, 0.59, 0.61, 100_010.0, 100_000.0, cfg)
     assert q is not None
     assert "via_follow" in q.note
     assert "via_pulse" not in q.note
 
 
-def test_follow_requires_fair_edge():
+def test_follow_rejects_opposing_fair():
     cfg = {
         "quote_size_shares": 5,
         "quote_join_touch": True,
@@ -117,11 +117,11 @@ def test_follow_requires_fair_edge():
         "follow_min_vel_usd": 0.2,
         "follow_up_lo": 0.52,
         "follow_up_hi": 0.72,
-        "follow_min_fair_edge": 0.03,
+        "follow_fair_oppose_max": 0.04,
         "follow_persist_polls": 1,
     }
-    # fair ≈ mid → rechazar
-    assert maker_follow(0.60, 0.59, 0.61, 100_010.0, 100_000.0, cfg) is None
-    # fair con edge → ok
-    q = maker_follow(0.64, 0.59, 0.61, 100_010.0, 100_000.0, cfg)
+    # fair muy por debajo del mid UP → veto
+    assert maker_follow(0.50, 0.59, 0.61, 100_010.0, 100_000.0, cfg) is None
+    # fair un poco por debajo (mid ya precio) → ok
+    q = maker_follow(0.58, 0.59, 0.61, 100_010.0, 100_000.0, cfg)
     assert q is not None

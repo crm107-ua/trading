@@ -457,11 +457,15 @@ def maker_follow(
     if side is None:
         return None
 
-    # Fair debe aportar edge a favor del follow (no basta con "no pelear").
-    min_fair_edge = float(cfg.get("follow_min_fair_edge", 0.02) or 0.02)
-    if side == "bid" and float(fair_up) < mid + min_fair_edge:
+    # BS-fair suele ir DETRÁS del mid en BTC 5m. Follow solo veta si el modelo
+    # se opone con fuerza (anti adverse-selection), no exige edge positivo.
+    oppose = float(
+        cfg.get("follow_fair_oppose_max", cfg.get("follow_min_fair_edge", 0.04))
+        or 0.04
+    )
+    if side == "bid" and float(fair_up) < mid - oppose:
         return None
-    if side == "ask" and float(fair_up) > mid - min_fair_edge:
+    if side == "ask" and float(fair_up) > mid + oppose:
         return None
 
     need = int(cfg.get("follow_persist_polls", 1) or 1)

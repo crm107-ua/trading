@@ -231,7 +231,13 @@ class PaperSession:
             mid_f = (float(bb) + float(ba)) / 2.0
             f_roll = float(self.cfg.get("follow_min_roll_usd", 1.5) or 1.5)
             f_vel = float(self.cfg.get("follow_min_vel_usd", 0.3) or 0.3)
-            f_edge = float(self.cfg.get("follow_min_fair_edge", 0.02) or 0.02)
+            oppose = float(
+                self.cfg.get(
+                    "follow_fair_oppose_max",
+                    self.cfg.get("follow_min_fair_edge", 0.04),
+                )
+                or 0.04
+            )
             up_lo = float(self.cfg.get("follow_up_lo", 0.52) or 0.52)
             up_hi = float(self.cfg.get("follow_up_hi", 0.72) or 0.72)
             dn_lo = float(self.cfg.get("follow_dn_lo", 0.28) or 0.28)
@@ -244,9 +250,9 @@ class PaperSession:
                 if trf < ft_min or trf > ft_max:
                     t_f_ok = False
             if t_f_ok and up_lo <= mid_f <= up_hi and roll >= f_roll and vel >= f_vel:
-                follow_agree = float(fair) >= mid_f + f_edge
+                follow_agree = float(fair) >= mid_f - oppose
             elif t_f_ok and dn_lo <= mid_f <= dn_hi and roll <= -f_roll and vel <= -f_vel:
-                follow_agree = float(fair) <= mid_f - f_edge
+                follow_agree = float(fair) <= mid_f + oppose
         if self.strategy_id == "maker_follow" or (
             self.strategy_id == "maker_fusion"
             and not bool(self.cfg.get("fusion_enable_pulse", True))
