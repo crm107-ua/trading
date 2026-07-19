@@ -1141,9 +1141,13 @@ class LiveSession:
         abs_cut = self._fusionish() and unreal <= -0.05
         stop = unreal <= -max_loss * (0.35 if self._fusionish() else 1.0)
         fade = fair < avg - 0.015
-        quick = unreal >= 0.05 or (
-            self._entry_fills > 0 and unreal >= 0.02 and time_rem < 120
-        )
+        # No “quick” por debajo del bank fusionish — mataba PnL al escalar size.
+        if self._fusionish() and green_at > 0:
+            quick = unreal >= max(green_at, 0.05) and time_rem < 100
+        else:
+            quick = unreal >= 0.05 or (
+                self._entry_fills > 0 and unreal >= 0.02 and time_rem < 120
+            )
         if urgent or take or hard_take or soft_cut or abs_cut or stop or fade or quick:
             if self.open_side == "SELL" and self.open_order_id and not urgent:
                 return

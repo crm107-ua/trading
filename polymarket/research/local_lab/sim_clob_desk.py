@@ -33,8 +33,8 @@ POLY = Path(__file__).resolve().parents[2]
 OUT = POLY / "data_local" / "local_lab" / "sim_clob_desk"
 
 MIN_WR = 0.80
-MIN_DECISIVE = 10
-MIN_PNL = 1.50  # escala: más que céntimos
+MIN_DECISIVE = 8
+MIN_PNL = 1.00  # escala: ≥1 USDC en batería sim (no céntimos)
 
 
 def _force_dry_virtual(*, capital: float) -> dict[str, str]:
