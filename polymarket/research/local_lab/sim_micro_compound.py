@@ -159,6 +159,19 @@ async def async_main(args: argparse.Namespace) -> int:
                 f"bank={state.bankroll:.2f} wr={state.to_dict()['wr']}",
                 flush=True,
             )
+            # until-win: parar en cuanto haya PnL>0 con al menos 1 win limpio
+            if (
+                (os.environ.get("POLY_MICRO_STOP_ON_WIN") or "").strip() == "1"
+                and state.wins >= 1
+                and state.bankroll > state.start_bankroll + 1e-9
+                and all(abs(float(x.get("residual") or 0)) < 0.01 for x in rows)
+            ):
+                print(
+                    f"STOP_ON_WIN bank={state.bankroll:.2f} "
+                    f"pnl={state.bankroll - state.start_bankroll:+.2f} wins={state.wins}",
+                    flush=True,
+                )
+                break
 
         st = state.to_dict()
         decisive = st["wins"] + st["losses"]

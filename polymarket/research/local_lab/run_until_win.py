@@ -181,6 +181,7 @@ async def async_main(args: argparse.Namespace) -> int:
         # En until-win preferimos fills > NIM; override hybrid del .env.
         os.environ["NVIDIA_NIM_MODE"] = "fast"
     os.environ["NVIDIA_NIM_GRIND"] = "0"
+    os.environ["POLY_MICRO_STOP_ON_WIN"] = "1"
     geo = check_geoblock()
     blocked, geo_msg = geoblock_blocks_real()
     print(
