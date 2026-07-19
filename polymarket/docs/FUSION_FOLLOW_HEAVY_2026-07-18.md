@@ -1,26 +1,18 @@
-# Fusion Follow — WR hunt (2026-07-19)
+# Fusion Follow / Bank — status 2026-07-19
 
-**Estado:** confirm v5 cerrado · **no** BOTH_READY · live SAFE  
-**Mejor DNA:** `fusion_follow_flow` (`maker_fusion`, pulse OFF)
+## @10 CHAMP (hunt cerrado)
+| DNA | WR | traded | total | PASS |
+|-----|-----|--------|-------|------|
+| **fusion_c10_bank** | **75%** | 4 | **+1.02** | ✓ |
+| fusion_c10_pulse | 75% | 4 | +0.23 | ✓ |
+| fusion_c10_edge | 25% | 4 | +0.21 | ✗ |
+| fusion_c10_flowv6 | 50% | 2 | −0.48 | ✗ |
 
-## Confirm v5 (8×5 min, feeds reales)
+Promo: `maker_demo_promo_fusion_c10.json` (= bank)
 
-| DNA | @5 | @10 | BOTH |
-|-----|----|-----|------|
-| **fusion_follow_flow** | **WR 100%** (7W, +0.40) ✓ | WR 40% (2W/2F/1L, −0.14) ✗ | False |
-| fusion_follow_heavy | WR 43% (−0.15) ✗ | WR 29% (−0.52) ✗ | False |
+## @5 paralelo (promo_flow_c5 v5)
+4 líneas × 6 sesiones: **agg WR 40%** traded=15 tot **+1.81** (PnL+, WR no asegura).
+Siguiente: paralelo con `promo_bank_c5` + confirm dual bank @5/@10.
 
-### Lectura
-- `@5` flow banca +0.05 casi siempre vía `rule_grind_bank` — DNA válido ahí.
-- `@10` rompe en follows tardíos (ask ~0.40–0.43) con gaps de 1 poll → −0.22/−0.28.
-- Heavy demasiado agresivo tras el unfreeze de spot.
-
-## v6 (en curso)
-- Flow: banda dn más alta (0.38–0.48), roll≥1.6, size 3, max_loss 0.03
-- Corte rojo inmediato ≤ −0.01 usdc cada poll (fusion/follow)
-
-```bash
-python3 -m polymarket.research.local_lab.confirm_dna_pair \
-  --label fusion_follow_flow --strategy maker_fusion \
-  --config maker_demo_fusion_follow_flow.json --sessions 8 --minutes 5
-```
+## v6 flow retighten
+BOTH_READY False (@5 WR33%, @10 WR25%) — descartado vs bank.
