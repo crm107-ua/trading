@@ -1,28 +1,32 @@
 # Go-live readiness (2026-07-19)
 
-## Objetivo
-Paper realista con **WR excelente (≥75% robusto)** @5€ y @10€, paralelo multi-línea, antes de capital real.
+## Veredicto paper
+Ejecutar:
+```bash
+python3 -m polymarket.research.local_lab.go_live_arm_check
+python3 -m polymarket.research.local_lab.go_live_gate --max-age-hours 3
+```
+
+Snapshot post-fix (bank/soft-cut en promo + size DNA):
+- paralelo pulse@5: WR75% traded=8 · robust +1.04
+- paralelo pulse@10: WR83% traded=12 · robust +1.59
+- flow@5 paralelo post-fix: WR~86% traded=7 (creciendo)
+- Live flags: `POLY_LIVE_ARMED=0` · `POLY_LIVE_DRY_RUN=1`
 
 ## DNA canónico
 - @5: `maker_demo_promo_flow_c5.json` (champ) · backup `maker_demo_promo_pulse_c5.json`
-- @10: `maker_demo_promo_pulse_c10.json` (champ fresco) · backup `maker_demo_promo_fusion_c10.json` (bank)
+- @10: `maker_demo_promo_pulse_c10.json`
 
-## Por qué “robusto”
-Hubo wins paper de **+1.00** por hold de inventario sin bankear verde (lotería mid).
-Runtime **bankea verde / corta rojo cada poll** en labels promo/fusion/flow/pulse (`preserve_selectivity`).
-El gate excluye `|net|>0.35` del WR y solo cuenta evidencia **fresca** (`--max-age-hours`).
+## Runtime WR-first
+- Bank verde / corte rojo cada poll en `preserve_selectivity` y labels promo/fusion/flow/pulse/bank
+- `hard_bank_usdc` implícito (~0.08) evita loterías por salto de mid
+- `apply_live_clob_floors` respeta size del DNA en preserve (no fuerza 5)
+- Gate: evidencia fresca ≤3h, excluye `|net|>0.35`
 
-## Gate
-```bash
-python3 -m polymarket.research.local_lab.go_live_gate --max-age-hours 3
-```
-- `READY_STRICT`: dual WR75 robusto + paralelo @5 y @10 WR70 traded≥8 + SAFE flags
-- `READY_RISK_ON`: WR75 @5 y @10 + al menos un paralelo 70 + SAFE
-- `NOT_READY`: seguir paper
+## Armado (solo si gate READY_*)
+1. `go_live_arm_check` → exit 0
+2. Micro dry-run: `ARMED=1` `DRY_RUN=1` `MAX_CAPITAL=5`
+3. Micro real: `DRY_RUN=0` `MAX_CAPITAL=2..5`
+4. No escalar hasta sesión live estable
 
-## Live (solo cuando READY_*)
-1. Micro dry-run: `POLY_LIVE_ARMED=1` + `POLY_LIVE_DRY_RUN=1`
-2. Micro real: `DRY_RUN=0` + `POLY_LIVE_MAX_CAPITAL_USDC` bajo (1–5)
-3. Nunca armar sin el gate en verde
-
-Flags actuales deben seguir `ARMED=0` hasta decisión explícita del operador.
+Paper ≠ live. Riesgo residual de fills/fees/latency.

@@ -439,6 +439,13 @@ class PaperSession:
         if fusionish and green_at > 0 and unreal >= green_at:
             self._flatten_inventory_mid(mark)
             return
+        # Techo duro: si el mid salta entre polls, no dejar correr a +0.40+ (lotería).
+        hard_bank = float(self.cfg.get("hard_bank_usdc", 0) or 0)
+        if fusionish and hard_bank <= 0:
+            hard_bank = max(green_at * 2.5, 0.08) if green_at > 0 else 0.08
+        if fusionish and hard_bank > 0 and unreal >= hard_bank:
+            self._flatten_inventory_mid(mark)
+            return
         max_loss = float(self.cfg.get("max_loss_usdc", 0) or 0)
         if max_loss > 0:
             grindish = (
