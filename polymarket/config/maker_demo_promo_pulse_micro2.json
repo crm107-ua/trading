@@ -86,7 +86,7 @@
   "abs_cut_usdc": 0.15,
   "min_hold_before_soft_cut_s": 25,
   "max_loss_usdc": 0.12,
-  "session_kill_net_usdc": 0.20,
+  "session_kill_net_usdc": 0.35,
   "pause_after_consecutive_losses": 2,
   "pause_entries_s": 180,
   "allow_rich_side_live": false,
