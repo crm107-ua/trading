@@ -151,7 +151,7 @@ def recommend_path(comparison: dict[str, Any]) -> dict[str, Any]:
     ranked = sorted(
         comparison.get("paths") or [],
         key=lambda p: (
-            int(bool(p.get("wr", 0) >= 0.80)),
+            int(bool(float(p.get("wr") or 0) >= 0.80)),
             int(bool(p.get("safer"))),
             float(p.get("pnl") or 0),
             -float(p.get("collision_risk") or 0),
