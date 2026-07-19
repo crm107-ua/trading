@@ -576,28 +576,27 @@ def maker_shadow_ofir(
     if side is None:
         return None
 
-    # Núcleo privado: solo si el mid AÚN no reflejó el move (lag residual).
+    # Núcleo privado: mid no debe haber absorbido ya el move.
+    # Si aún no hay serie de mid, se permite con lead fuerte (cold start).
     mid_d = cfg.get("_mid_delta")
-    max_mid_catch = float(cfg.get("shadow_max_mid_catchup", 0.018) or 0.018)
-    if mid_d is None:
-        return None  # sin serie de mid → no hay evidencia de lag
-    if side == "bid" and float(mid_d) > max_mid_catch:
-        return None
-    if side == "ask" and float(mid_d) < -max_mid_catch:
-        return None
+    max_mid_catch = float(cfg.get("shadow_max_mid_catchup", 0.022) or 0.022)
+    if mid_d is not None:
+        if side == "bid" and float(mid_d) > max_mid_catch:
+            return None
+        if side == "ask" and float(mid_d) < -max_mid_catch:
+            return None
 
-    # Toxicity / OFIR: imbalance debe confirmar la dirección (VPIN-lite).
+    # Toxicity / OFIR: imbalance confirma dirección (si hay libro).
     imb = cfg.get("_book_imbalance")
-    if imb is None:
-        return None
-    min_imb = float(cfg.get("shadow_min_imbalance", 0.55) or 0.55)
+    min_imb = float(cfg.get("shadow_min_imbalance", 0.50) or 0.50)
     max_opp = 1.0 - min_imb
-    if side == "bid" and float(imb) < min_imb:
-        return None  # asks dominan → toxic para comprar UP
-    if side == "ask" and float(imb) > max_opp:
-        return None  # bids dominan → toxic para vender UP
+    if imb is not None:
+        if side == "bid" and float(imb) < min_imb:
+            return None  # asks dominan → toxic para comprar UP
+        if side == "ask" and float(imb) > max_opp:
+            return None  # bids dominan → toxic para vender UP
 
-    need = int(cfg.get("shadow_persist_polls", 2) or 2)
+    need = int(cfg.get("shadow_persist_polls", 1) or 1)
     streak = int(cfg.get("_pulse_streak", 0) or 0)
     if streak < need:
         return None
