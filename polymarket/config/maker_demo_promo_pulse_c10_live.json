@@ -2,6 +2,7 @@
   "mode": "paper-maker",
   "hypothesis": 16,
   "demo_label": "promo_pulse_c10_live",
+  "strategy_id": "maker_fusion",
   "preserve_selectivity": true,
   "notes": "LOCKED = champ paper pulse@10 (WR~83%+ fresco). Misma DNA; l\u00edmites operativos v\u00eda MAX_CAPITAL micro + dry previo.",
   "initial_capital_usdc": 10.0,

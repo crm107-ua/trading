@@ -29,10 +29,14 @@ from polymarket.research.collectors.market_discovery import (
     window_start,
 )
 from polymarket.research.local_lab.paper_maker import load_maker_cfg
-from polymarket.research.local_lab.strategies import STRATEGIES, apply_inventory_skew
+from polymarket.research.local_lab.strategies import (
+    STRATEGIES,
+    apply_inventory_skew,
+    pulse_spot_fair,
+)
 from polymarket.src.ai.decision_engine import decide_quote_action
 from polymarket.src.ai.env_loader import load_repo_dotenv
-from polymarket.src.data.book_utils import best_bid_ask
+from polymarket.src.data.book_utils import best_bid_ask, top_size_imbalance
 from polymarket.src.data.btc_spot import fetch_btc_spot_async
 from polymarket.src.execution.clob_live import (
     MIN_BUY_NOTIONAL_USDC,
@@ -74,6 +78,7 @@ class LiveSession:
     out_dir: Path
     clob: ClobLiveClient
     bankroll: float
+    strategy_id: str = "maker_fusion"
     inventory_shares: float = 0.0
     cost_basis: float = 0.0
     fills: list[LiveFill] = field(default_factory=list)
@@ -86,7 +91,13 @@ class LiveSession:
     last_quote_spot: float | None = None
     current_market_id: str | None = None
     strike: float | None = None
+    strike_trusted: bool = False
+    _strike_stamped: bool = False
+    window_start_ns: int | None = None
     window_end_ns: int | None = None
+    spot_history: list[tuple[int, float]] = field(default_factory=list)
+    mid_history: list[tuple[int, float]] = field(default_factory=list)
+    _pulse_streak: int = 0
     _decision_count: int = 0
     _last_progress_log: float = 0.0
     _session_start_mono: float = 0.0
@@ -108,14 +119,234 @@ class LiveSession:
     _cash_bal_mono: float = 0.0
     _skip_cash_until: float = 0.0
 
-    def _maker_quote(self, fair: float, bb: float | None, ba: float | None, spot: float, time_rem: float):
-        self.cfg["_time_remaining_s"] = time_rem
+    def _spot_delta_usd(self, window_ms: int = 3000) -> float:
+        if len(self.spot_history) < 2:
+            return 0.0
+        now_ns = self.spot_history[-1][0]
+        cutoff = now_ns - int(window_ms * 1e6)
+        pts = [(t, s) for t, s in self.spot_history if t >= cutoff]
+        if len(pts) < 2:
+            pts = self.spot_history[-min(5, len(self.spot_history)) :]
+        if len(pts) < 2:
+            return 0.0
+        return float(pts[-1][1] - pts[0][1])
+
+    def _spot_velocity_usd(self, window_ms: int = 3000) -> float:
+        return self._spot_delta_usd(window_ms)
+
+    def _mid_delta(self, window_ms: int = 3000) -> float | None:
+        if len(self.mid_history) < 2:
+            return None
+        now_ns = self.mid_history[-1][0]
+        cutoff = now_ns - int(window_ms * 1e6)
+        pts = [(t, m) for t, m in self.mid_history if t >= cutoff]
+        if len(pts) < 2:
+            return None
+        return float(pts[-1][1] - pts[0][1])
+
+    def _maybe_stamp_strike(self, spot: float) -> None:
+        if self.window_start_ns is None:
+            self.strike_trusted = False
+            return
+        age_s = (time.time_ns() - self.window_start_ns) / 1e9
+        stamp_until = float(self.cfg.get("strike_stamp_max_age_s", 12) or 12)
+        max_join = float(self.cfg.get("max_window_join_age_s", 50) or 50)
+        if age_s < 0:
+            self.strike_trusted = False
+            self.cfg["_window_open"] = False
+            return
+        self.cfg["_window_open"] = True
+        if not self._strike_stamped and age_s <= max_join:
+            self.strike = float(spot)
+            self._strike_stamped = True
+        require_early = bool(self.cfg.get("pulse_require_early_strike", False))
+        if require_early:
+            self.strike_trusted = bool(self._strike_stamped and age_s <= stamp_until)
+        else:
+            self.strike_trusted = True
+
+    def _inject_pulse_runtime(
+        self,
+        *,
+        fair: float,
+        spot: float,
+        bids: list,
+        asks: list,
+        bb: float | None,
+        ba: float | None,
+        time_remaining_s: float | None,
+    ) -> None:
+        """Misma inyección runtime que paper_maker (Pulse/Follow/Shadow)."""
+        if time_remaining_s is not None:
+            self.cfg["_time_remaining_s"] = time_remaining_s
+        self.cfg["_strike_trusted"] = bool(self.strike_trusted)
+        vel_ms = int(self.cfg.get("pulse_velocity_window_ms", 3000) or 3000)
+        roll_ms = int(self.cfg.get("pulse_roll_window_ms", 8000) or 8000)
+        self.cfg["_spot_velocity_usd"] = self._spot_velocity_usd(vel_ms)
+        self.cfg["_roll_lead_usd"] = self._spot_delta_usd(roll_ms)
+        self.cfg["_mid_delta"] = self._mid_delta(roll_ms)
+        self.cfg["_book_imbalance"] = top_size_imbalance(
+            bids or [], asks or [], n=int(self.cfg.get("pulse_book_levels", 3) or 3)
+        )
+        roll = float(self.cfg["_roll_lead_usd"])
+        vel = float(self.cfg["_spot_velocity_usd"])
+        min_lead = float(self.cfg.get("min_spot_lead_usd", 12.0) or 12.0)
+        min_vel = float(self.cfg.get("min_spot_velocity_usd", 4.0) or 4.0)
+        min_edge = float(self.cfg.get("min_edge", 0.028) or 0.028)
+        mid_lo = float(self.cfg.get("min_quote_mid", 0.38) or 0.38)
+        mid_hi = float(self.cfg.get("max_quote_mid", 0.62) or 0.62)
+        symmetric = bool(self.cfg.get("pulse_symmetric", True))
+        mid_ok = False
+        pulse_dir_ok = False
+        if bb is not None and ba is not None:
+            mid = (float(bb) + float(ba)) / 2.0
+            mid_ok = mid_lo <= mid <= mid_hi
+            scale = float(self.cfg.get("pulse_fair_scale_usd", 28.0) or 28.0)
+            sf = pulse_spot_fair(float(spot), float(spot) - roll, scale)
+            if bool(self.cfg.get("pulse_blend_bs_fair", True)):
+                model_fair = max(float(fair), sf) if roll >= 0 else min(float(fair), sf)
+            else:
+                model_fair = sf
+            edge = model_fair - mid
+            up_ok = roll >= min_lead and vel >= min_vel and edge >= min_edge
+            dn_ok = (
+                symmetric
+                and roll <= -min_lead
+                and vel <= -min_vel
+                and edge <= -min_edge
+            )
+            pulse_dir_ok = up_ok or dn_ok
+        t_ok = True
+        if time_remaining_s is not None:
+            t_min = float(self.cfg.get("quote_time_min_s", 0) or 0)
+            t_max = float(self.cfg.get("quote_time_max_s", 0) or 0)
+            tr = float(time_remaining_s)
+            if t_min > 0 and tr < t_min:
+                t_ok = False
+            if t_max > 0 and tr > t_max:
+                t_ok = False
+        pulse_agree = self.strike_trusted and mid_ok and pulse_dir_ok and t_ok
+        follow_agree = False
+        if bb is not None and ba is not None:
+            mid_f = (float(bb) + float(ba)) / 2.0
+            f_roll = float(self.cfg.get("follow_min_roll_usd", 1.5) or 1.5)
+            f_vel = float(self.cfg.get("follow_min_vel_usd", 0.3) or 0.3)
+            up_lo = float(self.cfg.get("follow_up_lo", 0.52) or 0.52)
+            up_hi = float(self.cfg.get("follow_up_hi", 0.72) or 0.72)
+            dn_lo = float(self.cfg.get("follow_dn_lo", 0.28) or 0.28)
+            dn_hi = float(self.cfg.get("follow_dn_hi", 0.48) or 0.48)
+            t_f_ok = True
+            if time_remaining_s is not None:
+                ft_min = float(self.cfg.get("follow_time_min_s", 80) or 80)
+                ft_max = float(self.cfg.get("follow_time_max_s", 280) or 280)
+                trf = float(time_remaining_s)
+                if trf < ft_min or trf > ft_max:
+                    t_f_ok = False
+            if t_f_ok and up_lo <= mid_f <= up_hi and roll >= f_roll and vel >= f_vel:
+                follow_agree = True
+            elif (
+                t_f_ok
+                and dn_lo <= mid_f <= dn_hi
+                and roll <= -f_roll
+                and vel <= -f_vel
+            ):
+                follow_agree = True
+        shadow_agree = False
+        if bb is not None and ba is not None and (
+            bool(self.cfg.get("fusion_enable_shadow", False))
+            or self.strategy_id == "maker_shadow_ofir"
+        ):
+            mid_s = (float(bb) + float(ba)) / 2.0
+            mid_d = self.cfg.get("_mid_delta")
+            imb = self.cfg.get("_book_imbalance")
+            s_lead = float(
+                self.cfg.get("shadow_min_lead_usd", self.cfg.get("min_spot_lead_usd", 2.5))
+                or 2.5
+            )
+            s_vel = float(
+                self.cfg.get(
+                    "shadow_min_vel_usd", self.cfg.get("min_spot_velocity_usd", 0.7)
+                )
+                or 0.7
+            )
+            max_md = float(self.cfg.get("shadow_max_mid_catchup", 0.018) or 0.018)
+            min_imb = float(self.cfg.get("shadow_min_imbalance", 0.55) or 0.55)
+            t_s_ok = True
+            if time_remaining_s is not None:
+                st_min = float(self.cfg.get("shadow_time_min_s", 90) or 90)
+                st_max = float(self.cfg.get("shadow_time_max_s", 270) or 270)
+                trs = float(time_remaining_s)
+                if trs < st_min or trs > st_max:
+                    t_s_ok = False
+            if (
+                t_s_ok
+                and mid_d is not None
+                and imb is not None
+                and self.strike_trusted
+            ):
+                up_s = (
+                    roll >= s_lead
+                    and vel >= s_vel
+                    and float(mid_d) <= max_md
+                    and float(imb) >= min_imb
+                )
+                dn_s = (
+                    roll <= -s_lead
+                    and vel <= -s_vel
+                    and float(mid_d) >= -max_md
+                    and float(imb) <= (1.0 - min_imb)
+                )
+                shadow_agree = up_s or dn_s
+                _ = mid_s  # mid_s usado implícitamente vía mid_d/imb gates
+        if self.strategy_id == "maker_shadow_ofir" or (
+            self.strategy_id == "maker_fusion"
+            and bool(self.cfg.get("fusion_enable_shadow", False))
+            and not bool(self.cfg.get("fusion_enable_pulse", True))
+            and not bool(self.cfg.get("fusion_enable_follow", True))
+        ):
+            agree = shadow_agree
+        elif self.strategy_id == "maker_follow" or (
+            self.strategy_id == "maker_fusion"
+            and not bool(self.cfg.get("fusion_enable_pulse", True))
+        ):
+            agree = follow_agree
+        elif self.strategy_id == "maker_fusion":
+            agree = pulse_agree or follow_agree or shadow_agree
+        else:
+            agree = pulse_agree
+        self._pulse_streak = self._pulse_streak + 1 if agree else 0
+        self.cfg["_pulse_streak"] = self._pulse_streak
+
+    def _maker_quote(
+        self,
+        fair: float,
+        bb: float | None,
+        ba: float | None,
+        spot: float,
+        time_rem: float,
+        *,
+        bids: list | None = None,
+        asks: list | None = None,
+    ):
+        self._inject_pulse_runtime(
+            fair=fair,
+            spot=spot,
+            bids=bids or [],
+            asks=asks or [],
+            bb=bb,
+            ba=ba,
+            time_remaining_s=time_rem,
+        )
         self.cfg["_runtime_size_scale"] = 1.0
-        fn = STRATEGIES["maker_edge"]
+        sid = self.strategy_id if self.strategy_id in STRATEGIES else "maker_fusion"
+        fn = STRATEGIES[sid]
         raw = fn(fair, bb, ba, spot, self.strike or spot, self.cfg)
         if raw is None:
             return None
-        return apply_inventory_skew(raw, inventory_shares=self.inventory_shares, cfg=self.cfg)
+        mid = (bb + ba) / 2.0 if bb is not None and ba is not None else None
+        return apply_inventory_skew(
+            raw, inventory_shares=self.inventory_shares, cfg=self.cfg, mid=mid
+        )
 
     async def _fetch_state(self, token_id: str) -> dict[str, Any] | None:
         async with httpx.AsyncClient(timeout=12.0) as client:
@@ -287,9 +518,8 @@ class LiveSession:
         if side_u == "BUY" and px * sz < MIN_BUY_NOTIONAL_USDC:
             print(f"SKIP_MIN_NOTIONAL {px * sz:.2f} < {MIN_BUY_NOTIONAL_USDC}", flush=True)
             return
-        if side_u == "BUY" and not self.clob.gates.dry_run:
-            # CLOB real: notional BUY <= collateral libre (pUSD).
-            # En DRY_RUN no bloqueamos por balance (no hay gasto real).
+        if side_u == "BUY":
+            # Enforzar caja también en DRY (preflight realista antes de micro).
             now_m = time.monotonic()
             if now_m < self._skip_cash_until:
                 return
@@ -297,7 +527,6 @@ class LiveSession:
             need = px * sz
             # Buffer 2¢ por redondeos CLOB
             if need > cash - 0.02:
-                # Con min 5 shares solo cabe si px <= (cash-0.02)/5
                 max_px = max(0.01, (cash - 0.02) / max(sz, MIN_ORDER_SHARES))
                 print(
                     f"SKIP_CASH need={need:.2f} bal={cash:.4f} "
@@ -660,6 +889,28 @@ class LiveSession:
             print(f"BAL_COND_ERR {type(e).__name__}: {e}", flush=True)
             clob_bal = 0.0
         if clob_bal < 0.01:
+            # Dry: no hay tokens reales — sintetizar SELL y limpiar inventario simulado.
+            if self.clob.gates.dry_run and abs(self.inventory_shares) > 1e-9:
+                px_dry = (
+                    float(best_bid)
+                    if best_bid is not None
+                    else (float(best_ask) - 0.01 if best_ask is not None else 0.40)
+                )
+                px_dry = max(0.01, min(0.99, px_dry))
+                print(
+                    f"FLATTEN_DRY_CLEAR inv={self.inventory_shares:.4f} "
+                    f"px={px_dry:.2f} (sin tokens reales)",
+                    flush=True,
+                )
+                self._record_fill(
+                    "SELL",
+                    px_dry,
+                    abs(self.inventory_shares),
+                    None,
+                    dry=True,
+                )
+                self._flatten_fails = 0
+                return
             print(
                 f"FLATTEN_WRONG_TOKEN bal=0 token={sell_tid[:24]}… "
                 f"held={str(self.held_token_id)[:24] if self.held_token_id else None}",
@@ -771,6 +1022,22 @@ class LiveSession:
             return True
         return False
 
+    def _fusionish(self) -> bool:
+        label_l = str(self.cfg.get("demo_label", "")).lower()
+        return bool(self.cfg.get("preserve_selectivity")) or any(
+            x in label_l
+            for x in (
+                "fusion",
+                "follow",
+                "flow",
+                "pulse",
+                "bank",
+                "promo",
+                "shadow",
+                "ofir",
+            )
+        )
+
     async def _maybe_exit(
         self,
         token_id: str,
@@ -783,25 +1050,51 @@ class LiveSession:
     ) -> None:
         if abs(self.inventory_shares) < 1e-9:
             return
+        # Mark ejecutable (bid si long) — alineado con paper fusionish.
+        mark = float(best_bid) if best_bid is not None else float(mid)
         lock = float(self.cfg.get("lock_profit_usdc") or 0.15)
-        # Live micro: take profit / cut loss más agresivo que paper 100€
         lock = min(lock, 0.20)
         max_loss = min(float(self.cfg.get("max_loss_usdc") or 0.5), 0.35)
         avg = self.cost_basis / self.inventory_shares
-        unreal = self.inventory_shares * mid - self.cost_basis
+        unreal = self.inventory_shares * mark - self.cost_basis
         flatten_s = float(self.cfg.get("flatten_before_window_s") or 45)
         urgent = time_rem <= flatten_s
-        take = unreal >= lock
-        stop = unreal <= -max_loss
+        bank_at = float(self.cfg.get("grind_bank_usdc", 0) or 0)
+        green_at = min(bank_at, lock) if bank_at > 0 and lock > 0 else (bank_at or lock)
+        hard_bank = float(self.cfg.get("hard_bank_usdc", 0) or 0)
+        if self._fusionish() and hard_bank <= 0:
+            hard_bank = max(green_at * 2.5, 0.08) if green_at > 0 else 0.08
+        take = unreal >= (green_at if self._fusionish() and green_at > 0 else lock)
+        hard_take = self._fusionish() and hard_bank > 0 and unreal >= hard_bank
+        soft_cut = self._fusionish() and unreal <= -0.01
+        abs_cut = self._fusionish() and unreal <= -0.05
+        stop = unreal <= -max_loss * (0.35 if self._fusionish() else 1.0)
         fade = fair < avg - 0.015
-        # Tras fill de entrada: empezar a salir en cuanto haya +1 tick o urgencia
-        quick = unreal >= 0.05 or (self._entry_fills > 0 and unreal >= 0.02 and time_rem < 120)
-        if urgent or take or stop or fade or quick:
+        quick = unreal >= 0.05 or (
+            self._entry_fills > 0 and unreal >= 0.02 and time_rem < 120
+        )
+        if urgent or take or hard_take or soft_cut or abs_cut or stop or fade or quick:
             if self.open_side == "SELL" and self.open_order_id and not urgent:
-                return  # ya hay exit resting
+                return
+            reason = (
+                "urgent"
+                if urgent
+                else "hard_bank"
+                if hard_take
+                else "bank"
+                if take
+                else "soft_cut"
+                if soft_cut
+                else "abs_cut"
+                if abs_cut
+                else "sl"
+                if stop
+                else "fade"
+                if fade
+                else "quick"
+            )
             await self._force_flatten(
-                token_id, best_bid=best_bid, best_ask=best_ask, reason=
-                "urgent" if urgent else "tp" if take else "sl" if stop else "fade" if fade else "quick"
+                token_id, best_bid=best_bid, best_ask=best_ask, reason=reason
             )
 
     async def run(self, minutes: float = 5.0) -> dict[str, Any]:
@@ -855,13 +1148,13 @@ class LiveSession:
                     await asyncio.sleep(poll_s)
                     continue
 
-                # Dry: una prueba de sizing (size 1 → floor 5). Live real: solo log.
+                # Smoke sizing: por defecto solo log (no contaminar inventario dry).
+                # Opt-in post: POLY_LIVE_DRY_SMOKE_POST=1
                 if not smoke_done:
                     smoke_done = True
                     state0 = await self._fetch_state(target.token_id_up)
                     bb0 = state0["best_bid"] if state0 else 0.40
                     ba0 = state0["best_ask"] if state0 else 0.60
-                    # Precio de prueba en banda media (evita bid 0.95 * 5 = notional enorme)
                     smoke_px = 0.40
                     if bb0 is not None and ba0 is not None:
                         mid0 = (float(bb0) + float(ba0)) / 2.0
@@ -876,8 +1169,8 @@ class LiveSession:
                         f"notional={n_px*n_sz:.2f}",
                         flush=True,
                     )
-                    if gates.dry_run:
-                        # Dejar resting: _poll_fills simulará DRY_FILL a ~2s y luego exit
+                    smoke_post = (os.getenv("POLY_LIVE_DRY_SMOKE_POST") or "0").strip() == "1"
+                    if gates.dry_run and smoke_post:
                         await self._post_quote(
                             target.token_id_up,
                             "BUY",
@@ -901,12 +1194,22 @@ class LiveSession:
                             await self._poll_fills(self.open_token_id)
                     await self._cancel_open(reason="market_roll")
                     self.current_market_id = target.market_id
+                    ws = window_start(target)
                     we = window_end(target)
+                    self.window_start_ns = int(ws.timestamp() * 1e9) if ws else None
                     self.window_end_ns = int(we.timestamp() * 1e9) if we else None
+                    self._strike_stamped = False
+                    self.strike_trusted = False
+                    self._pulse_streak = 0
+                    self.spot_history.clear()
+                    self.mid_history.clear()
                     async with httpx.AsyncClient(timeout=12.0) as c:
                         self.strike, _src = await fetch_btc_spot_async(c)
                     self.last_quote_spot = None
-                    print(f"MARKET {target.question[:80]}", flush=True)
+                    print(
+                        f"MARKET strat={self.strategy_id} {target.question[:80]}",
+                        flush=True,
+                    )
 
                 # Señales siempre sobre libro UP; posición puede ser UP o DOWN
                 up_id = target.token_id_up
@@ -936,6 +1239,11 @@ class LiveSession:
 
                 we_ns = self.window_end_ns or time.time_ns()
                 time_rem = max((we_ns - time.time_ns()) / 1e9, 1.0)
+                now_ns = time.time_ns()
+                self.spot_history.append((now_ns, float(state_up["spot"])))
+                if len(self.spot_history) > 240:
+                    self.spot_history = self.spot_history[-180:]
+                self._maybe_stamp_strike(float(state_up["spot"]))
                 feats = build_market_features(
                     {
                         "spot": state_up["spot"],
@@ -957,6 +1265,10 @@ class LiveSession:
                     if bb_up is not None and ba_up is not None
                     else None
                 )
+                if mid_up is not None:
+                    self.mid_history.append((now_ns, float(mid_up)))
+                    if len(self.mid_history) > 240:
+                        self.mid_history = self.mid_history[-180:]
 
                 if mid is not None and abs(self.inventory_shares) > 1e-9:
                     await self._maybe_exit(
@@ -970,7 +1282,13 @@ class LiveSession:
                     await self._poll_fills(pos_id)
 
                 quote = self._maker_quote(
-                    fair_up, bb_up, ba_up, state_up["spot"], time_rem
+                    fair_up,
+                    bb_up,
+                    ba_up,
+                    state_up["spot"],
+                    time_rem,
+                    bids=state_up["bids"],
+                    asks=state_up["asks"],
                 )
                 max_entries = int(self.cfg.get("max_entry_fills") or 2)
                 cd = float(self.cfg.get("cooldown_after_fill_s") or 5)
@@ -1118,7 +1436,7 @@ class LiveSession:
             "demo_capital_usdc": float(self.cfg.get("initial_capital_usdc", 0)),
             "currency_label": "EUR",
             "demo_label": self.cfg.get("demo_label"),
-            "strategy_id": "maker_edge",
+            "strategy_id": self.strategy_id,
             "duration_minutes": minutes,
             "session_dir": str(self.out_dir),
             "fills": len(self.fills),
@@ -1150,22 +1468,43 @@ async def run_live_session(
     minutes: float,
     config_path: Path,
     session_id: str | None = None,
+    strategy: str | None = None,
 ) -> dict[str, Any]:
     gates = read_gates()
     if not gates.armed:
         raise RuntimeError("POLY_LIVE_ARMED=0 — no se inicia live")
     cfg = load_maker_cfg(config_path)
     capital = float(cfg.get("initial_capital_usdc") or 0)
+    # Paridad paper: pulse/fusion configs usan maker_fusion (no maker_edge).
+    sid_strat = (
+        strategy
+        or cfg.get("strategy_id")
+        or (
+            "maker_fusion"
+            if any(
+                x in str(cfg.get("demo_label", "")).lower()
+                for x in ("pulse", "fusion", "follow", "flow", "shadow", "promo")
+            )
+            else "maker_edge"
+        )
+    )
+    if sid_strat not in STRATEGIES:
+        raise ValueError(f"Unknown strategy: {sid_strat}")
     clob = ClobLiveClient()
     clob.connect()
     clob.assert_can_trade(capital=capital, allow_dry=True)
     sid = session_id or datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     out = OUT_BASE / "live_maker" / f"session_{sid}"
+    print(
+        f"LIVE_STRAT={sid_strat} label={cfg.get('demo_label')} capital={capital}",
+        flush=True,
+    )
     session = LiveSession(
         cfg=cfg,
         out_dir=out,
         clob=clob,
         bankroll=capital,
+        strategy_id=str(sid_strat),
     )
     return await session.run(minutes=minutes)
 
@@ -1175,14 +1514,33 @@ def main() -> int:
     p.add_argument("--config", required=True)
     p.add_argument("--minutes", type=float, default=5.0)
     p.add_argument("--session-id", default=None)
+    p.add_argument(
+        "--strategy",
+        default=None,
+        help="Override strategy (default: cfg/demo_label → maker_fusion for pulse)",
+    )
     args = p.parse_args()
     path = Path(args.config)
     if not path.is_file():
         path = ROOT.parent / args.config
     report = asyncio.run(
-        run_live_session(minutes=args.minutes, config_path=path, session_id=args.session_id)
+        run_live_session(
+            minutes=args.minutes,
+            config_path=path,
+            session_id=args.session_id,
+            strategy=args.strategy,
+        )
     )
-    print(json.dumps({"ok": True, "net": report.get("net_session_usdc"), "fills": report.get("fills")}))
+    print(
+        json.dumps(
+            {
+                "ok": True,
+                "net": report.get("net_session_usdc"),
+                "fills": report.get("fills"),
+                "strategy_id": report.get("strategy_id"),
+            }
+        )
+    )
     return 0
 
 
