@@ -663,7 +663,7 @@ class PaperSession:
             self.last_trade_seen = prev
 
     async def _fetch_state(self, token_id: str) -> dict[str, Any] | None:
-        async with httpx.AsyncClient(timeout=12.0) as client:
+        async with httpx.AsyncClient(timeout=25.0) as client:
             try:
                 spot, _src = await fetch_btc_spot_async(client)
             except RuntimeError:
@@ -760,7 +760,7 @@ class PaperSession:
                 we = window_end(target)
                 self.window_start_ns = int(ws.timestamp() * 1e9) if ws else None
                 self.window_end_ns = int(we.timestamp() * 1e9) if we else None
-                async with httpx.AsyncClient(timeout=12.0) as c:
+                async with httpx.AsyncClient(timeout=25.0) as c:
                     self.strike, _src = await fetch_btc_spot_async(c)
                 # Strike se sella al open real (ver _maybe_stamp_strike). Placeholder ahora.
                 self._strike_stamped = False

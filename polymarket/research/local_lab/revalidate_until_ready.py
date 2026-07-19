@@ -29,15 +29,23 @@ POLY = Path(__file__).resolve().parents[2]
 OUT = POLY / "data_local" / "local_lab" / "revalidate_loop"
 
 
-async def _run_mod(args: list[str]) -> int:
-    print(f"\n>> {' '.join(args)}", flush=True)
-    p = await asyncio.create_subprocess_exec(
-        sys.executable,
-        "-m",
-        *args,
-        cwd=str(POLY.parent),
-    )
-    return int(await p.wait())
+async def _run_mod(args: list[str], *, retries: int = 2) -> int:
+    """Ejecuta un módulo; reintenta si cae por timeout/red."""
+    code = 1
+    for attempt in range(1, retries + 2):
+        print(f"\n>> [try {attempt}/{retries+1}] {' '.join(args)}", flush=True)
+        p = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-m",
+            *args,
+            cwd=str(POLY.parent),
+        )
+        code = int(await p.wait())
+        if code == 0:
+            return 0
+        print(f"<< exit={code} (reintento si quedan)", flush=True)
+        await asyncio.sleep(3.0 * attempt)
+    return code
 
 
 async def _wave(*, wave: int, sessions: int, minutes: float, lines: int) -> dict:
