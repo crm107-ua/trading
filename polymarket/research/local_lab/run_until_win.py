@@ -196,13 +196,23 @@ async def async_main(args: argparse.Namespace) -> int:
     if blocked:
         print(f"REAL imposible aquí: {geo_msg}", flush=True)
         print("→ Continuando en SIM CLOB (ficticio) hasta ganar.", flush=True)
-        final = await _sim_until_win(
-            rounds=int(args.max_rounds),
-            minutes=float(args.sim_minutes),
-            start=float(args.start),
-        )
-        attempts.append(final)
-        won = bool(final.get("won"))
+        batches = max(1, int(args.sim_batches))
+        for b in range(1, batches + 1):
+            print(f"\n=== SIM BATCH {b}/{batches} ===", flush=True)
+            final = await _sim_until_win(
+                rounds=int(args.max_rounds),
+                minutes=float(args.sim_minutes),
+                start=float(args.start),
+            )
+            attempts.append(final)
+            won = bool(final.get("won"))
+            if won:
+                break
+            print(
+                f"SIM batch {b} no-win pnl={final.get('pnl_usdc')} "
+                f"fills={final.get('fills')} — reintento",
+                flush=True,
+            )
     else:
         for i in range(1, int(args.max_rounds) + 1):
             print(f"\n=== REAL ATTEMPT {i}/{args.max_rounds} ===", flush=True)
@@ -254,6 +264,7 @@ async def async_main(args: argparse.Namespace) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--max-rounds", type=int, default=8)
+    ap.add_argument("--sim-batches", type=int, default=4, help="reintentos SIM si no hay win")
     ap.add_argument("--minutes", type=float, default=12.0, help="minutos por sesión REAL")
     ap.add_argument("--sim-minutes", type=float, default=6.0, help="minutos por ronda SIM")
     ap.add_argument("--start", type=float, default=2.5, help="bankroll SIM inicial")

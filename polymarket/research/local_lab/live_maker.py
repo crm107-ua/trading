@@ -936,6 +936,7 @@ class LiveSession:
         best_bid: float | None,
         best_ask: float | None,
         reason: str,
+        mark_px: float | None = None,
     ) -> None:
         if abs(self.inventory_shares) < 1e-9:
             return
@@ -976,9 +977,10 @@ class LiveSession:
         if clob_bal < 0.01:
             # Dry: no hay tokens reales — sintetizar SELL y limpiar inventario simulado.
             if self.clob.gates.dry_run and abs(self.inventory_shares) > 1e-9:
-                # Mid ejecutable (no worst bid) — el soft_cut ya usó mark=bid;
-                # liquidar otra vez a bid peor dobla el slippage simulado.
-                if best_bid is not None and best_ask is not None:
+                # Usar el mark que disparó el cut (evita PnL dry surrealista 0.49→0.34).
+                if mark_px is not None:
+                    px_dry = float(mark_px)
+                elif best_bid is not None and best_ask is not None:
                     px_dry = 0.5 * (float(best_bid) + float(best_ask))
                 elif best_bid is not None:
                     px_dry = float(best_bid)
@@ -989,7 +991,7 @@ class LiveSession:
                 px_dry = max(0.01, min(0.99, round(px_dry, 2)))
                 print(
                     f"FLATTEN_DRY_CLEAR inv={self.inventory_shares:.4f} "
-                    f"px={px_dry:.2f} (sin tokens reales)",
+                    f"px={px_dry:.2f} mark={mark_px} (sin tokens reales)",
                     flush=True,
                 )
                 self._record_fill(
@@ -1205,7 +1207,11 @@ class LiveSession:
                 else "quick"
             )
             await self._force_flatten(
-                token_id, best_bid=best_bid, best_ask=best_ask, reason=reason
+                token_id,
+                best_bid=best_bid,
+                best_ask=best_ask,
+                reason=reason,
+                mark_px=mark,
             )
 
     async def run(self, minutes: float = 5.0) -> dict[str, Any]:

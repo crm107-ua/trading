@@ -84,9 +84,9 @@ async def _run_session(
     cfg["initial_capital_usdc"] = float(capital)
     cfg["max_notional_per_side_usdc"] = float(capital)
     cfg["max_inventory_usdc"] = float(capital)
-    # Precio max operable con 5 shares
+    # Precio max operable con 5 shares (sin +0.08: provocaba SKIP_BUDGET / overquote)
     px_max = max_affordable_price(capital)
-    cfg["max_quote_mid"] = min(float(cfg.get("max_quote_mid") or 0.48), px_max + 0.08)
+    cfg["max_quote_mid"] = min(float(cfg.get("max_quote_mid") or 0.48), px_max)
     cfg["demo_label"] = f"micro2_r{round_id}_c{capital:.2f}"
     path = out_dir / f"cfg_r{round_id:02d}.json"
     path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
