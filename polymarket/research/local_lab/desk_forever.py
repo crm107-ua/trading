@@ -101,6 +101,22 @@ def _notify_stopped_no_funds(*, bal: float, min_balance: float) -> None:
         print(f"EMAIL_STOP_ERR {type(e).__name__}: {e}", flush=True)
 
 
+def _pm2_stop_self() -> None:
+    """Marca la app stopped en PM2 para que no vuelva a arrancar sola."""
+    name = (os.getenv("POLY_DESK_PM2_NAME") or "poly-desk-forever").strip()
+    try:
+        subprocess.run(
+            ["pm2", "stop", name],
+            check=False,
+            timeout=30,
+            capture_output=True,
+            text=True,
+        )
+        print(f"PM2_STOP {name}", flush=True)
+    except Exception as e:
+        print(f"PM2_STOP_ERR {type(e).__name__}: {e}", flush=True)
+
+
 def _halt_no_funds(*, bal: float, min_balance: float, loops: int) -> int:
     print(
         f"STOP_NO_FUNDS bal={bal:.4f} < min={min_balance:.2f} — "
@@ -118,6 +134,7 @@ def _halt_no_funds(*, bal: float, min_balance: float, loops: int) -> int:
     )
     _notify_stopped_no_funds(bal=bal, min_balance=min_balance)
     _STOP.set()
+    _pm2_stop_self()
     return 0
 
 
