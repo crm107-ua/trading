@@ -124,3 +124,17 @@ def test_save_checklist_marks_ok(tmp_path, monkeypatch):
     pol.save_checklist({"dry_sessions_clean": 10, "ok": False})
     raw = json.loads(path.read_text(encoding="utf-8"))
     assert raw["ok"] is True
+
+
+def test_day_loss_disable_flag(tmp_path, monkeypatch):
+    monkeypatch.setattr(pol, "DAY_PNL_PATH", tmp_path / "day.json")
+    (tmp_path / "day.json").write_text(
+        json.dumps({"date": __import__("datetime").date.today().isoformat(), "pnl": -9.0, "sessions": 3}),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("POLY_LIVE_DAY_LOSS_DISABLE", raising=False)
+    assert pol.day_loss_breached() is True
+    monkeypatch.setenv("POLY_LIVE_DAY_LOSS_DISABLE", "1")
+    assert pol.day_loss_disabled() is True
+    assert pol.day_loss_breached() is False
+    assert pol.MAX_DAY_LOSS_USDC == 5.0

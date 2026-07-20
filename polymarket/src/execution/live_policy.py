@@ -29,9 +29,16 @@ MIN_REAL_CAPITAL = 1.0
 # CLOB floor = 5 shares → notional típico ~2–3.5 USDC; micro real viable = 5.
 MAX_REAL_CAPITAL = 5.0
 MAX_SESSION_LOSS_USDC = 0.40
-MAX_DAY_LOSS_USDC = 1.0
+# Micro5 edge-validation: cupo diario amplio para recolectar ≥20 limpias sin
+# tumbar el día por cohortes de pérdidas mecánicas ya corregidas (2026-07-20).
+MAX_DAY_LOSS_USDC = 5.0
 DRY_SESSIONS_REQUIRED = 10
 GEOBLOCK_URL = "https://polymarket.com/api/geoblock"
+
+
+def day_loss_disabled() -> bool:
+    """POLY_LIVE_DAY_LOSS_DISABLE=1 → no aplicar tope diario (MAX_DAY_LOSS se conserva)."""
+    return _flag("POLY_LIVE_DAY_LOSS_DISABLE", "0")
 
 
 @dataclass(frozen=True)
@@ -182,6 +189,8 @@ def record_session_pnl(net: float) -> dict[str, Any]:
 
 
 def day_loss_breached(extra_net: float = 0.0) -> bool:
+    if day_loss_disabled():
+        return False
     pnl = float(load_day_pnl().get("pnl") or 0) + float(extra_net)
     return pnl <= -MAX_DAY_LOSS_USDC
 
@@ -224,7 +233,7 @@ def evaluate_readiness(*, balance_pusd: float | None, dry_run: bool) -> LiveRead
         blockers.append(
             f"Saldo {bal:.2f} pUSD < mínimo {MIN_REAL_BALANCE_PUSD:.0f} pUSD para live real"
         )
-    if day_pnl <= -MAX_DAY_LOSS_USDC:
+    if (not day_loss_disabled()) and day_pnl <= -MAX_DAY_LOSS_USDC:
         can_real = False
         blockers.append(f"Pérdida diaria {day_pnl:.2f} ≤ -{MAX_DAY_LOSS_USDC:.0f} — SAFE")
 

@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import math
 import os
 import time
 from dataclasses import dataclass, field
@@ -477,6 +478,42 @@ class LiveSession:
         self.open_price = None
         self.open_size = None
 
+    def _clamp_post_only_px(
+        self,
+        side: str,
+        price: float,
+        *,
+        best_bid: float | None,
+        best_ask: float | None,
+        tick: float = 0.01,
+    ) -> float | None:
+        """Precio maker estricto: BUY < ask, SELL > bid. None si el libro no permite."""
+        px = float(price)
+        side_u = side.upper()
+        tick = float(tick) if tick and float(tick) > 0 else 0.01
+        if side_u == "BUY":
+            if best_ask is not None:
+                # Un tick bajo el ask (post-only); si el libro se movió, no cruzar.
+                px = min(px, float(best_ask) - tick)
+            if best_bid is not None:
+                # No mejorar más allá de un join razonable al bid
+                px = min(px, float(best_bid))
+            px = round(math.floor(px / tick + 1e-12) * tick, 8)
+            px = max(tick, min(1.0 - tick, px))
+            if best_ask is not None and px + 1e-12 >= float(best_ask):
+                return None
+            return px
+        if best_bid is not None:
+            # Post-only SELL debe quedar POR ENCIMA del bid (no join-bid = take).
+            px = max(px, float(best_bid) + tick)
+        if best_ask is not None:
+            px = min(px, float(best_ask))
+        px = round(math.ceil(px / tick - 1e-12) * tick, 8)
+        px = max(tick, min(1.0 - tick, px))
+        if best_bid is not None and px - 1e-12 <= float(best_bid):
+            return None
+        return px
+
     async def _post_quote(
         self,
         token_id: str,
@@ -489,16 +526,27 @@ class LiveSession:
     ) -> None:
         if self.open_order_id:
             await self._cancel_open(reason="replace")
-        # Post-only: BUY must stay below ask; SELL above bid
-        px = float(price)
+        # Libro fresco justo antes del POST (evita crosses book por stale quote).
+        try:
+            st_fresh = await self._fetch_state(token_id)
+            if st_fresh:
+                if st_fresh.get("best_bid") is not None:
+                    best_bid = float(st_fresh["best_bid"])
+                if st_fresh.get("best_ask") is not None:
+                    best_ask = float(st_fresh["best_ask"])
+        except Exception:
+            pass
         side_u = side.upper()
-        if side_u == "BUY" and best_ask is not None:
-            px = min(px, float(best_ask) - 0.01)
-        if side_u == "SELL" and best_bid is not None:
-            # join bid (puede ser = bid; post-only OK si no cruza)
-            px = min(px, float(best_bid))
-            if best_ask is not None:
-                px = min(px, float(best_ask) - 0.01)
+        px = self._clamp_post_only_px(
+            side_u, float(price), best_bid=best_bid, best_ask=best_ask
+        )
+        if px is None:
+            print(
+                f"SKIP_CROSSES_BOOK {side_u} raw={float(price):.2f} "
+                f"bb={best_bid} ba={best_ask}",
+                flush=True,
+            )
+            return
         if side_u == "SELL":
             # Nunca vender más de lo que hay (fill parcial 4.99 ≠ bump a 5)
             avail = round_inventory_size(min(abs(size), abs(self.inventory_shares)))
@@ -517,8 +565,31 @@ class LiveSession:
             px, sz = normalize_live_order(side="SELL", price=px, size=avail, tick=0.01)
             if sz > avail:
                 sz = avail
+            # Re-clamp tras normalize (round puede empujar al bid).
+            px2 = self._clamp_post_only_px(
+                "SELL", px, best_bid=best_bid, best_ask=best_ask
+            )
+            if px2 is None:
+                print(
+                    f"SKIP_CROSSES_BOOK SELL after_norm px={px:.2f} "
+                    f"bb={best_bid} ba={best_ask}",
+                    flush=True,
+                )
+                return
+            px = px2
         else:
             px, sz = normalize_live_order(side="BUY", price=px, size=size, tick=0.01)
+            px2 = self._clamp_post_only_px(
+                "BUY", px, best_bid=best_bid, best_ask=best_ask
+            )
+            if px2 is None:
+                print(
+                    f"SKIP_CROSSES_BOOK BUY after_norm px={px:.2f} "
+                    f"bb={best_bid} ba={best_ask}",
+                    flush=True,
+                )
+                return
+            px = px2
         max_notional = float(self.cfg.get("max_notional_per_side_usdc") or 5.0)
         if side_u == "BUY" and px * sz > max_notional + 1e-9:
             print(
@@ -557,18 +628,26 @@ class LiveSession:
             )
         except Exception as e:
             msg = str(e)
+            low = msg.lower()
+            if "crosses book" in low or "invalid post-only" in low:
+                print(
+                    f"SKIP_CROSSES_BOOK {side_u} px={px:.2f} "
+                    f"bb={best_bid} ba={best_ask} (api)",
+                    flush=True,
+                )
+                return
             print(f"POST_ERR {type(e).__name__}: {e}", flush=True)
             if side_u == "SELL":
                 self._flatten_fails += 1
                 self._last_flatten_attempt = time.monotonic()
-            if "balance is not enough" in msg.lower() or "not enough balance" in msg.lower():
+            if "balance is not enough" in low or "not enough balance" in low:
                 await self._refresh_cash(force=True)
                 self._skip_cash_until = time.monotonic() + 12.0
             # Geoblock: no tiene sentido seguir 15 min con señales y 0 posts.
             if (
-                "trading restricted in your region" in msg.lower()
-                or "geoblock" in msg.lower()
-                or ("status_code=403" in msg and "region" in msg.lower())
+                "trading restricted in your region" in low
+                or "geoblock" in low
+                or ("status_code=403" in msg and "region" in low)
             ):
                 self._halt_new_entries = True
                 print(
@@ -766,6 +845,14 @@ class LiveSession:
             # Crítico: no perder el token al limpiar open_order_* tras MATCHED
             if self.open_token_id:
                 self.held_token_id = str(self.open_token_id)
+            max_inv = float(self.cfg.get("max_inventory_shares") or MIN_ORDER_SHARES)
+            if self.inventory_shares > max_inv + 0.25:
+                print(
+                    f"INV_CAP_BREACH inv={self.inventory_shares:.4f} "
+                    f"> max={max_inv:.0f} — halt entradas",
+                    flush=True,
+                )
+                self._halt_new_entries = True
         else:
             if self.inventory_shares > 1e-9:
                 avg = self.cost_basis / self.inventory_shares
@@ -868,19 +955,30 @@ class LiveSession:
         *,
         best_ask: float | None,
     ) -> bool:
-        """Si inv < 5, compra el mínimo CLOB para poder vender después.
-        Devuelve True si el inventario queda >= MIN_ORDER_SHARES."""
+        """Si inv < 5, compra SOLO el delta hasta min vendible (nunca +5 enteros).
+
+        Bug 181122: top-up de 5 enteros con inv=4.99 → inv≈10.
+        """
         inv = round_inventory_size(self.inventory_shares)
         if inv + 1e-9 >= MIN_ORDER_SHARES:
             return True
         if self._dust_stuck:
             return False
-        # Precio para notional >= $1 con size=5
+        need = round_inventory_size(MIN_ORDER_SHARES - inv)
+        if need <= 1e-9:
+            return True
+        if need + 1e-9 < MIN_ORDER_SHARES:
+            print(
+                f"DUST_TOPUP_SKIP need={need:.6f} < {MIN_ORDER_SHARES} "
+                f"(inv={inv:.6f}) — no doblar inventario; esperar fill o sync",
+                flush=True,
+            )
+            return False
         ask = float(best_ask) if best_ask is not None else 0.5
-        px = max(ask, MIN_BUY_NOTIONAL_USDC / MIN_ORDER_SHARES)
+        px = max(ask, MIN_BUY_NOTIONAL_USDC / max(need, MIN_ORDER_SHARES))
         px = min(0.99, max(0.01, round(px, 2)))
         print(
-            f"DUST_TOPUP buy {MIN_ORDER_SHARES:.0f}@{px:.2f} "
+            f"DUST_TOPUP buy {need:.2f}@{px:.2f} "
             f"(inv={inv:.6f} < {MIN_ORDER_SHARES})",
             flush=True,
         )
@@ -890,7 +988,7 @@ class LiveSession:
                 token_id=token_id,
                 side="BUY",
                 price=px,
-                size=MIN_ORDER_SHARES,
+                size=need,
                 order_type="FAK",
             )
         except Exception as e:
@@ -904,16 +1002,15 @@ class LiveSession:
             self._record_fill(
                 "BUY",
                 float(wp.get("price") or px),
-                float(wp.get("size") or MIN_ORDER_SHARES),
+                float(wp.get("size") or need),
                 None,
                 dry=True,
             )
             return self.inventory_shares + 1e-9 >= MIN_ORDER_SHARES
         oid = resp.get("orderID")
-        # Poll order once for fill size
         if oid:
             order = await asyncio.to_thread(self.clob.get_order, oid)
-            fill = ClobLiveClient.fill_from_order(order) if order else None
+            fill = ClobLiveClient.fills_from_order(order) if order else None
             if fill and fill["size"] > 0:
                 self._record_fill(
                     "BUY", fill["price"], fill["size"], fill["order_id"], dry=False
@@ -957,7 +1054,20 @@ class LiveSession:
                 )
             return
         if self.open_side == "SELL" and self.open_order_id:
-            return  # ya hay exit resting
+            # Resting SELL OK para bank normal; urgent/cut debe cancelar y re-aplanar.
+            bypass = str(reason) in (
+                "urgent",
+                "kill",
+                "inv_cap",
+                "hard_stop",
+                "sl",
+                "abs_cut",
+                "soft_cut",
+                "scalp_cut",
+            ) or str(reason).startswith("scalp_")
+            if not bypass:
+                return
+            await self._cancel_open(reason=f"flatten_bypass:{reason}")
         # Siempre vender el token que realmente tenemos (no el Up por defecto)
         sell_tid = str(self.held_token_id or self.open_token_id or token_id)
         print(
@@ -1003,15 +1113,70 @@ class LiveSession:
                 )
                 self._flatten_fails = 0
                 return
+            # bal=0 con inv local: SELL resting bloquea allowance, o fill no sync.
+            if abs(self.inventory_shares) > 1e-9 and not self.clob.gates.dry_run:
+                try:
+                    await asyncio.to_thread(self.clob.cancel_all)
+                    print("FLATTEN_CANCEL_ALL bal=0 con inv local", flush=True)
+                except Exception as ce:
+                    print(f"CANCEL_ALL_ERR {type(ce).__name__}: {ce}", flush=True)
+                self.open_order_id = None
+                self.open_side = None
+                self.open_price = None
+                self.open_size = None
+                try:
+                    clob_bal = await asyncio.to_thread(
+                        self.clob.balance_conditional_shares, sell_tid
+                    )
+                except Exception:
+                    clob_bal = 0.0
+                if clob_bal < 0.01:
+                    print(
+                        f"FLATTEN_STUCK bal=0 tras cancel_all "
+                        f"local_inv={self.inventory_shares:.6f} token={sell_tid[:24]}…",
+                        flush=True,
+                    )
+                    self._flatten_fails += 1
+                    return
+                print(f"INV_RECOVERED clob_bal={clob_bal:.6f} tras cancel_all", flush=True)
+            else:
+                print(
+                    f"FLATTEN_WRONG_TOKEN bal=0 token={sell_tid[:24]}… "
+                    f"held={str(self.held_token_id)[:24] if self.held_token_id else None}",
+                    flush=True,
+                )
+                self._flatten_fails += 1
+                return
+        # Si el CLOB ya tiene ≥5 pero el local va corto (fill parcial redondeado), sync up.
+        if (
+            clob_bal + 1e-9 >= MIN_ORDER_SHARES
+            and abs(self.inventory_shares) + 1e-9 < MIN_ORDER_SHARES
+        ):
             print(
-                f"FLATTEN_WRONG_TOKEN bal=0 token={sell_tid[:24]}… "
-                f"held={str(self.held_token_id)[:24] if self.held_token_id else None}",
+                f"INV_SYNC local={self.inventory_shares:.6f} → clob={clob_bal:.6f}",
                 flush=True,
             )
-            self._flatten_fails += 1
-            return
+            self.inventory_shares = round_inventory_size(clob_bal)
         inv = round_inventory_size(min(abs(self.inventory_shares), clob_bal))
         if inv + 1e-9 < MIN_ORDER_SHARES:
+            # Scalp cut/bank: NUNCA top-up (181122 dobló a ~10sh). Esperar fill completo.
+            if str(reason).startswith("scalp_") or reason in (
+                "soft_cut",
+                "abs_cut",
+                "sl",
+                "fade",
+                "bank",
+                "quick",
+                "hard_bank",
+                "inv_cap",
+            ):
+                print(
+                    f"FLATTEN_WAIT_SIZE inv={inv:.6f} < {MIN_ORDER_SHARES} "
+                    f"reason={reason} — sin top-up",
+                    flush=True,
+                )
+                self._flatten_fails += 1
+                return
             topped = await self._topup_dust_to_min(sell_tid, best_ask=best_ask)
             if not topped:
                 self._flatten_fails += 1
@@ -1074,8 +1239,32 @@ class LiveSession:
                     )
                     self._flatten_fails = 0
                     return
+                # LIVE/resting: NO segundo SELL (185109: allowance bloqueada -> 400).
+                self.open_order_id = str(oid)
+                self.open_side = "SELL"
+                self.open_price = float(wp.get("price") or px)
+                self.open_size = float(wp.get("size") or inv)
+                self.open_token_id = sell_tid
+                self._exit_posted = True
+                self._flatten_fails = 0
+                print(
+                    f"EXIT_RESTING oid={oid} — wait fill (sin double-SELL)",
+                    flush=True,
+                )
+                return
         except Exception as e:
             print(f"EXIT_FAK_ERR {type(e).__name__}: {e}", flush=True)
+            err = str(e).lower()
+            if "not enough balance" in err or "allowance" in err:
+                try:
+                    await asyncio.to_thread(self.clob.cancel_all)
+                    print("FLATTEN_CANCEL_ALL tras allowance stuck", flush=True)
+                except Exception as ce:
+                    print(f"CANCEL_ALL_ERR {type(ce).__name__}: {ce}", flush=True)
+                self.open_order_id = None
+                self.open_side = None
+                self.open_price = None
+                self.open_size = None
         await self._post_quote(
             sell_tid,
             "SELL",
@@ -1096,11 +1285,21 @@ class LiveSession:
         return str(self.held_token_id or self.open_token_id or up_id)
 
     def _session_loss_kill(self) -> bool:
-        """Stop duro Fase D: session_kill_net o pérdida diaria."""
+        """Stop duro: pérdida sesión/día, o bank-kill al pillar verde (sin holding)."""
         lim = float(self.cfg.get("session_kill_net_usdc") or 0.40)
         if self.realized_pnl <= -abs(lim) + 1e-12:
             print(
                 f"KILL_SESSION realized={self.realized_pnl:.2f} limit=-{abs(lim):.2f}",
+                flush=True,
+            )
+            self._halt_new_entries = True
+            return True
+        # Pillar +N USDC realizados y cancelar ya (modo ingresos incrementales).
+        bank_kill = float(self.cfg.get("session_bank_kill_usdc") or 0)
+        if bank_kill > 0 and self.realized_pnl >= bank_kill - 1e-12:
+            print(
+                f"BANK_KILL session_realized={self.realized_pnl:.2f} "
+                f"target=+{bank_kill:.2f} — halt, sin más entradas",
                 flush=True,
             )
             self._halt_new_entries = True
@@ -1151,6 +1350,55 @@ class LiveSession:
         unreal = self.inventory_shares * mark - self.cost_basis
         flatten_s = float(self.cfg.get("flatten_before_window_s") or 45)
         urgent = time_rem <= flatten_s
+        hold_s = (
+            (time.monotonic() - self._last_fill_mono)
+            if self._last_fill_mono
+            else 999.0
+        )
+
+        # --- Modo SCALP LADDER (1/2/3/4€ + cut inmediato) ---
+        if bool(self.cfg.get("scalp_ladder_enable")):
+            from polymarket.research.local_lab.scalp_ladder import decide_scalp_exit
+
+            # Fill parcial (<5sh): no cut/bank aún — esperar size completo (anti-doble).
+            if (
+                not urgent
+                and abs(self.inventory_shares) + 1e-9 < MIN_ORDER_SHARES
+            ):
+                return
+            d = decide_scalp_exit(
+                unreal=unreal,
+                hold_s=hold_s,
+                ladder=self.cfg.get("scalp_bank_ladder_usdc") or (1, 2, 3, 4),
+                early_bank_usdc=float(self.cfg.get("scalp_early_bank_usdc") or 0.05),
+                scalp_cut_usdc=float(self.cfg.get("scalp_cut_usdc") or 0.08),
+                min_hold_cut_s=float(self.cfg.get("scalp_min_hold_cut_s") or 3.0),
+                max_bank_usdc=float(self.cfg.get("scalp_max_bank_usdc") or 4.0),
+            )
+            if urgent or d.action in ("bank", "cut", "cap"):
+                if self.open_side == "SELL" and self.open_order_id and not urgent:
+                    # Bank: esperar fill si la SELL sigue en/sobre el bid.
+                    # Cut/cap o SELL stale: cancelar y re-aplanar (192133: 0.34→0.06).
+                    op = float(self.open_price or 0)
+                    bb = float(best_bid) if best_bid is not None else None
+                    sell_ok = (
+                        d.action == "bank"
+                        and bb is not None
+                        and op > 0
+                        and op <= bb + 0.011
+                    )
+                    if sell_ok:
+                        return
+                reason = "urgent" if urgent else d.reason
+                await self._force_flatten(
+                    token_id,
+                    best_bid=best_bid,
+                    best_ask=best_ask,
+                    reason=reason,
+                    mark_px=mark,
+                )
+            return
+
         bank_at = float(self.cfg.get("grind_bank_usdc", 0) or 0)
         green_at = min(bank_at, lock) if bank_at > 0 and lock > 0 else (bank_at or lock)
         hard_bank = float(self.cfg.get("hard_bank_usdc", 0) or 0)
@@ -1158,8 +1406,9 @@ class LiveSession:
             hard_bank = max(green_at * 2.5, 0.08) if green_at > 0 else 0.08
         take = unreal >= (green_at if self._fusionish() and green_at > 0 else lock)
         hard_take = self._fusionish() and hard_bank > 0 and unreal >= hard_bank
-        # soft/abs cut en USDC — el viejo -0.01 mataba micros de 5sh al primer tick
-        # (5 × −0.002 mid = −0.01). Escalar por inventario o cfg.
+        mega_bank = float(self.cfg.get("mega_bank_usdc") or 0)
+        if mega_bank > 0 and unreal >= mega_bank:
+            hard_take = True
         inv_abs = max(abs(self.inventory_shares), 1.0)
         soft_cut_usdc = float(self.cfg.get("soft_cut_usdc") or 0)
         if soft_cut_usdc <= 0:
@@ -1167,21 +1416,26 @@ class LiveSession:
         abs_cut_usdc = float(self.cfg.get("abs_cut_usdc") or 0)
         if abs_cut_usdc <= 0:
             abs_cut_usdc = max(0.06, 0.012 * inv_abs)
-        hold_s = (
-            (time.monotonic() - self._last_fill_mono)
-            if self._last_fill_mono
-            else 999.0
-        )
         min_hold_soft = float(self.cfg.get("min_hold_before_soft_cut_s") or 0)
         soft_cut = self._fusionish() and unreal <= -soft_cut_usdc
         if soft_cut and min_hold_soft > 0 and hold_s < min_hold_soft:
-            soft_cut = False  # no cortar ruido de los primeros segundos
+            soft_cut = False
         abs_cut = self._fusionish() and unreal <= -abs_cut_usdc
+        raw_hard = self.cfg.get("min_hold_before_hard_cut_s", None)
+        if raw_hard is None:
+            min_hold_hard = 10.0 if min_hold_soft > 0 else 0.0
+        else:
+            min_hold_hard = float(raw_hard or 0)
+        if abs_cut and min_hold_hard > 0 and hold_s < min_hold_hard:
+            abs_cut = False
         stop = unreal <= -max_loss * (0.35 if self._fusionish() else 1.0)
+        if stop and min_hold_hard > 0 and hold_s < min_hold_hard:
+            stop = False
         fade = fair < avg - 0.015
-        # No “quick” por debajo del bank fusionish — mataba PnL al escalar size.
+        if fade and min_hold_soft > 0 and hold_s < min_hold_soft:
+            fade = False
         if self._fusionish() and green_at > 0:
-            quick = unreal >= max(green_at, 0.05) and time_rem < 100
+            quick = unreal >= max(green_at, 0.04) and time_rem < 180
         else:
             quick = unreal >= 0.05 or (
                 self._entry_fills > 0 and unreal >= 0.02 and time_rem < 120
@@ -1423,11 +1677,40 @@ class LiveSession:
                     break
                 # Con inventario: no nuevas entradas; gestionar exit
                 if not flat:
+                    max_inv = float(
+                        self.cfg.get("max_inventory_shares") or MIN_ORDER_SHARES
+                    )
+                    if self.inventory_shares > max_inv + 0.25:
+                        await self._force_flatten(
+                            pos_id,
+                            best_bid=bb,
+                            best_ask=ba,
+                            reason="inv_cap",
+                            mark_px=mid,
+                        )
                     self._progress(minutes, "in_pos")
                     await asyncio.sleep(poll_s)
                     continue
                 if self._halt_new_entries or self._dust_stuck:
                     self._progress(minutes, "halt_dust")
+                    await asyncio.sleep(poll_s)
+                    continue
+                # Evitar fill tarde → dump urgent (185705: BUY fill y inmediato urgent).
+                flatten_s = float(self.cfg.get("flatten_before_window_s") or 45)
+                entry_cut_s = flatten_s + float(
+                    self.cfg.get("entry_flatten_buffer_s") or 15.0
+                )
+                if (
+                    self.open_side == "BUY"
+                    and self.open_order_id
+                    and time_rem <= entry_cut_s
+                ):
+                    await self._cancel_open(reason="pre_flatten_window")
+                    self._progress(minutes, "pre_flat_cancel")
+                    await asyncio.sleep(poll_s)
+                    continue
+                if time_rem <= entry_cut_s:
+                    self._progress(minutes, "pre_flat_skip")
                     await asyncio.sleep(poll_s)
                     continue
                 if quote is None:

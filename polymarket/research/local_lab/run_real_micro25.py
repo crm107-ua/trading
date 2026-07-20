@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Sesión REAL micro 2.5€ — siempre restaura SAFE al salir.
+"""Sesión REAL micro5 — siempre restaura SAFE al salir.
 
-    python3 -m polymarket.research.local_lab.run_real_micro25 --minutes 15
+    python -m polymarket.research.local_lab.run_real_micro25 --capital 5 --minutes 12 --config maker_demo_promo_pulse_micro5.json
 """
 
 from __future__ import annotations
@@ -20,16 +20,6 @@ load_repo_dotenv()
 
 POLY = Path(__file__).resolve().parents[2]
 OUT = POLY / "data_local" / "local_lab" / "real_micro25"
-KILL_MARKERS = (
-    "FLATTEN_WRONG_TOKEN",
-    "DUST_STUCK",
-    "KILL_SESSION",
-    "KILL_DAY",
-    "POST_ERR",
-    "GEOBLOCK",
-    "Trading restricted in your region",
-    "balance is not enough",
-)
 
 
 def _snap_balance() -> float | None:
@@ -52,12 +42,17 @@ def _force_safe() -> None:
 
 async def async_main(args: argparse.Namespace) -> int:
     OUT.mkdir(parents=True, exist_ok=True)
+    capital = float(args.capital)
+    cfg_name = str(args.config)
     bal_before = _snap_balance()
-    print(f"BALANCE_BEFORE={bal_before}", flush=True)
+    print(
+        f"BALANCE_BEFORE={bal_before} capital={capital} cfg={cfg_name}",
+        flush=True,
+    )
 
     os.environ["POLY_LIVE_ARMED"] = "1"
-    os.environ["POLY_LIVE_DRY_RUN"] = "0"  # REAL
-    os.environ["POLY_LIVE_MAX_CAPITAL_USDC"] = "2.5"
+    os.environ["POLY_LIVE_DRY_RUN"] = "0"
+    os.environ["POLY_LIVE_MAX_CAPITAL_USDC"] = str(capital)
     os.environ["POLY_LIVE_DRY_SMOKE_POST"] = "0"
     os.environ.pop("POLY_LIVE_DRY_VIRTUAL_BALANCE_USDC", None)
 
@@ -71,47 +66,29 @@ async def async_main(args: argparse.Namespace) -> int:
     )
     if g.dry_run or not g.armed:
         _force_safe()
-        raise RuntimeError("ABORT: no se armó REAL (dry aún activo o no ARMED)")
+        raise RuntimeError("ABORT: no se armó REAL")
 
     geo_blocked, geo_msg = geoblock_blocks_real()
     print(f"GEOBLOCK_CHECK blocked={geo_blocked} {geo_msg}", flush=True)
     if geo_blocked:
         _force_safe()
-        # Escribir reporte para el loop until-win
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        out = {
-            "created_utc": datetime.now(timezone.utc).isoformat(),
-            "sid": f"REAL_micro25_{stamp}",
-            "minutes": float(args.minutes),
-            "balance_before_pusd": bal_before,
-            "balance_after_pusd": bal_before,
-            "balance_delta": 0.0,
-            "report": {"verdict": "GEOBLOCK_ABORT", "fills": 0, "net_session_usdc": 0.0},
-            "danger": ["geoblock"],
-            "live_flags_now": {
-                "POLY_LIVE_ARMED": os.environ.get("POLY_LIVE_ARMED"),
-                "POLY_LIVE_DRY_RUN": os.environ.get("POLY_LIVE_DRY_RUN"),
-            },
-            "ok": False,
-            "abort": geo_msg,
-        }
-        OUT.mkdir(parents=True, exist_ok=True)
-        (OUT / f"real_{stamp}.json").write_text(json.dumps(out, indent=2), encoding="utf-8")
-        (OUT / "real_latest.json").write_text(json.dumps(out, indent=2), encoding="utf-8")
         raise RuntimeError(f"ABORT geoblock: {geo_msg}")
 
-    ok, msg = validate_real_start(2.5, bal_before)
+    ok, msg = validate_real_start(capital, bal_before)
     print(f"VALIDATE {ok} {msg}", flush=True)
     if not ok:
         _force_safe()
         raise RuntimeError(f"ABORT validate: {msg}")
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    sid = f"REAL_micro25_{stamp}"
-    cfg = POLY / "config" / "maker_demo_promo_pulse_micro2.json"
+    sid = f"REAL_c5_{stamp}"
+    cfg = POLY / "config" / cfg_name
+    if not cfg.is_file():
+        cfg = POLY / cfg_name
 
     print(
-        f"=== REAL START capital=2.5 minutes={args.minutes} sid={sid} ===",
+        f"=== REAL START capital={capital} minutes={args.minutes} "
+        f"sid={sid} cfg={cfg.name} ===",
         flush=True,
     )
     t0 = time.time()
@@ -130,7 +107,6 @@ async def async_main(args: argparse.Namespace) -> int:
         print(f"REAL_ERR {type(e).__name__}: {e}", flush=True)
         report = {"error": f"{type(e).__name__}: {e}", "verdict": "REAL_ERROR"}
     finally:
-        # Cancelar todo y SAFE
         try:
             from polymarket.src.execution.clob_live import ClobLiveClient
 
@@ -142,26 +118,20 @@ async def async_main(args: argparse.Namespace) -> int:
         _force_safe()
 
     bal_after = _snap_balance()
-    elapsed = time.time() - t0
-    danger = []
-    # scan session log/report
-    session_dir = report.get("session_dir")
-    if session_dir:
-        dec = Path(session_dir) / "decisions.jsonl"
-        # also check stdout was printed; scan report fields
-    if report.get("inventory_residual") and abs(float(report.get("inventory_residual") or 0)) > 0.01:
+    residual = abs(float(report.get("inventory_residual") or 0))
+    danger = list(report.get("session_danger") or [])
+    if residual > 0.01 and "inventory_residual" not in danger:
         danger.append("inventory_residual")
-    if report.get("verdict") not in ("LIVE_ONCHAIN", "LIVE_DRY_RUN"):
-        # LIVE_ONCHAIN expected for real
-        pass
     if report.get("verdict") == "LIVE_DRY_RUN":
         danger.append("was_dry_not_real")
 
     out = {
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "sid": sid,
+        "capital_usdc": capital,
+        "config": cfg_name,
         "minutes": float(args.minutes),
-        "elapsed_s": round(elapsed, 1),
+        "elapsed_s": round(time.time() - t0, 1),
         "balance_before_pusd": bal_before,
         "balance_after_pusd": bal_after,
         "balance_delta": (
@@ -177,17 +147,31 @@ async def async_main(args: argparse.Namespace) -> int:
         },
         "ok": bool(
             report.get("verdict") == "LIVE_ONCHAIN"
-            and abs(float(report.get("inventory_residual") or 0)) < 0.01
-            and not danger
+            and residual < 0.01
+            and "unclosed_position_at_session_end" not in danger
+            and "inventory_residual" not in danger
         ),
     }
     path = OUT / f"real_{stamp}.json"
     path.write_text(json.dumps(out, indent=2), encoding="utf-8")
     (OUT / "real_latest.json").write_text(json.dumps(out, indent=2), encoding="utf-8")
-    print(json.dumps({k: out[k] for k in (
-        "ok", "balance_before_pusd", "balance_after_pusd", "balance_delta",
-        "danger", "live_flags_now"
-    )}, indent=2), flush=True)
+    print(
+        json.dumps(
+            {
+                k: out[k]
+                for k in (
+                    "ok",
+                    "balance_before_pusd",
+                    "balance_after_pusd",
+                    "balance_delta",
+                    "danger",
+                    "live_flags_now",
+                )
+            },
+            indent=2,
+        ),
+        flush=True,
+    )
     print(
         f"SESSION verdict={report.get('verdict')} net={report.get('net_session_usdc')} "
         f"fills={report.get('fills')} residual={report.get('inventory_residual')}",
@@ -199,7 +183,9 @@ async def async_main(args: argparse.Namespace) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--minutes", type=float, default=15.0)
+    ap.add_argument("--minutes", type=float, default=12.0)
+    ap.add_argument("--capital", type=float, default=5.0)
+    ap.add_argument("--config", default="maker_demo_promo_pulse_micro5.json")
     return asyncio.run(async_main(ap.parse_args()))
 
 
