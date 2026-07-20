@@ -7,16 +7,23 @@ export PYTHONUNBUFFERED=1
 export PYTHONIOENCODING=utf-8
 export PYTHONPATH="${ROOT}${PYTHONPATH:+:$PYTHONPATH}"
 
+# Evitar CRLF de Windows al sourcer .env
 if [[ -f "$ROOT/.env" ]]; then
   set -a
   # shellcheck disable=SC1091
-  source "$ROOT/.env"
+  source <(sed 's/\r$//' "$ROOT/.env")
   set +a
+fi
+
+if [[ -x "$ROOT/.venv/bin/python" ]]; then
+  PY="$ROOT/.venv/bin/python"
+else
+  PY="python3"
 fi
 
 mkdir -p "$ROOT/user_data/logs" "$ROOT/polymarket/data_local/local_lab"
 
-exec python3 -m polymarket.research.local_lab.desk_forever \
+exec "$PY" -m polymarket.research.local_lab.desk_forever \
   --minutes "${POLY_DESK_MINUTES:-12}" \
   --capital "${POLY_DESK_CAPITAL:-5}" \
   --config "${POLY_DESK_CONFIG:-maker_demo_promo_pulse_micro5_scalp.json}" \
