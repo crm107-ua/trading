@@ -19,7 +19,7 @@ DEFAULT_START_USDC = 2.0
 HARD_CAP_USDC = 5.0  # no escalar ciego por encima de micro
 MAX_SESSION_FRAC = 1.0  # usa todo el bankroll micro (ya es pequeño)
 LOSS_COOLDOWN_ROUNDS = 1
-MAX_CONSEC_LOSSES = 2
+MAX_CONSEC_LOSSES = 3  # permitir 1 loss + 1 starve recovery antes de kill
 
 
 @dataclass

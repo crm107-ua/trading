@@ -45,12 +45,17 @@ def _force_dry(virt: float) -> dict[str, str]:
             "POLY_LIVE_DRY_VIRTUAL_BALANCE_USDC", ""
         ),
         "POLY_LIVE_DRY_SMOKE_POST": os.environ.get("POLY_LIVE_DRY_SMOKE_POST", "0"),
+        "NVIDIA_NIM_MODE": os.environ.get("NVIDIA_NIM_MODE", ""),
+        "NVIDIA_NIM_GRIND": os.environ.get("NVIDIA_NIM_GRIND", ""),
     }
     os.environ["POLY_LIVE_ARMED"] = "1"
     os.environ["POLY_LIVE_DRY_RUN"] = "1"
     os.environ["POLY_LIVE_DRY_SMOKE_POST"] = "0"
     os.environ["POLY_LIVE_DRY_VIRTUAL_BALANCE_USDC"] = str(virt)
     os.environ["POLY_LIVE_MAX_CAPITAL_USDC"] = str(max(virt, HARD_CAP_USDC))
+    # Micro: path determinista (fast) — evita starve por nim_error/timeout.
+    os.environ["NVIDIA_NIM_MODE"] = "fast"
+    os.environ["NVIDIA_NIM_GRIND"] = "0"
     return prev
 
 
@@ -62,6 +67,7 @@ def _restore(prev: dict[str, str]) -> None:
             os.environ[k] = v
     os.environ["POLY_LIVE_ARMED"] = "0"
     os.environ["POLY_LIVE_DRY_RUN"] = "1"
+    # no dejar ARMED real accidentalmente
 
 
 async def _run_session(
@@ -78,9 +84,9 @@ async def _run_session(
     cfg["initial_capital_usdc"] = float(capital)
     cfg["max_notional_per_side_usdc"] = float(capital)
     cfg["max_inventory_usdc"] = float(capital)
-    # Precio max operable con 5 shares
+    # Precio max operable con 5 shares (sin +0.08: provocaba SKIP_BUDGET / overquote)
     px_max = max_affordable_price(capital)
-    cfg["max_quote_mid"] = min(float(cfg.get("max_quote_mid") or 0.48), px_max + 0.08)
+    cfg["max_quote_mid"] = min(float(cfg.get("max_quote_mid") or 0.48), px_max)
     cfg["demo_label"] = f"micro2_r{round_id}_c{capital:.2f}"
     path = out_dir / f"cfg_r{round_id:02d}.json"
     path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
@@ -153,6 +159,19 @@ async def async_main(args: argparse.Namespace) -> int:
                 f"bank={state.bankroll:.2f} wr={state.to_dict()['wr']}",
                 flush=True,
             )
+            # until-win: parar en cuanto haya PnL>0 con al menos 1 win limpio
+            if (
+                (os.environ.get("POLY_MICRO_STOP_ON_WIN") or "").strip() == "1"
+                and state.wins >= 1
+                and state.bankroll > state.start_bankroll + 1e-9
+                and all(abs(float(x.get("residual") or 0)) < 0.01 for x in rows)
+            ):
+                print(
+                    f"STOP_ON_WIN bank={state.bankroll:.2f} "
+                    f"pnl={state.bankroll - state.start_bankroll:+.2f} wins={state.wins}",
+                    flush=True,
+                )
+                break
 
         st = state.to_dict()
         decisive = st["wins"] + st["losses"]

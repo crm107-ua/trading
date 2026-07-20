@@ -564,6 +564,18 @@ class LiveSession:
             if "balance is not enough" in msg.lower() or "not enough balance" in msg.lower():
                 await self._refresh_cash(force=True)
                 self._skip_cash_until = time.monotonic() + 12.0
+            # Geoblock: no tiene sentido seguir 15 min con señales y 0 posts.
+            if (
+                "trading restricted in your region" in msg.lower()
+                or "geoblock" in msg.lower()
+                or ("status_code=403" in msg and "region" in msg.lower())
+            ):
+                self._halt_new_entries = True
+                print(
+                    "GEOBLOCK_KILL — IP/región bloqueada por Polymarket; "
+                    "abortando nuevas entradas (SAFE al salir).",
+                    flush=True,
+                )
             return
         oid = resp.get("orderID")
         st = resp.get("status")
@@ -924,6 +936,7 @@ class LiveSession:
         best_bid: float | None,
         best_ask: float | None,
         reason: str,
+        mark_px: float | None = None,
     ) -> None:
         if abs(self.inventory_shares) < 1e-9:
             return
@@ -964,15 +977,21 @@ class LiveSession:
         if clob_bal < 0.01:
             # Dry: no hay tokens reales — sintetizar SELL y limpiar inventario simulado.
             if self.clob.gates.dry_run and abs(self.inventory_shares) > 1e-9:
-                px_dry = (
-                    float(best_bid)
-                    if best_bid is not None
-                    else (float(best_ask) - 0.01 if best_ask is not None else 0.40)
-                )
-                px_dry = max(0.01, min(0.99, px_dry))
+                # Usar el mark que disparó el cut (evita PnL dry surrealista 0.49→0.34).
+                if mark_px is not None:
+                    px_dry = float(mark_px)
+                elif best_bid is not None and best_ask is not None:
+                    px_dry = 0.5 * (float(best_bid) + float(best_ask))
+                elif best_bid is not None:
+                    px_dry = float(best_bid)
+                elif best_ask is not None:
+                    px_dry = max(0.01, float(best_ask) - 0.01)
+                else:
+                    px_dry = 0.40
+                px_dry = max(0.01, min(0.99, round(px_dry, 2)))
                 print(
                     f"FLATTEN_DRY_CLEAR inv={self.inventory_shares:.4f} "
-                    f"px={px_dry:.2f} (sin tokens reales)",
+                    f"px={px_dry:.2f} mark={mark_px} (sin tokens reales)",
                     flush=True,
                 )
                 self._record_fill(
@@ -1139,8 +1158,25 @@ class LiveSession:
             hard_bank = max(green_at * 2.5, 0.08) if green_at > 0 else 0.08
         take = unreal >= (green_at if self._fusionish() and green_at > 0 else lock)
         hard_take = self._fusionish() and hard_bank > 0 and unreal >= hard_bank
-        soft_cut = self._fusionish() and unreal <= -0.01
-        abs_cut = self._fusionish() and unreal <= -0.05
+        # soft/abs cut en USDC — el viejo -0.01 mataba micros de 5sh al primer tick
+        # (5 × −0.002 mid = −0.01). Escalar por inventario o cfg.
+        inv_abs = max(abs(self.inventory_shares), 1.0)
+        soft_cut_usdc = float(self.cfg.get("soft_cut_usdc") or 0)
+        if soft_cut_usdc <= 0:
+            soft_cut_usdc = max(0.03, 0.008 * inv_abs)
+        abs_cut_usdc = float(self.cfg.get("abs_cut_usdc") or 0)
+        if abs_cut_usdc <= 0:
+            abs_cut_usdc = max(0.06, 0.012 * inv_abs)
+        hold_s = (
+            (time.monotonic() - self._last_fill_mono)
+            if self._last_fill_mono
+            else 999.0
+        )
+        min_hold_soft = float(self.cfg.get("min_hold_before_soft_cut_s") or 0)
+        soft_cut = self._fusionish() and unreal <= -soft_cut_usdc
+        if soft_cut and min_hold_soft > 0 and hold_s < min_hold_soft:
+            soft_cut = False  # no cortar ruido de los primeros segundos
+        abs_cut = self._fusionish() and unreal <= -abs_cut_usdc
         stop = unreal <= -max_loss * (0.35 if self._fusionish() else 1.0)
         fade = fair < avg - 0.015
         # No “quick” por debajo del bank fusionish — mataba PnL al escalar size.
@@ -1171,7 +1207,11 @@ class LiveSession:
                 else "quick"
             )
             await self._force_flatten(
-                token_id, best_bid=best_bid, best_ask=best_ask, reason=reason
+                token_id,
+                best_bid=best_bid,
+                best_ask=best_ask,
+                reason=reason,
+                mark_px=mark,
             )
 
     async def run(self, minutes: float = 5.0) -> dict[str, Any]:
