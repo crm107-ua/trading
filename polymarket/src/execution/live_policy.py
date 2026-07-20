@@ -23,10 +23,26 @@ LAB = POLY / "data_local" / "local_lab"
 CHECKLIST_PATH = LAB / "live_checklist.json"
 DAY_PNL_PATH = LAB / "live_day_pnl.json"
 
-# Plan: no live_real con saldo bajo; depósito mínimo recomendado
-MIN_REAL_BALANCE_PUSD = 5.0
+# Mínimo para REAL: por defecto ~1 pUSD (notional CLOB). Override: POLY_LIVE_MIN_BALANCE_PUSD.
+def _env_float(name: str, default: float) -> float:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+def min_real_balance_pusd() -> float:
+    """Saldo mínimo para REAL (env POLY_LIVE_MIN_BALANCE_PUSD, default 1.0)."""
+    return _env_float("POLY_LIVE_MIN_BALANCE_PUSD", 1.0)
+
+
+# Compat: valor por defecto documentado (la gate usa min_real_balance_pusd()).
+MIN_REAL_BALANCE_PUSD = 1.0
 MIN_REAL_CAPITAL = 1.0
-# CLOB floor = 5 shares → notional típico ~2–3.5 USDC; micro real viable = 5.
+# CLOB floor = 5 shares → notional típico ~1–3.5 USDC; techo sesión micro = 5.
 MAX_REAL_CAPITAL = 5.0
 MAX_SESSION_LOSS_USDC = 0.40
 # Micro5 edge-validation: cupo diario amplio para recolectar ≥20 limpias sin
@@ -228,11 +244,13 @@ def evaluate_readiness(*, balance_pusd: float | None, dry_run: bool) -> LiveRead
     if bal is None:
         can_real = False
         blockers.append("No se pudo leer saldo pUSD")
-    elif bal + 1e-9 < MIN_REAL_BALANCE_PUSD:
-        can_real = False
-        blockers.append(
-            f"Saldo {bal:.2f} pUSD < mínimo {MIN_REAL_BALANCE_PUSD:.0f} pUSD para live real"
-        )
+    else:
+        min_bal = min_real_balance_pusd()
+        if bal + 1e-9 < min_bal:
+            can_real = False
+            blockers.append(
+                f"Saldo {bal:.2f} pUSD < mínimo {min_bal:.2f} pUSD para live real"
+            )
     if (not day_loss_disabled()) and day_pnl <= -MAX_DAY_LOSS_USDC:
         can_real = False
         blockers.append(f"Pérdida diaria {day_pnl:.2f} ≤ -{MAX_DAY_LOSS_USDC:.0f} — SAFE")

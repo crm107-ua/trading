@@ -25,10 +25,11 @@ def test_validate_real_blocked_low_balance(tmp_path, monkeypatch):
         encoding="utf-8",
     )
     monkeypatch.setenv("POLY_LIVE_CHECKLIST_PATH", str(path))
+    monkeypatch.setenv("POLY_LIVE_MIN_BALANCE_PUSD", "1")
     monkeypatch.delenv("POLY_LIVE_BYPASS_CHECKLIST", raising=False)
     ok, msg = pol.validate_real_start(1.2, 0.83)
     assert ok is False
-    assert "5" in msg or "Saldo" in msg
+    assert "Saldo" in msg
 
 
 def test_validate_real_ok_with_checklist_and_balance(tmp_path, monkeypatch):

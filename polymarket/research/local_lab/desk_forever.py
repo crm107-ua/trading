@@ -208,7 +208,8 @@ def main() -> int:
     ap.add_argument(
         "--min-balance",
         type=float,
-        default=float(os.getenv("POLY_DESK_MIN_BALANCE") or 5.0),
+        # Parar solo sin fondos operables (~1 pUSD = min notional CLOB).
+        default=float(os.getenv("POLY_DESK_MIN_BALANCE") or 1.0),
     )
     ap.add_argument(
         "--email-every-s",
@@ -264,13 +265,20 @@ def main() -> int:
                 loops=loops,
             )
 
+        # Usar todo el saldo disponible (hasta el techo configurado), sin exigir 5.
         cap = min(float(args.capital), float(bal) * 0.98)
-        # Floor CLOB / política micro5
         if cap + 1e-9 < float(args.min_balance):
             return _halt_no_funds(
                 bal=float(bal),
                 min_balance=float(args.min_balance),
                 loops=loops,
+            )
+        # Aviso en log si opera por debajo de 5 (micro reducido).
+        if cap + 1e-9 < 5.0:
+            print(
+                f"CAP_SCALED bal={bal:.4f} → capital={cap:.2f} "
+                "(sigue mientras haya fondos)",
+                flush=True,
             )
 
         _cancel_all()

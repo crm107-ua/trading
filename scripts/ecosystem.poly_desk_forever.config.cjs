@@ -23,16 +23,19 @@ module.exports = {
         POLY_DESK_CAPITAL: "5",
         POLY_DESK_CONFIG: "maker_demo_promo_pulse_micro5_scalp.json",
         POLY_DESK_PAUSE_S: "45",
-        POLY_DESK_MIN_BALANCE: "5",
+        POLY_DESK_MIN_BALANCE: "1",
+        POLY_LIVE_MIN_BALANCE_PUSD: "1",
+        POLY_LIVE_MAX_CAPITAL_USDC: "5",
         POLY_DESK_EMAIL_EVERY_S: "10800",
         MAIL_TO: "caromamusic@gmail.com",
       },
       merge_logs: true,
       log_date_format: "YYYY-MM-DDTHH:mm:ss",
-      // Reinicia si crashea. Exit 0 = stop intencional (sin fondos / SIGTERM): NO reiniciar.
+      // Si se queda sin fondos el proceso hace `pm2 stop` (status stopped).
+      // Tras crash inesperado sí reinicia; tras stop manual/sin fondos NO.
       autorestart: true,
       stop_exit_codes: [0],
-      max_restarts: 50,
+      max_restarts: 20,
       min_uptime: 10000,
       restart_delay: 15000,
       kill_timeout: 20000,
