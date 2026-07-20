@@ -76,6 +76,51 @@ def _cancel_all() -> None:
         _force_safe()
 
 
+def _notify_stopped_no_funds(*, bal: float, min_balance: float) -> None:
+    """Aviso: desk parado por saldo insuficiente (no seguir en negativo)."""
+    try:
+        from polymarket.src.notify.mailer import send_email
+        from polymarket.src.notify.trial_email import build_simple_banner_email
+
+        title = "DESK PARADO — sin fondos"
+        body = (
+            f"poly-desk-forever se ha DETENIDO para no operar en negativo.\n\n"
+            f"Saldo CLOB: {bal:.4f} pUSD\n"
+            f"Mínimo requerido: {min_balance:.2f} pUSD\n\n"
+            f"No se lanzarán más sesiones REAL hasta que recargues y hagas:\n"
+            f"  pm2 start poly-desk-forever\n"
+        )
+        _, html = build_simple_banner_email(title=title, body=body)
+        r = send_email(
+            subject=f"[Poly Desk] PARADO sin fondos · saldo {bal:.2f} pUSD",
+            body_text=body,
+            body_html=html,
+        )
+        print(f"EMAIL_STOP_NO_FUNDS ok={r.get('ok')} err={r.get('error')}", flush=True)
+    except Exception as e:
+        print(f"EMAIL_STOP_ERR {type(e).__name__}: {e}", flush=True)
+
+
+def _halt_no_funds(*, bal: float, min_balance: float, loops: int) -> int:
+    print(
+        f"STOP_NO_FUNDS bal={bal:.4f} < min={min_balance:.2f} — "
+        "SAFE + exit (no más trading)",
+        flush=True,
+    )
+    _force_safe()
+    _cancel_all()
+    _write_hb(
+        status="stopped_no_funds",
+        loops=loops,
+        balance=bal,
+        min_balance=min_balance,
+        reason="insufficient_balance",
+    )
+    _notify_stopped_no_funds(bal=bal, min_balance=min_balance)
+    _STOP.set()
+    return 0
+
+
 def _report_worker(interval_s: float) -> None:
     # Primer informe a los ~2 min (smoke), luego cada interval_s
     if _STOP.wait(120):
@@ -194,22 +239,22 @@ def main() -> int:
             print("WAIT bal=None — reintento en 60s", flush=True)
             _STOP.wait(60)
             continue
+        # Sin dinero suficiente → PARAR del todo (no sleep infinito / no negativos).
         if bal + 1e-9 < float(args.min_balance):
-            print(
-                f"WAIT_BALANCE bal={bal:.4f} < min={args.min_balance} — sleep 120s",
-                flush=True,
+            return _halt_no_funds(
+                bal=float(bal),
+                min_balance=float(args.min_balance),
+                loops=loops,
             )
-            _write_hb(status="wait_balance", loops=loops, balance=bal)
-            _STOP.wait(120)
-            continue
 
         cap = min(float(args.capital), float(bal) * 0.98)
         # Floor CLOB / política micro5
-        if cap + 1e-9 < 5.0 and float(args.min_balance) >= 5.0:
-            print(f"WAIT_CAP capital_efectivo={cap:.2f} < 5 — sleep 120s", flush=True)
-            _write_hb(status="wait_capital", loops=loops, balance=bal, capital_eff=cap)
-            _STOP.wait(120)
-            continue
+        if cap + 1e-9 < float(args.min_balance):
+            return _halt_no_funds(
+                bal=float(bal),
+                min_balance=float(args.min_balance),
+                loops=loops,
+            )
 
         _cancel_all()
         _write_hb(status="trading", loops=loops, balance=bal, capital_eff=cap)
@@ -227,7 +272,14 @@ def main() -> int:
             _force_safe()
             _cancel_all()
 
-        _write_hb(status="pause", loops=loops, last_rc=rc, balance=_balance())
+        bal_after = _balance()
+        _write_hb(status="pause", loops=loops, last_rc=rc, balance=bal_after)
+        if bal_after is not None and bal_after + 1e-9 < float(args.min_balance):
+            return _halt_no_funds(
+                bal=float(bal_after),
+                min_balance=float(args.min_balance),
+                loops=loops,
+            )
         print(f"PAUSE {args.pause_s}s antes de la siguiente (rc={rc})", flush=True)
         _STOP.wait(float(args.pause_s))
 

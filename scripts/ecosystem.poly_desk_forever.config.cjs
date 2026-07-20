@@ -29,8 +29,9 @@ module.exports = {
       },
       merge_logs: true,
       log_date_format: "YYYY-MM-DDTHH:mm:ss",
-      // Reinicia si crashea; el loop interno es el que nunca termina a propósito.
+      // Reinicia si crashea. Exit 0 = stop intencional (sin fondos / SIGTERM): NO reiniciar.
       autorestart: true,
+      stop_exit_codes: [0],
       max_restarts: 50,
       min_uptime: 10000,
       restart_delay: 15000,
