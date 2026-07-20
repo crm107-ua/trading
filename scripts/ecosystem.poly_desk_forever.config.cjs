@@ -19,6 +19,7 @@ module.exports = {
         NVIDIA_NIM_MODE: "hybrid",
         NVIDIA_NIM_PROFIT_ASSIST: "1",
         POLY_LIVE_DAY_LOSS_DISABLE: "1",
+        POLY_LIVE_BYPASS_CHECKLIST: "1",
         POLY_DESK_MINUTES: "12",
         POLY_DESK_CAPITAL: "5",
         POLY_DESK_CONFIG: "maker_demo_promo_pulse_micro5_scalp.json",
