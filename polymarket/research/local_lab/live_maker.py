@@ -1882,11 +1882,22 @@ async def run_live_session(
     session_id: str | None = None,
     strategy: str | None = None,
     desk_line_id: int = 1,
+    capital_usdc: float | None = None,
 ) -> dict[str, Any]:
     gates = read_gates()
     if not gates.armed:
         raise RuntimeError("POLY_LIVE_ARMED=0 — no se inicia live")
     cfg = load_maker_cfg(config_path)
+    # Override de capital (desk forever escala al saldo disponible).
+    if capital_usdc is not None and float(capital_usdc) > 0:
+        cap_ov = float(capital_usdc)
+        cfg["initial_capital_usdc"] = cap_ov
+        cfg["max_notional_per_side_usdc"] = min(
+            float(cfg.get("max_notional_per_side_usdc") or cap_ov), cap_ov
+        )
+        cfg["max_inventory_usdc"] = min(
+            float(cfg.get("max_inventory_usdc") or cap_ov), cap_ov
+        )
     capital = float(cfg.get("initial_capital_usdc") or 0)
     # Paridad paper: pulse/fusion configs usan maker_fusion (no maker_edge).
     sid_strat = (

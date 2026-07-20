@@ -102,6 +102,7 @@ async def async_main(args: argparse.Namespace) -> int:
             session_id=sid,
             strategy="maker_fusion",
             desk_line_id=1,
+            capital_usdc=capital,
         )
     except Exception as e:
         print(f"REAL_ERR {type(e).__name__}: {e}", flush=True)
