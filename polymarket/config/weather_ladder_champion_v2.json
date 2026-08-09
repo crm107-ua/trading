@@ -5,6 +5,8 @@
   "initial_capital_usdc": 150.0,
   "budget_per_market_usdc": 12.0,
   "max_markets_per_run": 14,
+  "max_per_city": 3,
+  "sort_mode": "horizon_first",
   "limit_per_city": 10,
   "resolved_max_age_days": 12,
   "ladder_width": 3,

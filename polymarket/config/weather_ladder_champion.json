@@ -121,5 +121,7 @@
     "verdict": "STRONG",
     "live_paper_scorecard_pnl": 418.62,
     "source": "floor-gate multi-sleeve 2026-08-09"
-  }
+  },
+  "max_per_city": 3,
+  "sort_mode": "horizon_first"
 }
