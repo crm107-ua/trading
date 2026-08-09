@@ -25,9 +25,12 @@ La key debe tener scope **Public API endpoints** en [build.nvidia.com](https://b
 ```
 paper_maker.py
     └── decision_engine.py
-            ├── rule_guard()     ← seguridad determinista (sin API)
-            └── nvidia_client.py ← chat/completions + cache local
+            ├── rule_guard()              ← seguridad determinista (sin API)
+            ├── context_engineering.py    ← ingest → rank → route → compress
+            └── nvidia_client.py          ← chat/completions + cache local
 ```
+
+**Context engineering** (default on, `NVIDIA_NIM_CONTEXT_ENGINEERING=1`) cura el contexto que ve NIM: provenance por chunk, ranking por semántica/recencia/autoridad, ruta por presupuesto, y compresión sin truncado ciego. Detalle: [`CONTEXT_ENGINEERING.md`](CONTEXT_ENGINEERING.md).
 
 - **Modo rápido (default):** `NVIDIA_NIM_MODE=fast` — si las reglas de seguridad pasan, **cotiza al instante** sin llamar API (~0 ms). NIM solo en modo `full`.
 - **Hybrid + profit assist:** `NVIDIA_NIM_PROFIT_ASSIST=1` — sube el umbral `rule_strong_edge` (`NVIDIA_NIM_STRONG_EDGE_MULT`, p.ej. 1.7) para que más entradas pasen por NIM, y pregunta a NIM cada `NVIDIA_NIM_EXIT_EVERY_S` s si **hold** o **flatten** con inventario abierto (maximizar PnL de sesión). Sigue **sin** cambiar precios/fair.
