@@ -22,8 +22,9 @@ class Station:
 
 # Center coords near resolution airports (not city centroids).
 STATIONS: dict[str, Station] = {
-    "singapore": Station("singapore", "WSSS", 1.3644, 103.9915, "Asia/Singapore", typical_model_spread_c=1.4, volatile=True),
-    "shanghai": Station("shanghai", "ZSPD", 31.1443, 121.8083, "Asia/Shanghai", typical_model_spread_c=2.2, volatile=True),
+    # bias_c from resolved sweep 2026-08: models slightly cold vs Polymarket station highs
+    "singapore": Station("singapore", "WSSS", 1.3644, 103.9915, "Asia/Singapore", typical_model_spread_c=1.4, bias_c=0.5, volatile=True),
+    "shanghai": Station("shanghai", "ZSPD", 31.1443, 121.8083, "Asia/Shanghai", typical_model_spread_c=2.2, bias_c=0.5, volatile=True),
     "tokyo": Station("tokyo", "RJTT", 35.5494, 139.7798, "Asia/Tokyo", typical_model_spread_c=2.0, volatile=True),
     "seoul": Station("seoul", "RKSI", 37.4602, 126.4407, "Asia/Seoul", typical_model_spread_c=2.4, volatile=True),
     "hong-kong": Station("hong-kong", "VHHH", 22.3080, 113.9185, "Asia/Hong_Kong", typical_model_spread_c=1.6, volatile=True),

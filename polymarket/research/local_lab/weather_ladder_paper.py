@@ -104,6 +104,10 @@ def plan_event(
     if station is None:
         meta["skip"] = "unknown_station"
         return None, meta
+    excluded = {str(c).lower() for c in (cfg.get("exclude_cities") or [])}
+    if event.city.lower() in excluded:
+        meta["skip"] = "excluded_city"
+        return None, meta
     if cfg.get("volatile_only") and not station.volatile:
         meta["skip"] = "not_volatile"
         return None, meta
@@ -142,6 +146,22 @@ def plan_event(
     if not models:
         meta["skip"] = "no_forecast"
         return None, meta
+    bias_override = cfg.get("bias_override_c")
+    if bias_override is not None:
+        from polymarket.src.weather.stations import Station
+
+        station = Station(
+            city=station.city,
+            icao=station.icao,
+            lat=station.lat,
+            lon=station.lon,
+            timezone=station.timezone,
+            unit=station.unit,
+            typical_model_spread_c=station.typical_model_spread_c,
+            bias_c=float(station.bias_c) + float(bias_override),
+            volatile=station.volatile,
+        )
+        meta["bias_override_c"] = float(bias_override)
     fc = build_day_forecast(station, event.day, models, bucket_temps=point_temps)
     if fc is None:
         meta["skip"] = "forecast_build_failed"
@@ -288,14 +308,17 @@ def run_weather_ladder_paper(
     spent_total = 0.0
 
     # Realized (resolved) first — article edge prints at resolution — then open D+1/D+2
-    events_sorted = sorted(
-        events,
-        key=lambda e: (
+    priority = {str(c).lower(): i for i, c in enumerate(cfg.get("city_priority") or [])}
+
+    def _sort_key(e: TempEvent) -> tuple:
+        return (
             0 if _event_resolved(e) else 1,
+            priority.get(e.city.lower(), 100),
             abs(horizon_days(e.day, today=today)),
             e.slug,
-        ),
-    )
+        )
+
+    events_sorted = sorted(events, key=_sort_key)
 
     for event in events_sorted:
         if len(taken) >= max_markets:
