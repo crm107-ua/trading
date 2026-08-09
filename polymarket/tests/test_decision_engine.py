@@ -109,6 +109,28 @@ def test_rule_guard_respects_min_spread_cents():
     assert d2.reason == "rule_tight_market_spread"
 
 
+def test_context_engineering_builds_messages(monkeypatch):
+    monkeypatch.setenv("NVIDIA_NIM_CONTEXT_ENGINEERING", "1")
+    from polymarket.src.ai.decision_engine import _build_nim_messages, assemble_quote_context
+
+    snap = _base_snapshot(edge_abs=0.04, min_edge=0.03, session_context={"fills": 0})
+    assembled = assemble_quote_context(snap)
+    assert assembled is not None
+    assert assembled.chunk_count >= 1
+    messages = _build_nim_messages(snap, assembled=assembled)
+    assert messages[1]["role"] == "user"
+    assert "Context route=" in messages[1]["content"]
+
+
+def test_context_engineering_can_disable_legacy_json(monkeypatch):
+    monkeypatch.setenv("NVIDIA_NIM_CONTEXT_ENGINEERING", "0")
+    from polymarket.src.ai.decision_engine import _build_nim_messages, assemble_quote_context
+
+    assert assemble_quote_context(_base_snapshot()) is None
+    messages = _build_nim_messages(_base_snapshot(edge_abs=0.04, min_edge=0.03))
+    assert "Market snapshot:" in messages[1]["content"]
+
+
 def test_nim_error_falls_back_to_quote_on_edge(monkeypatch):
     monkeypatch.setenv("NVIDIA_NIM_MODE", "hybrid")
     monkeypatch.setenv("NVIDIA_NIM_GRIND", "1")
