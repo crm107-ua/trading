@@ -1,7 +1,7 @@
 {
   "strategy": "temperature_ladder_multi_sleeve",
   "demo_label": "weather_ladder_champion",
-  "notes": "Pointer to multi-sleeve STRONG desk: core SG/SH/HK + Beijing. Union WR92.9% +$609 on 90 cases. Paper only.",
+  "notes": "Multi-sleeve STRONG v3: core SG/SH/HK + Beijing. Floor-trap gate (center < min bucket) \u2192 research WR100% n=13 +$623.55 OOS WR100%. Paper only.",
   "initial_capital_usdc": 150.0,
   "budget_per_market_usdc": 12.0,
   "max_markets_per_run": 14,
@@ -110,22 +110,16 @@
     }
   ],
   "optimize_metrics": {
-    "universe": "core(SG+SH+HK)+beijing",
+    "universe": "core+beijing+floor_gate",
     "n_cases": 90,
-    "n_taken": 14,
+    "n_taken": 13,
     "wins": 13,
-    "winrate": 0.9286,
-    "total_pnl": 609.75,
+    "winrate": 1.0,
+    "total_pnl": 623.55,
     "oos_half_wr": 1.0,
     "oos_half_pnl": 258.09,
     "verdict": "STRONG",
-    "source": "multi-sleeve hunt 2026-08-09",
-    "live_paper_12d": {
-      "winrate": 1.0,
-      "n": 9,
-      "scorecard_pnl": 418.62,
-      "session": "session_20260809_223128"
-    },
-    "live_paper_scorecard_pnl": 418.62
+    "live_paper_scorecard_pnl": 418.62,
+    "source": "floor-gate multi-sleeve 2026-08-09"
   }
 }

@@ -132,3 +132,27 @@ def test_build_day_forecast_uses_bias_and_models():
     assert fc is not None
     assert fc.truncated_center in {30, 31, 32}
     assert abs(sum(fc.bucket_probs.values()) - 1.0) < 1e-6
+
+
+def test_skip_center_below_ladder_floor():
+    """Beijing-style open-low trap: center 27 with buckets starting at 28."""
+    buckets = [
+        BucketQuote("28°C", 0.40, 0.28, 28),
+        BucketQuote("29°C", 0.30, 0.07, 29),
+        BucketQuote("30°C", 0.20, 0.08, 30),
+    ]
+    plan = build_ladder_plan(
+        buckets,
+        center_temp=27,
+        model_temps=[27.3, 27.7, 25.9],
+        typical_spread=2.6,
+        budget=12.0,
+        max_basket_cost=0.55,
+        min_cluster_prob=0.30,
+        min_basket_ev=0.01,
+        width=3,
+        press_on_underdispersion=False,
+        max_leg_price=0.39,
+    )
+    assert plan.take is False
+    assert "center_below_ladder_floor" in plan.reason

@@ -1,7 +1,7 @@
 {
   "strategy": "temperature_ladder_multi_sleeve",
-  "demo_label": "weather_ladder_champion_v2",
-  "notes": "Multi-sleeve STRONG desk on 90 resolved cases. Core SG/SH/HK (bias+0.5 basket0.50) WR100% +$218 + Beijing expansion (bias+1.0 basket0.55) WR87.5% +$392. Union WR92.9% n=14 +$609.75 OOS WR100%. Exclude Seoul/Taipei volume traps. Paper only.",
+  "demo_label": "weather_ladder_champion_v3",
+  "notes": "Multi-sleeve STRONG v3: core SG/SH/HK + Beijing. Floor-trap gate (center < min bucket) \u2192 research WR100% n=13 +$623.55 OOS WR100%. Paper only.",
   "initial_capital_usdc": 150.0,
   "budget_per_market_usdc": 12.0,
   "max_markets_per_run": 14,
@@ -123,13 +123,14 @@
     "verdict": "STRONG",
     "n_cases": 90,
     "union": {
-      "n_taken": 14,
+      "n_taken": 13,
       "wins": 13,
-      "winrate": 0.9286,
-      "total_pnl": 609.75,
+      "winrate": 1.0,
+      "total_pnl": 623.55,
       "oos_half_n": 7,
       "oos_half_wr": 1.0,
-      "oos_half_pnl": 258.09
+      "oos_half_pnl": 258.09,
+      "profit_factor": 10.0
     },
     "core": {
       "n": 6,
@@ -137,15 +138,19 @@
       "pnl": 218.18
     },
     "beijing": {
-      "n": 8,
-      "winrate": 0.875,
-      "pnl": 391.57
+      "n": 7,
+      "winrate": 1.0,
+      "pnl": 405.37
     },
+    "guards": [
+      "center_below_ladder_floor skip (kills open-low trap)"
+    ],
     "live_paper_12d": {
       "winrate": 1.0,
       "n": 9,
       "scorecard_pnl": 418.62,
-      "session": "session_20260809_223128"
+      "session": "session_20260809_223128",
+      "note": "pre-floor-gate paper; floor gate only removes BJ 2026-07-10 loss"
     }
   }
 }

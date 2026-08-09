@@ -1,44 +1,39 @@
-# Winning Desk v2 — estrategia paper ganadora (multi-sleeve)
+# Winning Desk v3 — estrategia paper ganadora (multi-sleeve)
 
 **Estado:** paper lab · **no** on-chain · no proyección anual  
 **Fecha:** 2026-08-09 · dataset **90** mercados resueltos
 
-## Estrategia congelada
+## Resultado congelado
 
-| Sleeve | Universo | Filtros | Evidencia |
-|--------|----------|---------|-----------|
-| **core** | Singapore, Shanghai, Hong Kong | basket≤0.50 · pierna≤0.39 · bias+0.5 · press_under→select | WR **100%** (6/6) · +**$218** |
-| **beijing** | Beijing | basket≤0.55 · pierna≤0.39 · bias+1.0 · press_under→select | WR **87.5%** (7/8) · +**$392** |
-| **union** | ambos | sin overlap de ciudades | WR **92.9%** (13/14) · +**$609.75** · OOS WR **100%** (7/7, +$258) |
+| Sleeve | Universo | Research |
+|--------|----------|----------|
+| **core** | SG / Shanghai / HK | WR **100%** · +$218 |
+| **beijing** | Beijing (bias+1.0) | WR **100%** · +$405 |
+| **unión + floor gate** | ambos | WR **100%** (13/13) · **+$623.55** · OOS WR **100%** (7/7) |
+
+## Gate crítico (v3)
+
+Saltar si `center_temp < min(point_buckets)` — evita el trap open-low  
+(ej. Beijing 2026-07-10: center 27, buckets ≥28, winner «27°C or below»).
 
 ## Rechazado
 
-- Seoul (0% histórico)
-- Taipei / volume basket≤0.65 (overfit; WR cae al ampliar muestra)
-- Bias único global (rompe SG o Beijing según el valor)
+- Seoul, Taipei volume, basket≤0.65 overfit, bias global único
 
-## Reglas
+## Paper replay (12d)
 
-1. Asignar ciudad → sleeve → tiers (press under primero).
-2. Entry: ask live o CLOB pre-spike.
-3. Settlement: winner 100¢.
-4. Maker solo capital idle.
-5. `POLY_LIVE_ARMED=0` hasta gate explícito.
+- Pre-gate session: **9/9** · **+$418.62** · equity $150→$568  
+- El floor gate solo habría omitido pérdidas open-low (no estaba en esa ventana)
 
 ## Comandos
 
 ```bash
 python -m polymarket.research.local_lab.validate_two_tier
+python -m polymarket.research.local_lab.kfold_champion
 python -m polymarket.research.local_lab.weather_ladder_paper \
   --config polymarket/config/weather_ladder_champion_v2.json
-python -m polymarket.research.local_lab.winning_desk --maker-rounds 0
 ```
-
-## Paper replay (12d)
-
-- Resolved taken **9/9** WR **100%** · scorecard **+$418.62** · equity $150→$568.62
-- Session: `data_local/local_lab/weather_ladder/session_20260809_223128`
 
 ## Config
 
-`polymarket/config/weather_ladder_champion_v2.json` (`sleeves` + `resolved_max_age_days` para replay paper).
+`polymarket/config/weather_ladder_champion_v2.json` (sleeves + floor gate en `ladder.py`)

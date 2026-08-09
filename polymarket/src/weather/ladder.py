@@ -178,9 +178,15 @@ def build_ladder_plan(
     total_ev, per_ev = ladder_ev(tuples)
     ud = underdispersion_signal(model_temps, typical_spread)
     under = bool(ud["underdispersed"])
+    point_temps = [int(b.temp_c) for b in buckets if b.temp_c is not None]
 
     reason_parts: list[str] = []
     take = True
+    # Open-ended floor trap: center below all °C buckets → ladder sits on 28/29/30
+    # while resolution can pay "27°C or below" (Beijing 2026-07-10 style).
+    if point_temps and int(center_temp) < min(point_temps):
+        take = False
+        reason_parts.append("center_below_ladder_floor")
     if unit_cost <= 0 or unit_cost > max_basket_cost:
         take = False
         reason_parts.append(f"basket_cost={unit_cost:.3f}>max={max_basket_cost}")
