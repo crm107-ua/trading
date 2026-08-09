@@ -37,16 +37,19 @@ MAKER_CFG = POLY / "config" / "maker_demo_grind_nim_best.json"
 
 def _ladder_stats(rep: dict[str, Any]) -> dict[str, Any]:
     taken = list(rep.get("taken") or [])
-    wins = sum(1 for t in taken if float(t.get("pnl") or 0) > 1e-9)
+    resolved = [t for t in taken if t.get("resolved")]
+    wins = sum(1 for t in resolved if float(t.get("pnl") or 0) > 1e-9)
     return {
         "pnl": float(rep.get("scorecard_pnl_usdc") or rep.get("realized_pnl_usdc") or 0),
         "total_pnl": float(rep.get("total_pnl_usdc") or 0),
         "wins": wins,
-        "n": len(taken),
-        "winrate": (wins / len(taken)) if taken else None,
+        "n": len(resolved),
+        "open_n": len(taken) - len(resolved),
+        "winrate": (wins / len(resolved)) if resolved else None,
         "spent": float(rep.get("spent_usdc") or 0),
         "session_id": rep.get("session_id"),
         "slugs": [t.get("slug") for t in taken],
+        "sleeves": sorted({t.get("sleeve") for t in taken if t.get("sleeve")}),
     }
 
 
@@ -116,10 +119,10 @@ async def run_desk(*, maker_rounds: int, maker_minutes: float) -> dict[str, Any]
     comb_w = lw + mw
     report = {
         "ts_utc": datetime.now(timezone.utc).isoformat(),
-        "strategy": "winning_desk_v2",
+        "strategy": "winning_desk_v2_multi_sleeve",
         "thesis": (
-            "Primary: two-tier Temperature Ladder on Singapore/Shanghai — "
-            "core underdispersion (WR100%) then volume bias expansion (WR≈86%, OOS WR75%). "
+            "Primary: multi-sleeve Temperature Ladder — "
+            "core SG/SH/HK (WR100%) + Beijing bias+1.0 (WR≈88%); union WR≈93% / +$610 research. "
             "Secondary: grind_nim_best maker only on idle capital."
         ),
         "ladder": ladder,
@@ -130,8 +133,10 @@ async def run_desk(*, maker_rounds: int, maker_minutes: float) -> dict[str, Any]
         "combined_trades": comb_n,
         "verdict": (
             "STRONG"
-            if total > 0 and (comb_n == 0 or (comb_w / comb_n) >= 0.6)
+            if float(ladder["pnl"]) > 0 and (ln == 0 or (lw / ln) >= 0.7)
             else "MIXED"
+            if total > 0
+            else "WEAK"
         ),
         "guards": [
             "Paper only — not on-chain approval",

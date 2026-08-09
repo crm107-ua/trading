@@ -57,6 +57,27 @@ def load_cfg(path: Path | None) -> dict[str, Any]:
     p = path or DEFAULT_CFG
     return json.loads(p.read_text(encoding="utf-8"))
 
+def _cfg_for_city(cfg: dict[str, Any], city: str) -> dict[str, Any]:
+    """Merge sleeve overlays (city-specific tiers/bias) onto base config."""
+    city_l = city.strip().lower()
+    sleeves = list(cfg.get("sleeves") or [])
+    if not sleeves:
+        return cfg
+    for sleeve in sleeves:
+        cities = {str(c).lower() for c in (sleeve.get("cities") or [])}
+        if city_l in cities:
+            merged = {**cfg, **{k: v for k, v in sleeve.items() if k not in ("name", "cities")}}
+            merged["sleeve"] = sleeve.get("name", "default")
+            # If sleeve has tiers, they replace base tiers
+            if "tiers" in sleeve:
+                merged["tiers"] = sleeve["tiers"]
+            return merged
+    # City not in any sleeve → skip via empty cities allowlist signal
+    out = dict(cfg)
+    out["_sleeve_miss"] = True
+    return out
+
+
 
 def _quotes_for_event(event: TempEvent, probs: dict[int, float]) -> list[BucketQuote]:
     out: list[BucketQuote] = []
@@ -111,15 +132,24 @@ def plan_event(
     if cfg.get("volatile_only") and not station.volatile:
         meta["skip"] = "not_volatile"
         return None, meta
+    # City sleeves: core SG/SH/HK vs Beijing expansion, etc.
+    cfg = _cfg_for_city(cfg, event.city)
+    if cfg.get("_sleeve_miss") and cfg.get("sleeves"):
+        meta["skip"] = "no_sleeve_for_city"
+        return None, meta
+    if cfg.get("sleeve"):
+        meta["sleeve"] = cfg["sleeve"]
+
     prefer = set(int(x) for x in (cfg.get("prefer_horizons") or [1, 2]))
     hz = horizon_days(event.day, today=today)
-    # Open trades: D+1/D+2 only. Resolved: replay last 0–2 days for realized PnL.
+    # Open trades: D+1/D+2 only.
     if not resolved and hz not in prefer:
         meta["skip"] = f"horizon_{hz}"
         return None, meta
-    # Only replay yesterday/today resolved — older days lack clean D+1 entry context
-    if resolved and hz not in (0, -1):
-        meta["skip"] = "resolved_outside_d0_d1"
+    # Resolved replay window (research desk can widen via resolved_max_age_days)
+    max_age = int(cfg.get("resolved_max_age_days", 1))
+    if resolved and (hz > 0 or hz < -max_age):
+        meta["skip"] = f"resolved_age_{hz}"
         return None, meta
 
     point_temps = sorted({b.temp_c for b in event.buckets if b.temp_c is not None})
@@ -297,9 +327,30 @@ def run_weather_ladder_paper(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     cities = list(cfg.get("cities") or list(STATIONS.keys()))
-    slugs = discover_temperature_slugs(cities=cities, limit_per_city=3)
-    # Also probe explicit near-term slugs for configured cities (search can miss)
+    slugs = discover_temperature_slugs(cities=cities, limit_per_city=int(cfg.get("limit_per_city", 8)))
     today = datetime.now(timezone.utc).date()
+    # Probe calendar slugs for resolved replay / near-term open markets
+    from datetime import timedelta
+    import httpx
+    months = [
+        "january","february","march","april","may","june",
+        "july","august","september","october","november","december",
+    ]
+    max_age = int(cfg.get("resolved_max_age_days", 1))
+    probe_days = max(3, max_age + 2)
+    with httpx.Client(timeout=20.0) as client:
+        for city in cities:
+            for delta in range(-2, probe_days + 1):
+                d = today - timedelta(days=delta)
+                slug = f"highest-temperature-in-{city}-on-{months[d.month-1]}-{d.day}-{d.year}"
+                if slug in slugs:
+                    continue
+                try:
+                    r = client.get("https://gamma-api.polymarket.com/events", params={"slug": slug})
+                    if r.status_code == 200 and r.json():
+                        slugs.append(slug)
+                except Exception:
+                    continue
     t0 = time.perf_counter()
 
     events: list[TempEvent] = []
@@ -366,8 +417,10 @@ def run_weather_ladder_paper(
         else:
             open_mark_pnl += pnl
 
-    wins = sum(1 for t in taken if float(t.get("pnl") or 0) > 1e-9)
-    losses = sum(1 for t in taken if float(t.get("pnl") or 0) < -1e-9)
+    resolved_taken = [t for t in taken if t.get("resolved")]
+    open_taken = [t for t in taken if not t.get("resolved")]
+    wins = sum(1 for t in resolved_taken if float(t.get("pnl") or 0) > 1e-9)
+    losses = sum(1 for t in resolved_taken if float(t.get("pnl") or 0) < -1e-9)
     report = {
         "ts_utc": datetime.now(timezone.utc).isoformat(),
         "session_id": sid,
@@ -378,9 +431,11 @@ def run_weather_ladder_paper(
         "events_seen": len(events),
         "ladders_taken": len(taken),
         "ladders_skipped": len(skipped),
+        "resolved_taken": len(resolved_taken),
+        "open_taken": len(open_taken),
         "wins": wins,
         "losses": losses,
-        "winrate": round(wins / len(taken), 4) if taken else None,
+        "winrate": round(wins / len(resolved_taken), 4) if resolved_taken else None,
         "spent_usdc": round(spent_total, 4),
         "realized_pnl_usdc": round(realized_pnl, 4),
         "open_mark_pnl_usdc": round(open_mark_pnl, 4),

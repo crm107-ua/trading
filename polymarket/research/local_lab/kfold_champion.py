@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Time-ordered k-fold validation for the champion ladder edge."""
+"""Time-ordered validation for multi-sleeve champion edge."""
 
 from __future__ import annotations
 
@@ -14,40 +14,42 @@ POLY = Path(__file__).resolve().parents[2]
 CASES = POLY / "data_local" / "local_lab" / "weather_optimize" / "cases.json"
 OUT = POLY / "data_local" / "local_lab" / "weather_research"
 
+CORE_PRESS = TrialFilters(0.50, 0.39, 0.35, 0.01, True, 3, 12.0, 0.5)
+CORE_SELECT = TrialFilters(0.50, 0.39, 0.35, 0.01, False, 3, 12.0, 0.5)
+BJ_PRESS = TrialFilters(0.55, 0.39, 0.35, 0.01, True, 3, 12.0, 1.0)
+BJ_SELECT = TrialFilters(0.55, 0.39, 0.35, 0.01, False, 3, 12.0, 1.0)
+
+
+def _take_all(cases: list[dict]) -> list[dict]:
+    taken = []
+    for c in sorted(cases, key=lambda x: x["day"]):
+        city = c["city"]
+        if city in ("singapore", "shanghai", "hong-kong"):
+            for filt in (CORE_PRESS, CORE_SELECT):
+                r = _eval_case(c, filt)
+                if r and r.get("taken"):
+                    taken.append(r)
+                    break
+        elif city == "beijing":
+            for filt in (BJ_PRESS, BJ_SELECT):
+                r = _eval_case(c, filt)
+                if r and r.get("taken"):
+                    taken.append(r)
+                    break
+    return taken
+
 
 def main() -> int:
     cases = json.loads(CASES.read_text(encoding="utf-8"))
-    cases = [c for c in cases if c["city"] in ("singapore", "shanghai", "hong-kong")]
-    cases = sorted(cases, key=lambda c: c["day"])
-    filt = TrialFilters(
-        max_basket_cost=0.50,
-        max_leg_price=0.39,
-        min_cluster_prob=0.35,
-        min_basket_ev=0.01,
-        require_underdispersion=False,
-        width=3,
-        budget=12.0,
-        bias_override=0.5,
-    )
-    # Collect all taken chronologically
-    taken = []
-    for c in cases:
-        r = _eval_case(c, filt)
-        if r and r.get("taken"):
-            taken.append(r)
-
-    # Expanding walk-forward: train on past folds, test next chunk
+    taken = _take_all(cases)
     folds = []
     if len(taken) >= 4:
-        # leave-future-out style chunks of ~2
         chunk = max(1, len(taken) // 4)
         for i in range(0, len(taken), chunk):
             test = taken[i : i + chunk]
             train = taken[:i]
             if not test:
                 continue
-            tm = _score([{**t, "taken": True} for t in test] + [{"taken": False}] * 0)
-            # recompute manually
             wins = sum(1 for t in test if t["win"])
             pnl = sum(float(t["pnl"]) for t in test)
             folds.append(
@@ -68,8 +70,14 @@ def main() -> int:
     oos_w = sum(f["test_wins"] for f in folds)
     report = {
         "ts_utc": datetime.now(timezone.utc).isoformat(),
-        "filters": asdict(filt),
-        "cities": ["singapore", "shanghai", "hong-kong"],
+        "mode": "multi_sleeve",
+        "filters": {
+            "core_press": asdict(CORE_PRESS),
+            "core_select": asdict(CORE_SELECT),
+            "beijing_press": asdict(BJ_PRESS),
+            "beijing_select": asdict(BJ_SELECT),
+        },
+        "cities": ["singapore", "shanghai", "hong-kong", "beijing"],
         "n_universe_cases": len(cases),
         "n_taken": len(taken),
         "overall": overall,
@@ -83,10 +91,10 @@ def main() -> int:
         "trades": taken,
         "verdict": (
             "STRONG"
-            if overall["winrate"] >= 0.75
-            and overall["total_pnl"] > 50
-            and overall["n_taken"] >= 5
-            and (oos_n == 0 or (oos_w / oos_n) >= 0.7)
+            if overall["winrate"] >= 0.85
+            and overall["total_pnl"] > 200
+            and overall["n_taken"] >= 10
+            and (oos_n == 0 or (oos_w / oos_n) >= 0.8)
             else "PROMISING"
         ),
     }
