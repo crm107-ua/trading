@@ -31,7 +31,7 @@ from polymarket.src.ai.env_loader import load_repo_dotenv
 
 POLY = Path(__file__).resolve().parents[2]
 OUT = POLY / "data_local" / "local_lab" / "winning_desk"
-LADDER_CFG = POLY / "config" / "weather_ladder_champion.json"
+LADDER_CFG = POLY / "config" / "weather_ladder_champion_v2.json"
 MAKER_CFG = POLY / "config" / "maker_demo_grind_nim_best.json"
 
 
@@ -116,11 +116,11 @@ async def run_desk(*, maker_rounds: int, maker_minutes: float) -> dict[str, Any]
     comb_w = lw + mw
     report = {
         "ts_utc": datetime.now(timezone.utc).isoformat(),
-        "strategy": "winning_desk_v1",
+        "strategy": "winning_desk_v2",
         "thesis": (
-            "Primary: SurferX temperature ladder on Singapore/Shanghai with "
-            "optimized cheap-basket filters (resolved WR≈80%). "
-            "Secondary: grind_nim_best maker on idle capital."
+            "Primary: two-tier Temperature Ladder on Singapore/Shanghai — "
+            "core underdispersion (WR100%) then volume bias expansion (WR≈86%, OOS WR75%). "
+            "Secondary: grind_nim_best maker only on idle capital."
         ),
         "ladder": ladder,
         "maker": maker,

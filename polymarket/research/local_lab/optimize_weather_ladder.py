@@ -95,55 +95,93 @@ def _load_resolved_cases(
     *,
     max_events: int,
     max_age_days: int = 40,
+    resume_path: Path | None = None,
+    priority_cities: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Prefetch resolved events with forecasts + entry quotes (expensive I/O once)."""
     today = datetime.now(timezone.utc).date()
-    slugs = _discover_more_slugs(cities, per_city=10)
+    # Priority cities first (longer lookback for SG/SH edge research)
+    pri = [c.lower() for c in (priority_cities or ["singapore", "shanghai"])]
+    ordered_cities = sorted(cities, key=lambda c: (0 if c.lower() in pri else 1, c))
+    slugs = _discover_more_slugs(ordered_cities, per_city=14)
+    # Prefer priority city slugs early
+    slugs.sort(key=lambda s: (0 if any(f"-{c}-" in s or s.startswith(f"highest-temperature-in-{c}-") for c in pri) else 1, s))
+
     cases: list[dict[str, Any]] = []
-    for slug in slugs:
-        if len(cases) >= max_events:
-            break
-        parsed = parse_event_slug(slug)
-        if parsed is None:
-            continue
-        city, day = parsed
-        hz = horizon_days(day, today=today)
-        if hz > 0 or hz < -max_age_days:
-            continue
-        station = get_station(city)
-        if station is None or not station.volatile:
-            continue
+    have: set[str] = set()
+    if resume_path and resume_path.is_file():
         try:
-            event = fetch_temp_event(slug, use_clob=False)
-        except Exception:
-            continue
-        if event is None:
-            continue
-        winner = winning_bucket(event)
-        if winner is None:
-            continue
-        models = fetch_historical_model_maxes(station, day)
-        if len(models) < 2:
-            continue
-        point_temps = sorted({b.temp_c for b in event.buckets if b.temp_c is not None})
-        if len(point_temps) < 3:
-            continue
-        entries: dict[str, float] = {}
-        for b in event.buckets:
-            if b.temp_c is None:
+            cases = json.loads(resume_path.read_text(encoding="utf-8"))
+            have = {c["slug"] for c in cases}
+            print(f"resuming with {len(cases)} cached cases", flush=True)
+        except Exception as exc:  # noqa: BLE001
+            print(f"resume load failed: {exc}", flush=True)
+            cases, have = [], set()
+
+    # Shared CLOB client — fewer handshakes, longer timeout, soft retries
+    with httpx.Client(timeout=httpx.Timeout(45.0, connect=15.0)) as clob:
+        for slug in slugs:
+            if len(cases) >= max_events:
+                break
+            if slug in have:
                 continue
-            px = historical_entry_ask(b.token_yes)
-            if px is not None and 0.01 <= px <= 0.70:
-                entries[b.name] = float(px)
-        if len(entries) < 3:
-            continue
-        cases.append(
-            {
+            parsed = parse_event_slug(slug)
+            if parsed is None:
+                continue
+            city, day = parsed
+            hz = horizon_days(day, today=today)
+            age_cap = max_age_days + (20 if city.lower() in pri else 0)
+            if hz > 0 or hz < -age_cap:
+                continue
+            station = get_station(city)
+            if station is None or not station.volatile:
+                continue
+            try:
+                event = fetch_temp_event(slug, use_clob=False)
+            except Exception as exc:  # noqa: BLE001
+                print(f"skip fetch {slug}: {exc}", flush=True)
+                time.sleep(0.4)
+                continue
+            if event is None:
+                continue
+            # Skip °F markets when station is Celsius-modeled (or vice versa)
+            if station.unit == "C" and any("°F" in (b.name or "") for b in event.buckets):
+                continue
+            if station.unit == "F" and any("°C" in (b.name or "") for b in event.buckets):
+                continue
+            winner = winning_bucket(event)
+            if winner is None:
+                continue
+            try:
+                models = fetch_historical_model_maxes(station, day)
+            except Exception as exc:  # noqa: BLE001
+                print(f"skip forecast {slug}: {exc}", flush=True)
+                continue
+            if len(models) < 2:
+                continue
+            point_temps = sorted({b.temp_c for b in event.buckets if b.temp_c is not None})
+            if len(point_temps) < 3:
+                continue
+            entries: dict[str, float] = {}
+            for b in event.buckets:
+                if b.temp_c is None:
+                    continue
+                try:
+                    px = historical_entry_ask(b.token_yes, client=clob, retries=2)
+                except Exception:
+                    px = None
+                if px is not None and 0.01 <= px <= 0.70:
+                    entries[b.name] = float(px)
+            if len(entries) < 3:
+                continue
+            case = {
                 "slug": slug,
                 "city": city,
                 "day": day.isoformat(),
                 "winner": winner.name,
                 "winner_temp": winner.temp_c,
+                "winner_open_high": "or higher" in (winner.name or "").lower(),
+                "winner_open_low": "or below" in (winner.name or "").lower(),
                 "models": models,
                 "point_temps": point_temps,
                 "entries": entries,
@@ -151,11 +189,15 @@ def _load_resolved_cases(
                     {"name": b.name, "temp_c": b.temp_c} for b in event.buckets if b.temp_c is not None
                 ],
             }
-        )
-        print(
-            f"case {len(cases)}: {slug} winner={winner.name} models={models}",
-            flush=True,
-        )
+            cases.append(case)
+            have.add(slug)
+            print(
+                f"case {len(cases)}: {slug} winner={winner.name} models={models}",
+                flush=True,
+            )
+            if resume_path is not None and len(cases) % 5 == 0:
+                resume_path.parent.mkdir(parents=True, exist_ok=True)
+                resume_path.write_text(json.dumps(cases, indent=2), encoding="utf-8")
     return cases
 
 
@@ -220,8 +262,26 @@ def _eval_case(case: dict[str, Any], filt: TrialFilters) -> dict[str, Any] | Non
     spent = sum(leg.dollars for leg in plan.legs)
     payout = 0.0
     hit = False
+    open_high = bool(case.get("winner_open_high"))
+    open_low = bool(case.get("winner_open_low"))
+    wtemp = case.get("winner_temp")
     for leg in plan.legs:
-        if leg.name == winner:
+        leg_hit = leg.name == winner
+        # Open-ended resolution: highest/lowest bucket in cluster can still collect
+        if not leg_hit and wtemp is not None:
+            # match exact temp label inside cluster
+            if f"{wtemp}°C" == leg.name or f"{wtemp}°F" == leg.name:
+                leg_hit = True
+            if open_high and leg.temp_c is not None and int(leg.temp_c) >= int(wtemp):
+                # only the top rung of our cluster should proxy the open-high bucket
+                max_c = max((x.temp_c for x in plan.legs if x.temp_c is not None), default=None)
+                if max_c is not None and leg.temp_c == max_c and int(max_c) >= int(wtemp):
+                    leg_hit = True
+            if open_low and leg.temp_c is not None and int(leg.temp_c) <= int(wtemp):
+                min_c = min((x.temp_c for x in plan.legs if x.temp_c is not None), default=None)
+                if min_c is not None and leg.temp_c == min_c and int(min_c) <= int(wtemp):
+                    leg_hit = True
+        if leg_hit:
             payout += leg.shares * 1.0
             hit = True
     pnl = payout - spent
@@ -366,8 +426,15 @@ def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     t0 = time.perf_counter()
     print("loading resolved cases...", flush=True)
-    cases = _load_resolved_cases(cities, max_events=int(args.max_events))
-    (OUT / "cases.json").write_text(json.dumps(cases, indent=2), encoding="utf-8")
+    cases_path = OUT / "cases.json"
+    cases = _load_resolved_cases(
+        cities,
+        max_events=int(args.max_events),
+        max_age_days=55,
+        resume_path=cases_path,
+        priority_cities=["singapore", "shanghai"],
+    )
+    cases_path.write_text(json.dumps(cases, indent=2), encoding="utf-8")
     print(f"loaded {len(cases)} resolved cases", flush=True)
     if len(cases) < 3:
         print("NOT ENOUGH CASES")

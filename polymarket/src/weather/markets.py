@@ -225,28 +225,49 @@ def horizon_days(event_day: date, *, today: date | None = None) -> int:
     return (event_day - today).days
 
 
-def historical_entry_ask(token_id: str, *, timeout_s: float = 20.0) -> float | None:
+def historical_entry_ask(
+    token_id: str,
+    *,
+    timeout_s: float = 30.0,
+    client: httpx.Client | None = None,
+    retries: int = 2,
+) -> float | None:
     """
     Pre-resolution YES price from CLOB history.
     Uses an early percentile (not the final spike to ~1) so paper entry
     matches the article's 'buy the neighborhood before the crowd reprices'.
     """
-    with httpx.Client(timeout=timeout_s) as client:
-        r = client.get(
-            f"{CLOB}/prices-history",
-            params={"market": token_id, "interval": "max", "fidelity": 60},
-        )
-        if r.status_code != 200:
-            return None
-        hist = (r.json() or {}).get("history") or []
-        prices = [float(p["p"]) for p in hist if p.get("p") is not None]
-        if not prices:
-            return None
-        # Drop terminal resolution spike; take early/mid uncertainty window
-        usable = [p for p in prices if 0.01 <= p <= 0.85]
-        if not usable:
-            usable = prices[: max(1, len(prices) // 2)]
-        usable_sorted = sorted(usable)
-        # ~35th percentile — still cheap insurance / center before squeeze
-        idx = max(0, min(len(usable_sorted) - 1, int(0.35 * (len(usable_sorted) - 1))))
-        return float(usable_sorted[idx])
+    own = client is None
+    http = client or httpx.Client(timeout=timeout_s)
+    try:
+        last_exc: Exception | None = None
+        for attempt in range(max(1, retries + 1)):
+            try:
+                r = http.get(
+                    f"{CLOB}/prices-history",
+                    params={"market": token_id, "interval": "max", "fidelity": 60},
+                )
+                if r.status_code != 200:
+                    return None
+                hist = (r.json() or {}).get("history") or []
+                prices = [float(p["p"]) for p in hist if p.get("p") is not None]
+                if not prices:
+                    return None
+                # Drop terminal resolution spike; take early/mid uncertainty window
+                usable = [p for p in prices if 0.01 <= p <= 0.85]
+                if not usable:
+                    usable = prices[: max(1, len(prices) // 2)]
+                usable_sorted = sorted(usable)
+                # ~35th percentile — still cheap insurance / center before squeeze
+                idx = max(0, min(len(usable_sorted) - 1, int(0.35 * (len(usable_sorted) - 1))))
+                return float(usable_sorted[idx])
+            except (httpx.TimeoutException, httpx.TransportError) as exc:
+                last_exc = exc
+                if attempt < retries:
+                    continue
+                return None
+        _ = last_exc
+        return None
+    finally:
+        if own:
+            http.close()

@@ -146,69 +146,78 @@ def plan_event(
     if not models:
         meta["skip"] = "no_forecast"
         return None, meta
-    bias_override = cfg.get("bias_override_c")
-    if bias_override is not None:
-        from polymarket.src.weather.stations import Station
 
-        station = Station(
-            city=station.city,
-            icao=station.icao,
-            lat=station.lat,
-            lon=station.lon,
-            timezone=station.timezone,
-            unit=station.unit,
-            typical_model_spread_c=station.typical_model_spread_c,
-            bias_c=float(station.bias_c) + float(bias_override),
-            volatile=station.volatile,
-        )
-        meta["bias_override_c"] = float(bias_override)
-    fc = build_day_forecast(station, event.day, models, bucket_temps=point_temps)
-    if fc is None:
-        meta["skip"] = "forecast_build_failed"
-        return None, meta
+    from polymarket.src.weather.stations import Station
 
+    # Two-tier desk: core underdispersion first, then volume expansion tier.
+    tiers: list[dict[str, Any]] = list(cfg.get("tiers") or [{"name": "default"}])
     min_ask = float(cfg.get("min_leg_ask", 0.015))
     max_ask = float(cfg.get("max_leg_ask", 0.70))
-    if resolved:
-        # Entry = early CLOB history (pre-spike), not the final 0/1 prices
-        quotes: list[BucketQuote] = []
-        for b in event.buckets:
-            if b.temp_c is None:
-                continue
-            entry = historical_entry_ask(b.token_yes)
-            if entry is None or not (min_ask <= entry <= max_ask):
-                continue
-            quotes.append(
-                BucketQuote(
-                    name=b.name,
-                    my_prob=float(fc.bucket_probs.get(b.temp_c, 0.0)),
-                    market_price=float(entry),
-                    temp_c=b.temp_c,
-                )
-            )
-        meta["entry_pricing"] = "clob_history_pre_resolution"
-    else:
-        quotes = _quotes_for_event(event, fc.bucket_probs)
-        quotes = [q for q in quotes if min_ask <= q.market_price <= max_ask]
-        meta["entry_pricing"] = "live_ask"
+    base_station = station
+    best_plan: LadderPlan | None = None
+    last_extra: dict[str, Any] = {}
 
-    require_ud = bool(cfg.get("require_underdispersion", True))
-    # Article: keep basket cheap so one 100c winner clears losers (~47c example)
-    plan = build_ladder_plan(
-        quotes,
-        center_temp=fc.truncated_center,
-        model_temps=list(fc.models.values()),
-        typical_spread=station.typical_model_spread_c,
-        budget=float(cfg.get("budget_per_market_usdc", 8.0)),
-        max_basket_cost=float(cfg.get("max_basket_cost", 0.50)),
-        min_cluster_prob=float(cfg.get("min_cluster_prob", 0.50)),
-        min_basket_ev=float(cfg.get("min_basket_ev", 0.015)),
-        width=int(cfg.get("ladder_width", 3)),
-        press_on_underdispersion=require_ud,
-        max_leg_price=float(cfg.get("max_leg_price", 0.42)),
-    )
-    meta.update(
-        {
+    for tier in tiers:
+        tier_cfg = {**cfg, **{k: v for k, v in tier.items() if k != "name"}}
+        bias_override = tier_cfg.get("bias_override_c")
+        st = base_station
+        if bias_override is not None:
+            st = Station(
+                city=base_station.city,
+                icao=base_station.icao,
+                lat=base_station.lat,
+                lon=base_station.lon,
+                timezone=base_station.timezone,
+                unit=base_station.unit,
+                typical_model_spread_c=base_station.typical_model_spread_c,
+                bias_c=float(base_station.bias_c) + float(bias_override),
+                volatile=base_station.volatile,
+            )
+        fc = build_day_forecast(st, event.day, models, bucket_temps=point_temps)
+        if fc is None:
+            continue
+        if resolved:
+            quotes = []
+            for b in event.buckets:
+                if b.temp_c is None:
+                    continue
+                entry = historical_entry_ask(b.token_yes)
+                if entry is None or not (min_ask <= entry <= max_ask):
+                    continue
+                quotes.append(
+                    BucketQuote(
+                        name=b.name,
+                        my_prob=float(fc.bucket_probs.get(b.temp_c, 0.0)),
+                        market_price=float(entry),
+                        temp_c=b.temp_c,
+                    )
+                )
+            meta["entry_pricing"] = "clob_history_pre_resolution"
+        else:
+            quotes = _quotes_for_event(event, fc.bucket_probs)
+            quotes = [q for q in quotes if min_ask <= q.market_price <= max_ask]
+            meta["entry_pricing"] = "live_ask"
+
+        require_ud = bool(tier_cfg.get("require_underdispersion", True))
+        budget = float(tier_cfg.get("budget_per_market_usdc", 8.0)) * float(
+            tier_cfg.get("budget_mult", 1.0)
+        )
+        plan = build_ladder_plan(
+            quotes,
+            center_temp=fc.truncated_center,
+            model_temps=list(fc.models.values()),
+            typical_spread=st.typical_model_spread_c,
+            budget=budget,
+            max_basket_cost=float(tier_cfg.get("max_basket_cost", 0.50)),
+            min_cluster_prob=float(tier_cfg.get("min_cluster_prob", 0.50)),
+            min_basket_ev=float(tier_cfg.get("min_basket_ev", 0.015)),
+            width=int(tier_cfg.get("ladder_width", cfg.get("ladder_width", 3))),
+            press_on_underdispersion=require_ud,
+            max_leg_price=float(tier_cfg.get("max_leg_price", 0.42)),
+        )
+        last_extra = {
+            "tier": tier.get("name", "default"),
+            "bias_override_c": float(bias_override) if bias_override is not None else None,
             "models": fc.models,
             "corrected_center": fc.corrected_center,
             "truncated_center": fc.truncated_center,
@@ -220,8 +229,15 @@ def plan_event(
             "reason": plan.reason,
             "legs": [asdict(x) for x in plan.legs],
         }
-    )
-    return plan, meta
+        if plan.take:
+            best_plan = plan
+            break
+
+    if not last_extra:
+        meta["skip"] = "forecast_build_failed"
+        return None, meta
+    meta.update(last_extra)
+    return best_plan, meta
 
 
 def settle_plan(

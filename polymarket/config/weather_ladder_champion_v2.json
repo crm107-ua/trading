@@ -1,7 +1,7 @@
 {
   "strategy": "temperature_ladder",
-  "demo_label": "weather_ladder_champion",
-  "notes": "Winning desk pointer → two-tier v2. Core underdispersion WR100% +$182; volume bias WR85.7% +$270 (OOS WR75%). SG+Shanghai only. Paper only.",
+  "demo_label": "weather_ladder_champion_v2",
+  "notes": "Two-tier winning edge. Core: underdispersion+cheap basket WR100% n=5 +$182. Volume: basket<=0.65 leg<=0.45 bias+0.5 WR85.7% n=7 +$270 OOS WR75%. SG+Shanghai only. Paper only.",
   "initial_capital_usdc": 100.0,
   "budget_per_market_usdc": 12.0,
   "max_markets_per_run": 8,
@@ -13,7 +13,6 @@
   "max_leg_ask": 0.7,
   "max_leg_price": 0.45,
   "require_underdispersion": false,
-  "prefer_underdispersion": true,
   "bias_override_c": 0.5,
   "prefer_horizons": [1, 2],
   "volatile_only": true,
@@ -21,7 +20,7 @@
   "mark_open_to_mid": true,
   "cities": ["singapore", "shanghai"],
   "city_priority": ["singapore", "shanghai"],
-  "exclude_cities": ["seoul", "tokyo", "hong-kong", "miami", "wellington", "beijing", "taipei", "paris", "london"],
+  "exclude_cities": ["tokyo", "seoul", "hong-kong", "miami", "wellington", "beijing", "taipei", "paris", "london"],
   "tiers": [
     {
       "name": "core_under",
@@ -46,25 +45,28 @@
       "ladder_width": 3
     }
   ],
-  "optimize_metrics": {
-    "universe": "singapore+shanghai+two_tier",
-    "two_tier_n": 9,
-    "two_tier_winrate": 0.8889,
-    "two_tier_pnl": 237.78,
-    "two_tier_oos_n": 5,
-    "two_tier_oos_wr": 1.0,
-    "two_tier_oos_pnl": 85.17,
-    "core_n": 5,
-    "core_winrate": 1.0,
-    "core_pnl": 182.45,
-    "volume_n": 7,
-    "volume_winrate": 0.8571,
-    "volume_pnl": 269.6,
-    "volume_oos_wr": 0.75,
-    "volume_oos_pnl": 77.3,
+  "research": {
+    "verdict": "STRONG",
+    "core_under": {
+      "n_taken": 5,
+      "wins": 5,
+      "winrate": 1.0,
+      "total_pnl": 182.45,
+      "profit_factor": 10.0,
+      "oos_half_wr": 1.0,
+      "oos_half_pnl": 67.75
+    },
+    "volume_bias": {
+      "n_taken": 7,
+      "wins": 6,
+      "winrate": 0.8571,
+      "total_pnl": 269.6,
+      "profit_factor": 119.767,
+      "oos_half_n": 4,
+      "oos_half_wr": 0.75,
+      "oos_half_pnl": 77.3
+    },
     "kfold_verdict": "STRONG",
-    "two_tier_verdict": "STRONG",
-    "live_paper_scorecard_pnl": 53.16,
-    "source": "validate_two_tier+kfold+paper 2026-08-09"
+    "universe": "singapore+shanghai"
   }
 }

@@ -199,10 +199,22 @@ def build_ladder_plan(
         take = False
         reason_parts.append("not_underdispersed")
 
-    # Size: underdispersion → lean budget toward center (already via probs);
-    # optionally boost budget 1.25x when underdispersed (caller can pass budget).
-    eff_budget = budget * (1.25 if under and take else 1.0)
-    sized = size_ladder(tuples, eff_budget)
+    # Size: underdispersion → press; also scale budget up when EV is fat & basket cheap.
+    press = 1.0
+    if take and under:
+        press *= 1.35
+    if take and total_ev >= 0.08 and unit_cost <= 0.45:
+        press *= 1.15
+    eff_budget = budget * press
+    # Center-heavier when underdispersed: square probability weights
+    if under and take:
+        total_p = sum(max(0.0, p) for _, p, _ in tuples) or 1.0
+        squared = [(n, (max(0.0, p) ** 2), px) for n, p, px in tuples]
+        z = sum(p for _, p, _ in squared) or 1.0
+        tuples_sized = [(n, p / z, px) for n, p, px in squared]
+        sized = size_ladder(tuples_sized, eff_budget)
+    else:
+        sized = size_ladder(tuples, eff_budget)
     legs = [
         LadderLeg(
             name=name,
