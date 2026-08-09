@@ -1258,9 +1258,13 @@ async def run_paper_session(
     session_id: str | None = None,
     config_path: Path | None = None,
 ) -> dict[str, Any]:
-    from polymarket.src.ai.env_loader import require_nvidia_api_key
+    from polymarket.src.ai.decision_engine import fast_path_enabled
+    from polymarket.src.ai.env_loader import load_repo_dotenv, require_nvidia_api_key
 
-    require_nvidia_api_key()
+    load_repo_dotenv()
+    # Fast path is pure rules — allow paper without NVIDIA key for comparisons/labs.
+    if not fast_path_enabled():
+        require_nvidia_api_key()
     if strategy_id not in STRATEGIES:
         raise ValueError(f"Unknown strategy: {strategy_id}. Choose from {list(STRATEGIES)}")
     cfg = load_maker_cfg(config_path)
