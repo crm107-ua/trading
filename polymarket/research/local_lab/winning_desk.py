@@ -3,8 +3,8 @@
 Winning desk — capital allocation across researched edges.
 
 Stack (paper only):
-  1. Temperature Ladder champion (Singapore/Shanghai, cheap basket, bias+0.5)
-  2. Residual sleeve: grind_nim_best maker (BTC-5m) when ladder has idle capital
+  1. Temperature Ladder champion (HK/SG/SH/Beijing multi-sleeve)
+  2. Idle capital: grind_nim_best OR micro_spread (0.48/0.52 follow bands)
 
 Research basis:
   - SurferX ladder math + underdispersion / cheap neighborhood
@@ -33,6 +33,11 @@ POLY = Path(__file__).resolve().parents[2]
 OUT = POLY / "data_local" / "local_lab" / "winning_desk"
 LADDER_CFG = POLY / "config" / "weather_ladder_champion_v2.json"
 MAKER_CFG = POLY / "config" / "maker_demo_grind_nim_best.json"
+SPREAD_CFG = POLY / "config" / "maker_demo_copy_micro_spread.json"
+IDLE_SLEEVES = {
+    "grind": ("maker_edge", MAKER_CFG),
+    "micro_spread": ("maker_follow", SPREAD_CFG),
+}
 
 
 def _ladder_stats(rep: dict[str, Any]) -> dict[str, Any]:
@@ -53,14 +58,15 @@ def _ladder_stats(rep: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-async def _maker_sleeve(rounds: int, minutes: float) -> dict[str, Any]:
+async def _maker_sleeve(rounds: int, minutes: float, *, sleeve: str = "grind") -> dict[str, Any]:
+    strategy_name, cfg_path = IDLE_SLEEVES.get(sleeve, IDLE_SLEEVES["grind"])
     sessions: list[dict[str, Any]] = []
     for i in range(rounds):
         sid = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S") + f"_wd{i}"
         rep = await run_paper_session(
-            "maker_16",
+            strategy_name,
             minutes=minutes,
-            config_path=MAKER_CFG,
+            config_path=cfg_path,
             session_id=sid,
         )
         net = float(rep.get("net_session_usdc") or 0)
@@ -86,7 +92,7 @@ async def _maker_sleeve(rounds: int, minutes: float) -> dict[str, Any]:
     }
 
 
-async def run_desk(*, maker_rounds: int, maker_minutes: float) -> dict[str, Any]:
+async def run_desk(*, maker_rounds: int, maker_minutes: float, idle_sleeve: str = "grind") -> dict[str, Any]:
     load_repo_dotenv(override=True)
     os.environ.setdefault("NVIDIA_NIM_MODE", "hybrid")
     os.environ.setdefault("NVIDIA_NIM_GRIND", "1")
@@ -106,8 +112,9 @@ async def run_desk(*, maker_rounds: int, maker_minutes: float) -> dict[str, Any]
     run_maker = idle >= 8.0 and maker_rounds > 0
     maker: dict[str, Any]
     if run_maker:
-        print(f"=== MAKER grind_nim_best sleeve (idle≈{idle:.1f}) ===", flush=True)
-        maker = await _maker_sleeve(maker_rounds, maker_minutes)
+        print(f"=== MAKER idle sleeve={idle_sleeve} (idle≈{idle:.1f}) ===", flush=True)
+        maker = await _maker_sleeve(maker_rounds, maker_minutes, sleeve=idle_sleeve)
+        maker["idle_sleeve"] = idle_sleeve
     else:
         maker = {"pnl": 0.0, "wins": 0, "played": 0, "winrate": None, "sessions": [], "skipped": "no_idle_or_rounds0"}
 
@@ -157,8 +164,15 @@ def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--maker-rounds", type=int, default=3)
     p.add_argument("--maker-minutes", type=float, default=5.0)
+    p.add_argument("--idle-sleeve", choices=sorted(IDLE_SLEEVES), default="grind")
     args = p.parse_args()
-    rep = asyncio.run(run_desk(maker_rounds=args.maker_rounds, maker_minutes=args.maker_minutes))
+    rep = asyncio.run(
+        run_desk(
+            maker_rounds=args.maker_rounds,
+            maker_minutes=args.maker_minutes,
+            idle_sleeve=args.idle_sleeve,
+        )
+    )
     print(json.dumps({k: rep[k] for k in rep if k not in ("ladder", "maker") or True}, indent=2, default=str)[:4000])
     print(
         f"\nDESK PnL={rep['combined_pnl_usdc']} WR={rep['combined_winrate']} "
