@@ -253,6 +253,7 @@ def research(*, max_events: int, reuse_cases: Path | None) -> dict[str, Any]:
 
     # Freeze v2 config
     f = best["filters"]
+    bias = float(f.get("bias_override") or 0.0)
     cfg = {
         "strategy": "temperature_ladder",
         "demo_label": "weather_ladder_champion_v2",
@@ -263,7 +264,7 @@ def research(*, max_events: int, reuse_cases: Path | None) -> dict[str, Any]:
         ),
         "initial_capital_usdc": 100.0,
         "budget_per_market_usdc": f["budget"],
-        "max_markets_per_run": 6,
+        "max_markets_per_run": 8,
         "ladder_width": f["width"],
         "max_basket_cost": f["max_basket_cost"],
         "min_cluster_prob": f["min_cluster_prob"],
@@ -272,7 +273,7 @@ def research(*, max_events: int, reuse_cases: Path | None) -> dict[str, Any]:
         "max_leg_ask": 0.70,
         "max_leg_price": f["max_leg_price"],
         "require_underdispersion": f["require_underdispersion"],
-        "bias_override_c": f.get("bias_override") or 0.0,
+        "bias_override_c": bias,
         "prefer_horizons": [1, 2],
         "volatile_only": True,
         "use_clob_asks": True,
@@ -280,11 +281,40 @@ def research(*, max_events: int, reuse_cases: Path | None) -> dict[str, Any]:
         "cities": best["cities"],
         "city_priority": best["cities"],
         "exclude_cities": [c for c in STATIONS if c not in best["cities"]],
+        "tiers": [
+            {
+                "name": "press_under",
+                "max_basket_cost": f["max_basket_cost"],
+                "max_leg_price": f["max_leg_price"],
+                "min_cluster_prob": f["min_cluster_prob"],
+                "min_basket_ev": f["min_basket_ev"],
+                "require_underdispersion": True,
+                "bias_override_c": bias,
+                "budget_mult": 1.0,
+                "ladder_width": f["width"],
+            },
+            {
+                "name": "select",
+                "max_basket_cost": f["max_basket_cost"],
+                "max_leg_price": f["max_leg_price"],
+                "min_cluster_prob": f["min_cluster_prob"],
+                "min_basket_ev": f["min_basket_ev"],
+                "require_underdispersion": False,
+                "bias_override_c": bias,
+                "budget_mult": 1.0,
+                "ladder_width": f["width"],
+            },
+        ],
         "research": {
             "verdict": verdict,
             "is": best["is"],
             "oos": best["oos"],
             "full_sample": full["metrics"],
+            "walkforward_half": {
+                "n": len(wf_test),
+                "winrate": round(wf_wr, 4),
+                "pnl": round(wf_pnl, 4),
+            },
             "artifact": str(path),
         },
     }

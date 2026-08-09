@@ -17,17 +17,17 @@ OUT = POLY / "data_local" / "local_lab" / "weather_research"
 
 def main() -> int:
     cases = json.loads(CASES.read_text(encoding="utf-8"))
-    cases = [c for c in cases if c["city"] in ("singapore", "shanghai")]
+    cases = [c for c in cases if c["city"] in ("singapore", "shanghai", "hong-kong")]
     cases = sorted(cases, key=lambda c: c["day"])
     filt = TrialFilters(
         max_basket_cost=0.50,
         max_leg_price=0.39,
-        min_cluster_prob=0.45,
+        min_cluster_prob=0.35,
         min_basket_ev=0.01,
-        require_underdispersion=True,
+        require_underdispersion=False,
         width=3,
         budget=12.0,
-        bias_override=0.0,
+        bias_override=0.5,
     )
     # Collect all taken chronologically
     taken = []
@@ -69,7 +69,7 @@ def main() -> int:
     report = {
         "ts_utc": datetime.now(timezone.utc).isoformat(),
         "filters": asdict(filt),
-        "cities": ["singapore", "shanghai"],
+        "cities": ["singapore", "shanghai", "hong-kong"],
         "n_universe_cases": len(cases),
         "n_taken": len(taken),
         "overall": overall,

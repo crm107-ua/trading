@@ -1,43 +1,43 @@
 {
   "strategy": "temperature_ladder",
   "demo_label": "weather_ladder_champion_v2",
-  "notes": "Two-tier winning edge. Core: underdispersion+cheap basket WR100% n=5 +$182. Volume: basket<=0.65 leg<=0.45 bias+0.5 WR85.7% n=7 +$270 OOS WR75%. SG+Shanghai only. Paper only.",
+  "notes": "Expanded 90-case research 2026-08-09. Winner: basket<=0.50 leg<=0.39 min_p=0.35 bias+0.5 on SG+SH+HK. Two-tier press_under→select WR100% n=6 +$218 OOS WR100%. Loose volume_bias REJECTED (overfit; WR dropped to ~44% on more Shanghai). Paper only.",
   "initial_capital_usdc": 100.0,
   "budget_per_market_usdc": 12.0,
   "max_markets_per_run": 8,
   "ladder_width": 3,
-  "max_basket_cost": 0.65,
-  "min_cluster_prob": 0.4,
+  "max_basket_cost": 0.5,
+  "min_cluster_prob": 0.35,
   "min_basket_ev": 0.01,
   "min_leg_ask": 0.015,
   "max_leg_ask": 0.7,
-  "max_leg_price": 0.45,
+  "max_leg_price": 0.39,
   "require_underdispersion": false,
   "bias_override_c": 0.5,
   "prefer_horizons": [1, 2],
   "volatile_only": true,
   "use_clob_asks": true,
   "mark_open_to_mid": true,
-  "cities": ["singapore", "shanghai"],
-  "city_priority": ["singapore", "shanghai"],
-  "exclude_cities": ["tokyo", "seoul", "hong-kong", "miami", "wellington", "beijing", "taipei", "paris", "london"],
+  "cities": ["singapore", "shanghai", "hong-kong"],
+  "city_priority": ["singapore", "shanghai", "hong-kong"],
+  "exclude_cities": ["tokyo", "seoul", "miami", "wellington", "beijing", "taipei", "paris", "london"],
   "tiers": [
     {
-      "name": "core_under",
+      "name": "press_under",
       "max_basket_cost": 0.5,
       "max_leg_price": 0.39,
-      "min_cluster_prob": 0.45,
+      "min_cluster_prob": 0.35,
       "min_basket_ev": 0.01,
       "require_underdispersion": true,
-      "bias_override_c": 0.0,
+      "bias_override_c": 0.5,
       "budget_mult": 1.0,
       "ladder_width": 3
     },
     {
-      "name": "volume_bias",
-      "max_basket_cost": 0.65,
-      "max_leg_price": 0.45,
-      "min_cluster_prob": 0.4,
+      "name": "select",
+      "max_basket_cost": 0.5,
+      "max_leg_price": 0.39,
+      "min_cluster_prob": 0.35,
       "min_basket_ev": 0.01,
       "require_underdispersion": false,
       "bias_override_c": 0.5,
@@ -47,26 +47,22 @@
   ],
   "research": {
     "verdict": "STRONG",
-    "core_under": {
-      "n_taken": 5,
-      "wins": 5,
-      "winrate": 1.0,
-      "total_pnl": 182.45,
-      "profit_factor": 10.0,
-      "oos_half_wr": 1.0,
-      "oos_half_pnl": 67.75
-    },
-    "volume_bias": {
-      "n_taken": 7,
+    "n_cases": 90,
+    "full_sample": {
+      "n_taken": 6,
       "wins": 6,
-      "winrate": 0.8571,
-      "total_pnl": 269.6,
-      "profit_factor": 119.767,
-      "oos_half_n": 4,
-      "oos_half_wr": 0.75,
-      "oos_half_pnl": 77.3
+      "winrate": 1.0,
+      "total_pnl": 218.18,
+      "profit_factor": 10.0
     },
-    "kfold_verdict": "STRONG",
-    "universe": "singapore+shanghai"
+    "oos_half": {
+      "n": 3,
+      "winrate": 1.0,
+      "pnl": 72.39
+    },
+    "artifact": "/workspace/polymarket/data_local/local_lab/weather_research/research_20260809_221452.json",
+    "rejected": {
+      "volume_bias_065": "Overfit on thin sample; expanded Shanghai → WR~0.44"
+    }
   }
 }
