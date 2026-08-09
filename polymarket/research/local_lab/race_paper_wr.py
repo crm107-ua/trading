@@ -86,7 +86,8 @@ def run_weather(config: Path) -> dict[str, Any]:
     losses = sum(1 for t in taken if float(t.get("pnl") or 0) < -1e-9)
     flats = len(taken) - wins - losses
     wr = (wins / len(taken)) if taken else None
-    pnl = float(rep.get("total_pnl_usdc") or 0.0)
+    # Prefer realized (resolved) scorecard — article edge prints at resolution
+    pnl = float(rep.get("scorecard_pnl_usdc") if rep.get("scorecard_pnl_usdc") is not None else rep.get("total_pnl_usdc") or 0.0)
     capital = float(rep.get("initial_capital_usdc") or 100.0)
     model_ev = 0.0
     for t in taken:
@@ -94,15 +95,21 @@ def run_weather(config: Path) -> dict[str, Any]:
             model_ev += float(t.get("basket_ev") or 0) * float(t.get("spent") or 0)
         except (TypeError, ValueError):
             pass
+    resolved_taken = [t for t in taken if t.get("resolved")]
+    r_wins = sum(1 for t in resolved_taken if float(t.get("pnl") or 0) > 1e-9)
+    r_wr = (r_wins / len(resolved_taken)) if resolved_taken else wr
     return {
         "method": "temperature_ladder",
         "capital_usdc": capital,
         "ladders_taken": len(taken),
+        "resolved_ladders": len(resolved_taken),
         "wins": wins,
         "losses": losses,
         "flats": flats,
         "winrate": None if wr is None else round(wr, 4),
-        "total_pnl_usdc": round(pnl, 4),
+        "resolved_winrate": None if r_wr is None else round(r_wr, 4),
+        "total_pnl_usdc": round(float(rep.get("total_pnl_usdc") or 0.0), 4),
+        "scorecard_pnl_usdc": round(pnl, 4),
         "realized_pnl_usdc": rep.get("realized_pnl_usdc"),
         "open_mark_pnl_usdc": rep.get("open_mark_pnl_usdc"),
         "model_ev_dollar_proxy": round(model_ev, 4),
@@ -183,7 +190,7 @@ def main() -> int:
     p.add_argument("--maker-minutes", type=float, default=6.0)
     p.add_argument(
         "--maker-config",
-        default=str(ROOT / "config" / "maker_demo_grind_nim_v2.json"),
+        default=str(ROOT / "config" / "maker_demo_grind_nim_best.json"),
     )
     p.add_argument(
         "--weather-config",

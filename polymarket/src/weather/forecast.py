@@ -12,6 +12,7 @@ from polymarket.src.weather.ladder import gaussian_bucket_probs, truncate_temp
 from polymarket.src.weather.stations import Station
 
 OPEN_METEO = "https://api.open-meteo.com/v1/forecast"
+HIST_FORECAST = "https://historical-forecast-api.open-meteo.com/v1/forecast"
 DEFAULT_MODELS = ("icon_seamless", "gfs_seamless", "ecmwf_ifs025")
 
 
@@ -109,6 +110,42 @@ def forecast_for_station(
             return None
     temps = bucket_temps or list(range(20, 42))
     return build_day_forecast(station, date.fromisoformat(key), raw[key], bucket_temps=temps)
+
+
+def fetch_historical_model_maxes(
+    station: Station,
+    day: date,
+    *,
+    models: tuple[str, ...] = DEFAULT_MODELS,
+    timeout_s: float = 20.0,
+) -> dict[str, float]:
+    """
+    Multi-model daily max that was available historically for `day`.
+    Used to center ladders for resolved-day paper (no look-ahead on outcome).
+    """
+    out: dict[str, float] = {}
+    key = day.isoformat()
+    with httpx.Client(timeout=timeout_s) as client:
+        for model in models:
+            params = {
+                "latitude": station.lat,
+                "longitude": station.lon,
+                "start_date": key,
+                "end_date": key,
+                "daily": "temperature_2m_max",
+                "timezone": station.timezone,
+                "models": model,
+            }
+            r = client.get(HIST_FORECAST, params=params)
+            if r.status_code != 200:
+                continue
+            daily = r.json().get("daily") or {}
+            times = daily.get("time") or []
+            vals = daily.get("temperature_2m_max") or []
+            for t, v in zip(times, vals, strict=False):
+                if str(t) == key and v is not None:
+                    out[model] = float(v)
+    return out
 
 
 def parse_forecast_payload(payload: dict[str, Any]) -> dict[str, dict[str, float]]:

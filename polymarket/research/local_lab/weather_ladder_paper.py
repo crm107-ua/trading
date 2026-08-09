@@ -20,12 +20,17 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from polymarket.src.weather.forecast import build_day_forecast, fetch_model_maxes
+from polymarket.src.weather.forecast import (
+    build_day_forecast,
+    fetch_historical_model_maxes,
+    fetch_model_maxes,
+)
 from polymarket.src.weather.ladder import BucketQuote, LadderPlan, build_ladder_plan
 from polymarket.src.weather.markets import (
     TempEvent,
     discover_temperature_slugs,
     fetch_temp_event,
+    historical_entry_ask,
     horizon_days,
     winning_bucket,
 )
@@ -76,6 +81,10 @@ def _quotes_for_event(event: TempEvent, probs: dict[int, float]) -> list[BucketQ
     return out
 
 
+def _event_resolved(event: TempEvent) -> bool:
+    return event.closed or winning_bucket(event) is not None
+
+
 def plan_event(
     event: TempEvent,
     cfg: dict[str, Any],
@@ -83,12 +92,14 @@ def plan_event(
     today: date | None = None,
 ) -> tuple[LadderPlan | None, dict[str, Any]]:
     station = get_station(event.city)
+    resolved = _event_resolved(event)
     meta: dict[str, Any] = {
         "slug": event.slug,
         "city": event.city,
         "day": event.day.isoformat(),
         "horizon_d": horizon_days(event.day, today=today),
         "closed": event.closed,
+        "resolved": resolved,
     }
     if station is None:
         meta["skip"] = "unknown_station"
@@ -98,9 +109,13 @@ def plan_event(
         return None, meta
     prefer = set(int(x) for x in (cfg.get("prefer_horizons") or [1, 2]))
     hz = horizon_days(event.day, today=today)
-    # Allow horizon 0 only for resolved PnL replay; open trades stick to D+1/D+2
-    if not event.closed and hz not in prefer:
+    # Open trades: D+1/D+2 only. Resolved: replay last 0–2 days for realized PnL.
+    if not resolved and hz not in prefer:
         meta["skip"] = f"horizon_{hz}"
+        return None, meta
+    # Only replay yesterday/today resolved — older days lack clean D+1 entry context
+    if resolved and hz not in (0, -1):
+        meta["skip"] = "resolved_outside_d0_d1"
         return None, meta
 
     point_temps = sorted({b.temp_c for b in event.buckets if b.temp_c is not None})
@@ -108,37 +123,69 @@ def plan_event(
         meta["skip"] = "few_buckets"
         return None, meta
 
-    raw = fetch_model_maxes(station, days=max(3, hz + 1))
-    key = event.day.isoformat()
-    if key not in raw:
-        # Fall back to nearest available forecast day
-        if not raw:
-            meta["skip"] = "no_forecast"
-            return None, meta
-        key = min(raw.keys(), key=lambda d: abs(date.fromisoformat(d) - event.day).days)
-        meta["forecast_day_used"] = key
-    fc = build_day_forecast(station, date.fromisoformat(key), raw[key], bucket_temps=point_temps)
+    if resolved:
+        # Article path: center on station forecast available before resolution
+        models = fetch_historical_model_maxes(station, event.day)
+        meta["forecast_source"] = "historical_forecast_api"
+    else:
+        raw = fetch_model_maxes(station, days=max(3, hz + 1))
+        key = event.day.isoformat()
+        if key not in raw:
+            if not raw:
+                meta["skip"] = "no_forecast"
+                return None, meta
+            key = min(raw.keys(), key=lambda d: abs(date.fromisoformat(d) - event.day).days)
+            meta["forecast_day_used"] = key
+        models = raw[key]
+        meta["forecast_source"] = "live_forecast_api"
+
+    if not models:
+        meta["skip"] = "no_forecast"
+        return None, meta
+    fc = build_day_forecast(station, event.day, models, bucket_temps=point_temps)
     if fc is None:
         meta["skip"] = "forecast_build_failed"
         return None, meta
 
-    quotes = _quotes_for_event(event, fc.bucket_probs)
     min_ask = float(cfg.get("min_leg_ask", 0.015))
     max_ask = float(cfg.get("max_leg_ask", 0.70))
-    if not event.closed:
+    if resolved:
+        # Entry = early CLOB history (pre-spike), not the final 0/1 prices
+        quotes: list[BucketQuote] = []
+        for b in event.buckets:
+            if b.temp_c is None:
+                continue
+            entry = historical_entry_ask(b.token_yes)
+            if entry is None or not (min_ask <= entry <= max_ask):
+                continue
+            quotes.append(
+                BucketQuote(
+                    name=b.name,
+                    my_prob=float(fc.bucket_probs.get(b.temp_c, 0.0)),
+                    market_price=float(entry),
+                    temp_c=b.temp_c,
+                )
+            )
+        meta["entry_pricing"] = "clob_history_pre_resolution"
+    else:
+        quotes = _quotes_for_event(event, fc.bucket_probs)
         quotes = [q for q in quotes if min_ask <= q.market_price <= max_ask]
+        meta["entry_pricing"] = "live_ask"
+
     require_ud = bool(cfg.get("require_underdispersion", True))
+    # Article: keep basket cheap so one 100c winner clears losers (~47c example)
     plan = build_ladder_plan(
         quotes,
         center_temp=fc.truncated_center,
         model_temps=list(fc.models.values()),
         typical_spread=station.typical_model_spread_c,
         budget=float(cfg.get("budget_per_market_usdc", 8.0)),
-        max_basket_cost=float(cfg.get("max_basket_cost", 0.85)),
+        max_basket_cost=float(cfg.get("max_basket_cost", 0.50)),
         min_cluster_prob=float(cfg.get("min_cluster_prob", 0.50)),
         min_basket_ev=float(cfg.get("min_basket_ev", 0.015)),
         width=int(cfg.get("ladder_width", 3)),
         press_on_underdispersion=require_ud,
+        max_leg_price=float(cfg.get("max_leg_price", 0.42)),
     )
     meta.update(
         {
@@ -168,7 +215,7 @@ def settle_plan(
     Resolved: winner pays $1/share; losers 0.
     Open: mark each leg to mid (or ask if no mid).
     """
-    winner = winning_bucket(event) if event.closed else None
+    winner = winning_bucket(event)
     by_name = {b.name: b for b in event.buckets}
     fills: list[PaperFill] = []
     spent = 0.0
@@ -240,17 +287,19 @@ def run_weather_ladder_paper(
     open_mark_pnl = 0.0
     spent_total = 0.0
 
-    # Prefer open D+1/D+2 first, then recently closed for realized scorecard
+    # Realized (resolved) first — article edge prints at resolution — then open D+1/D+2
     events_sorted = sorted(
         events,
-        key=lambda e: (e.closed, abs(horizon_days(e.day, today=today) - 1), e.slug),
+        key=lambda e: (
+            0 if _event_resolved(e) else 1,
+            abs(horizon_days(e.day, today=today)),
+            e.slug,
+        ),
     )
 
     for event in events_sorted:
         if len(taken) >= max_markets:
-            # still score closed events for comparison if we have room in skipped log only
-            if not event.closed:
-                continue
+            break
         plan, meta = plan_event(event, cfg, today=today)
         if plan is None or not plan.take:
             skipped.append(meta)
@@ -273,11 +322,13 @@ def run_weather_ladder_paper(
         }
         taken.append(row)
         all_fills.extend(row["fills"])
-        if event.closed:
+        if _event_resolved(event):
             realized_pnl += pnl
         else:
             open_mark_pnl += pnl
 
+    wins = sum(1 for t in taken if float(t.get("pnl") or 0) > 1e-9)
+    losses = sum(1 for t in taken if float(t.get("pnl") or 0) < -1e-9)
     report = {
         "ts_utc": datetime.now(timezone.utc).isoformat(),
         "session_id": sid,
@@ -288,15 +339,23 @@ def run_weather_ladder_paper(
         "events_seen": len(events),
         "ladders_taken": len(taken),
         "ladders_skipped": len(skipped),
+        "wins": wins,
+        "losses": losses,
+        "winrate": round(wins / len(taken), 4) if taken else None,
         "spent_usdc": round(spent_total, 4),
         "realized_pnl_usdc": round(realized_pnl, 4),
         "open_mark_pnl_usdc": round(open_mark_pnl, 4),
+        # Primary scorecard = realized (resolved). Open mark is secondary drag.
         "total_pnl_usdc": round(realized_pnl + open_mark_pnl, 4),
+        "scorecard_pnl_usdc": round(realized_pnl, 4),
         "ending_equity_usdc": round(bankroll + realized_pnl + open_mark_pnl, 4),
         "elapsed_s": round(time.perf_counter() - t0, 2),
         "taken": taken,
         "skipped_head": skipped[:20],
-        "note": "Paper — asks from CLOB/gamma; no on-chain. Open PnL is mark-to-mid.",
+        "note": (
+            "Paper. Resolved ladders use historical forecast + CLOB pre-resolution "
+            "entry; open ladders mark-to-mid. No on-chain."
+        ),
     }
     (out_dir / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     with (out_dir / "fills.jsonl").open("w", encoding="utf-8") as fh:

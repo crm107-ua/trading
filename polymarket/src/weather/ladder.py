@@ -156,11 +156,12 @@ def build_ladder_plan(
     model_temps: Sequence[float],
     typical_spread: float,
     budget: float,
-    max_basket_cost: float = 0.85,
+    max_basket_cost: float = 0.50,
     min_cluster_prob: float = 0.55,
     min_basket_ev: float = 0.02,
     width: int = 3,
     press_on_underdispersion: bool = True,
+    max_leg_price: float = 0.42,
 ) -> LadderPlan:
     """
     Full decision: cluster → EV → underdispersion → size → take/skip.
@@ -172,6 +173,7 @@ def build_ladder_plan(
 
     unit_cost = sum(b.market_price for b in cluster)
     cluster_prob = sum(b.my_prob for b in cluster)
+    max_leg = max(b.market_price for b in cluster)
     tuples = [(b.name, b.my_prob, b.market_price) for b in cluster]
     total_ev, per_ev = ladder_ev(tuples)
     ud = underdispersion_signal(model_temps, typical_spread)
@@ -182,6 +184,10 @@ def build_ladder_plan(
     if unit_cost <= 0 or unit_cost > max_basket_cost:
         take = False
         reason_parts.append(f"basket_cost={unit_cost:.3f}>max={max_basket_cost}")
+    # Article Singapore shape peaked ~39c — a 48c+ leg means skew is already gone.
+    if max_leg_price > 0 and max_leg > max_leg_price:
+        take = False
+        reason_parts.append(f"max_leg={max_leg:.3f}>{max_leg_price}")
     if cluster_prob < min_cluster_prob:
         take = False
         reason_parts.append(f"cluster_p={cluster_prob:.3f}<{min_cluster_prob}")

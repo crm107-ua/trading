@@ -42,3 +42,15 @@ NVIDIA_NIM_MODE=fast NVIDIA_NIM_CONTEXT_ENGINEERING=1 \
 - Preferir ciudades volátiles + horizonte D+1/D+2
 - Centrar en estación, no en “app del tiempo” de la ciudad
 - Bias correction antes de construir el cluster
+
+
+## Resolved paper (cómo imprime)
+
+El edge del artículo se realiza en **resolución**, no en mark-to-mid.
+
+1. Forecast histórico multi-modelo (estación) → centro truncado
+2. Entry = precio CLOB pre-spike (`prices-history`)
+3. Filtros artículo: basket ≤ 0.50, pierna máx ≤ 0.42, underdispersion
+4. Settlement: winner 100¢ / losers 0
+
+Ejemplo 2026-08-09 Shanghai: basket 0.185 → **+11.79 USDC** paper (WR 100% en esa corrida filtrada).

@@ -76,14 +76,14 @@ def test_build_ladder_plan_take_on_cheap_cluster():
         model_temps=[31.8, 32.0, 32.1],
         typical_spread=1.8,
         budget=10.0,
-        max_basket_cost=0.85,
+        max_basket_cost=0.55,
         min_cluster_prob=0.50,
         min_basket_ev=0.01,
         width=3,
     )
     assert plan.take is True
     assert plan.underdispersed is True
-    assert plan.basket_cost < 0.85
+    assert plan.basket_cost < 0.55
     assert len(plan.legs) == 3
 
 

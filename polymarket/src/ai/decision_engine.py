@@ -296,13 +296,23 @@ def decide_quote_action(
     messages = _build_nim_messages(snapshot, assembled=assembled)
     conf_min = _confidence_min()
     model_hint = assembled.model_hint if assembled is not None else primary_model_id()
+    # Champion lab used nemotron-mini; keep it ahead of slow/timing-out 1B llama.
+    roster = preferred_models or [
+        primary_model_id(),
+        "nvidia/nemotron-mini-4b-instruct",
+        model_hint,
+    ]
+    preferred: list[str] = []
+    for mid in roster:
+        if mid and mid not in preferred:
+            preferred.append(mid)
     try:
         resp = robust_chat_completion(
             messages=messages,
-            timeout_ms=min(max(latency_budget_ms, 500), 4000),
+            timeout_ms=min(max(latency_budget_ms, 800), 6000),
             temperature=0.0,
             max_tokens=120,
-            preferred_models=preferred_models or [model_hint, primary_model_id()],
+            preferred_models=preferred,
             use_cache=use_cache,
         )
     except Exception:
