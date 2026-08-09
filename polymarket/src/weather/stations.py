@@ -27,6 +27,7 @@ STATIONS: dict[str, Station] = {
     "shanghai": Station("shanghai", "ZSPD", 31.1443, 121.8083, "Asia/Shanghai", typical_model_spread_c=2.2, bias_c=0.5, volatile=True),
     "tokyo": Station("tokyo", "RJTT", 35.5494, 139.7798, "Asia/Tokyo", typical_model_spread_c=2.0, volatile=True),
     "seoul": Station("seoul", "RKSI", 37.4602, 126.4407, "Asia/Seoul", typical_model_spread_c=2.4, volatile=True),
+    # sleeve bias_override (+0.5) applied in champion config; keep station base 0 here
     "hong-kong": Station("hong-kong", "VHHH", 22.3080, 113.9185, "Asia/Hong_Kong", typical_model_spread_c=1.6, volatile=True),
     "miami": Station("miami", "KMIA", 25.7959, -80.2870, "America/New_York", unit="F", typical_model_spread_c=3.0, volatile=True),
     "wellington": Station("wellington", "NZWN", -41.3276, 174.8050, "Pacific/Auckland", typical_model_spread_c=2.5, volatile=True),

@@ -1,7 +1,7 @@
 {
   "strategy": "temperature_ladder_multi_sleeve",
   "demo_label": "weather_ladder_champion",
-  "notes": "Multi-sleeve STRONG v3: core SG/SH/HK + Beijing. Floor-trap gate (center < min bucket) \u2192 research WR100% n=13 +$623.55 OOS WR100%. Paper only.",
+  "notes": "Multi-sleeve STRONG v3: core SG/SH/HK + Beijing. Floor-trap gate (center < min bucket) \u2192 research WR100% n=13 +$623.55 OOS WR100%. Paper only. HK prioritized after macau.weather wallet study (HK highest/lowest +$10k; do not copy Shenzhen/expensive baskets).",
   "initial_capital_usdc": 150.0,
   "budget_per_market_usdc": 12.0,
   "max_markets_per_run": 14,
@@ -31,10 +31,10 @@
     "beijing"
   ],
   "city_priority": [
+    "hong-kong",
     "singapore",
     "shanghai",
-    "beijing",
-    "hong-kong"
+    "beijing"
   ],
   "exclude_cities": [
     "seoul",

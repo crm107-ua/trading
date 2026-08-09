@@ -16,6 +16,10 @@
 Saltar si `center_temp < min(point_buckets)` — evita el trap open-low  
 (ej. Beijing 2026-07-10: center 27, buckets ≥28, winner «27°C or below»).
 
+## Referencia de mercado: `macau.weather`
+
+Wallet live de ladder HK (highest+lowest, ~+$10k). Ver `docs/MACAU_WEATHER_BOT.md`. Copiamos **universo HK + disciplina cheap-basket**, no su width/basket caros.
+
 ## Rechazado
 
 - Seoul, Taipei volume, basket≤0.65 overfit, bias global único
