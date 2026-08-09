@@ -6,6 +6,12 @@ import re
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from polymarket.src.ai.context_engineering import (
+    AssembledContext,
+    RouteDecision,
+    build_maker_context,
+    context_engineering_enabled,
+)
 from polymarket.src.ai.env_loader import load_repo_dotenv
 from polymarket.src.ai.nvidia_client import NimResponse, primary_model_id, robust_chat_completion
 
@@ -139,10 +145,10 @@ def rule_guard(snapshot: dict[str, Any]) -> Decision | None:
     return None
 
 
-def _build_nim_messages(snapshot: dict[str, Any]) -> list[dict[str, str]]:
+def _legacy_snapshot_ctx(snapshot: dict[str, Any]) -> dict[str, Any]:
     spread = _market_spread_cents(snapshot)
     move = _spot_move_usd(snapshot)
-    ctx = {
+    return {
         "spot_usd": snapshot.get("spot"),
         "strike_usd": snapshot.get("strike"),
         "time_remaining_s": snapshot.get("time_remaining_s"),
@@ -161,6 +167,27 @@ def _build_nim_messages(snapshot: dict[str, Any]) -> list[dict[str, str]]:
         "requote_threshold_usd": snapshot.get("requote_spot_move_usd"),
         "feed_age_ms": snapshot.get("feed_age_ms"),
     }
+
+
+def assemble_quote_context(snapshot: dict[str, Any]) -> AssembledContext | None:
+    """Build curated NIM context via Context Engineering (or None if disabled)."""
+    if not context_engineering_enabled():
+        return None
+    return build_maker_context(
+        snapshot,
+        query=(
+            "Decide quote, cancel_replace, or hold for this Polymarket BTC-5m maker. "
+            "Focus on edge_abs vs min_edge, book spread, feed_age_ms, inventory risk, "
+            "and spot move vs requote threshold."
+        ),
+    )
+
+
+def _build_nim_messages(
+    snapshot: dict[str, Any],
+    *,
+    assembled: AssembledContext | None = None,
+) -> list[dict[str, str]]:
     profit_bias = (
         "Maximize session maker PnL under risk caps.\n"
         "QUOTE when edge_abs >= min_edge and book is stable (capture maker edge).\n"
@@ -169,6 +196,17 @@ def _build_nim_messages(snapshot: dict[str, Any]) -> list[dict[str, str]]:
         if profit_assist_enabled()
         else ""
     )
+    if assembled is None:
+        assembled = assemble_quote_context(snapshot)
+
+    if assembled is not None and assembled.text.strip():
+        user_content = (
+            f"Context route={assembled.route.value} sources={assembled.selected_source_ids}\n"
+            f"{assembled.text}"
+        )
+    else:
+        user_content = f"Market snapshot:\n{json.dumps(_legacy_snapshot_ctx(snapshot), ensure_ascii=False)}"
+
     return [
         {
             "role": "system",
@@ -186,7 +224,7 @@ def _build_nim_messages(snapshot: dict[str, Any]) -> list[dict[str, str]]:
         },
         {
             "role": "user",
-            "content": f"Market snapshot:\n{json.dumps(ctx, ensure_ascii=False)}",
+            "content": user_content,
         },
     ]
 
@@ -243,15 +281,28 @@ def decide_quote_action(
                 return Decision("hold", "rule_weak_edge", 1.0, "rule"), None
         # ambiguous / medium edge → fall through to NIM (más ancho si STRONG_EDGE_MULT↑)
 
-    messages = _build_nim_messages(snapshot)
+    assembled = assemble_quote_context(snapshot)
+    # Context route TOOL_ONLY means retrieval adds nothing — stay on deterministic path.
+    if assembled is not None and assembled.route == RouteDecision.TOOL_ONLY:
+        if (
+            edge_abs is not None
+            and float(edge_abs) >= min_edge
+            and spread is not None
+            and spread + 1e-9 >= min_cents
+        ):
+            return Decision("quote", "rule_context_tool_only_edge", 0.85, "rule"), None
+        return Decision("hold", "rule_context_tool_only", 0.85, "rule"), None
+
+    messages = _build_nim_messages(snapshot, assembled=assembled)
     conf_min = _confidence_min()
+    model_hint = assembled.model_hint if assembled is not None else primary_model_id()
     try:
         resp = robust_chat_completion(
             messages=messages,
             timeout_ms=min(max(latency_budget_ms, 500), 4000),
             temperature=0.0,
             max_tokens=120,
-            preferred_models=preferred_models or [primary_model_id()],
+            preferred_models=preferred_models or [model_hint, primary_model_id()],
             use_cache=use_cache,
         )
     except Exception:
@@ -295,6 +346,20 @@ def _build_exit_messages(snapshot: dict[str, Any]) -> list[dict[str, str]]:
         "best_bid": snapshot.get("best_bid"),
         "best_ask": snapshot.get("best_ask"),
     }
+    user_content = f"Open position snapshot:\n{json.dumps(ctx, ensure_ascii=False)}"
+    if context_engineering_enabled():
+        assembled = build_maker_context(
+            snapshot,
+            query=(
+                "Manage open inventory: hold or flatten to maximize session PnL. "
+                "Prioritize unrealized_pnl_usdc, fair vs entry, and time_remaining_s."
+            ),
+        )
+        if assembled.text.strip():
+            user_content = (
+                f"Context route={assembled.route.value} sources={assembled.selected_source_ids}\n"
+                f"{assembled.text}"
+            )
     return [
         {
             "role": "system",
@@ -311,7 +376,7 @@ def _build_exit_messages(snapshot: dict[str, Any]) -> list[dict[str, str]]:
         },
         {
             "role": "user",
-            "content": f"Open position snapshot:\n{json.dumps(ctx, ensure_ascii=False)}",
+            "content": user_content,
         },
     ]
 
