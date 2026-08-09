@@ -32,7 +32,7 @@ python -m polymarket.research.local_lab.winning_desk --idle-sleeve micro_spread 
 
 Ranking: `ladder` ≫ `micro_spread` > `grind_nim`. Veredicto: **LADDER_STILL_BEST**.
 
-Scan leaderboard: con `closed-positions` ordenado ASC+DESC por REALIZEDPNL, **casi 0 wallets “never lose” con n≥15** (la cifra viral “47” no se reproduce).
+Scan leaderboard (`elite_scan_20260809_231516`, n=20): `found_never_lose_with_n15` = **1** (no 47). Estilo mid-band 0.48–0.52 es raro en el top.
 
 ## Veredicto operativo (regla del desk)
 
