@@ -1,0 +1,118 @@
+{
+  "strategy": "temperature_ladder_multi_sleeve",
+  "demo_label": "weather_ladder_ultra_real_v1",
+  "notes": "Champion v3 locked for ultra-real paper campaign. Same sleeves/gates as weather_ladder_champion_v2 plus friction stress. Paper only — POLY_LIVE_ARMED stays 0.",
+  "inherits": "weather_ladder_champion_v2.json",
+  "initial_capital_usdc": 150.0,
+  "budget_per_market_usdc": 12.0,
+  "max_markets_per_run": 16,
+  "max_per_city": 3,
+  "sort_mode": "horizon_first",
+  "limit_per_city": 14,
+  "resolved_max_age_days": 30,
+  "ladder_width": 3,
+  "max_basket_cost": 0.5,
+  "min_cluster_prob": 0.35,
+  "min_basket_ev": 0.01,
+  "min_leg_ask": 0.015,
+  "max_leg_ask": 0.7,
+  "max_leg_price": 0.39,
+  "require_underdispersion": false,
+  "bias_override_c": 0.5,
+  "prefer_horizons": [1, 2],
+  "volatile_only": true,
+  "use_clob_asks": true,
+  "mark_open_to_mid": true,
+  "cities": ["singapore", "shanghai", "hong-kong", "beijing"],
+  "city_priority": ["hong-kong", "singapore", "shanghai", "beijing"],
+  "exclude_cities": ["tokyo", "seoul", "miami", "wellington", "taipei", "paris", "london"],
+  "friction": {
+    "entry_slip_cents": 0.01,
+    "taker_fee_bps": 0,
+    "fill_ratio": 0.95,
+    "min_leg_shares": 5.0,
+    "min_leg_notional_usdc": 1.0,
+    "adverse_selection_mult": 1.0
+  },
+  "sleeves": [
+    {
+      "name": "core",
+      "cities": ["singapore", "shanghai", "hong-kong"],
+      "max_basket_cost": 0.5,
+      "max_leg_price": 0.39,
+      "min_cluster_prob": 0.35,
+      "min_basket_ev": 0.01,
+      "bias_override_c": 0.5,
+      "tiers": [
+        {
+          "name": "press_under",
+          "max_basket_cost": 0.5,
+          "max_leg_price": 0.39,
+          "min_cluster_prob": 0.35,
+          "min_basket_ev": 0.01,
+          "require_underdispersion": true,
+          "bias_override_c": 0.5,
+          "budget_mult": 1.0,
+          "ladder_width": 3
+        },
+        {
+          "name": "select",
+          "max_basket_cost": 0.5,
+          "max_leg_price": 0.39,
+          "min_cluster_prob": 0.35,
+          "min_basket_ev": 0.01,
+          "require_underdispersion": false,
+          "bias_override_c": 0.5,
+          "budget_mult": 1.0,
+          "ladder_width": 3
+        }
+      ]
+    },
+    {
+      "name": "beijing",
+      "cities": ["beijing"],
+      "max_basket_cost": 0.55,
+      "max_leg_price": 0.39,
+      "min_cluster_prob": 0.35,
+      "min_basket_ev": 0.01,
+      "bias_override_c": 1.0,
+      "budget_per_market_usdc": 12.0,
+      "tiers": [
+        {
+          "name": "press_under",
+          "max_basket_cost": 0.55,
+          "max_leg_price": 0.39,
+          "min_cluster_prob": 0.35,
+          "min_basket_ev": 0.01,
+          "require_underdispersion": true,
+          "bias_override_c": 1.0,
+          "budget_mult": 1.0,
+          "ladder_width": 3
+        },
+        {
+          "name": "select",
+          "max_basket_cost": 0.55,
+          "max_leg_price": 0.39,
+          "min_cluster_prob": 0.35,
+          "min_basket_ev": 0.01,
+          "require_underdispersion": false,
+          "bias_override_c": 1.0,
+          "budget_mult": 1.0,
+          "ladder_width": 3
+        }
+      ]
+    }
+  ],
+  "income_gate": {
+    "min_resolved_trades": 8,
+    "min_winrate": 0.75,
+    "min_profit_factor": 2.0,
+    "min_scorecard_pnl_usdc": 50.0,
+    "min_stress_pnl_usdc": 0.0,
+    "max_drawdown_frac": 0.35,
+    "live_min_resolved": 6,
+    "live_min_winrate": 0.6,
+    "live_min_scorecard_pnl_usdc": 20.0,
+    "live_friction_base_min_pnl_usdc": 0.0
+  }
+}

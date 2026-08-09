@@ -368,33 +368,49 @@ def run_weather_ladder_paper(
     print(f"fetched {len(events)} events", flush=True)
 
     max_markets = int(cfg.get("max_markets_per_run", 6))
+    max_per_city = int(cfg.get("max_per_city", 0) or 0)  # 0 = unlimited
     bankroll = float(cfg.get("initial_capital_usdc", 100.0))
+    min_budget = float(cfg.get("budget_per_market_usdc", 8.0))
     taken: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
     all_fills: list[dict[str, Any]] = []
     realized_pnl = 0.0
     open_mark_pnl = 0.0
     spent_total = 0.0
+    taken_by_city: dict[str, int] = {}
 
-    # Realized (resolved) first — article edge prints at resolution — then open D+1/D+2
+    # Realized first; by default interleave by horizon so one city cannot consume bankroll.
+    # Optional city_priority is a tie-breaker only (unless sort_mode=city_first).
     priority = {str(c).lower(): i for i, c in enumerate(cfg.get("city_priority") or [])}
+    sort_mode = str(cfg.get("sort_mode") or "horizon_first")
 
     def _sort_key(e: TempEvent) -> tuple:
-        return (
-            0 if _event_resolved(e) else 1,
-            priority.get(e.city.lower(), 100),
-            abs(horizon_days(e.day, today=today)),
-            e.slug,
-        )
+        resolved_rank = 0 if _event_resolved(e) else 1
+        hz = abs(horizon_days(e.day, today=today))
+        pri = priority.get(e.city.lower(), 100)
+        if sort_mode == "city_first":
+            return (resolved_rank, pri, hz, e.slug)
+        return (resolved_rank, hz, pri, e.slug)
 
     events_sorted = sorted(events, key=_sort_key)
 
-    print(f"planning {len(events_sorted)} events (max_markets={max_markets})...", flush=True)
+    print(
+        f"planning {len(events_sorted)} events (max_markets={max_markets} "
+        f"max_per_city={max_per_city or '∞'} sort={sort_mode})...",
+        flush=True,
+    )
     for i, event in enumerate(events_sorted):
         if len(taken) >= max_markets:
             break
+        if bankroll - spent_total < min_budget * 0.5:
+            print(f"  bankroll exhausted at event {i+1}; stopping early", flush=True)
+            break
         if i % 5 == 0:
             print(f"  …event {i+1}/{len(events_sorted)} taken={len(taken)} skipped={len(skipped)}", flush=True)
+        city_l = event.city.lower()
+        if max_per_city and taken_by_city.get(city_l, 0) >= max_per_city:
+            skipped.append({"slug": event.slug, "city": event.city, "skip": "max_per_city"})
+            continue
         plan, meta = plan_event(event, cfg, today=today)
         if plan is None or not plan.take:
             skipped.append(meta)
@@ -409,6 +425,7 @@ def run_weather_ladder_paper(
             skipped.append(meta)
             continue
         spent_total += spent
+        taken_by_city[city_l] = taken_by_city.get(city_l, 0) + 1
         row = {
             **meta,
             "spent": spent,
