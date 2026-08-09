@@ -351,6 +351,7 @@ def run_weather_ladder_paper(
                         slugs.append(slug)
                 except Exception:
                     continue
+    print(f"discovered {len(slugs)} slugs for {cities}", flush=True)
     t0 = time.perf_counter()
 
     events: list[TempEvent] = []
@@ -364,6 +365,7 @@ def run_weather_ladder_paper(
             continue
         if ev is not None:
             events.append(ev)
+    print(f"fetched {len(events)} events", flush=True)
 
     max_markets = int(cfg.get("max_markets_per_run", 6))
     bankroll = float(cfg.get("initial_capital_usdc", 100.0))
@@ -387,9 +389,12 @@ def run_weather_ladder_paper(
 
     events_sorted = sorted(events, key=_sort_key)
 
-    for event in events_sorted:
+    print(f"planning {len(events_sorted)} events (max_markets={max_markets})...", flush=True)
+    for i, event in enumerate(events_sorted):
         if len(taken) >= max_markets:
             break
+        if i % 5 == 0:
+            print(f"  …event {i+1}/{len(events_sorted)} taken={len(taken)} skipped={len(skipped)}", flush=True)
         plan, meta = plan_event(event, cfg, today=today)
         if plan is None or not plan.take:
             skipped.append(meta)

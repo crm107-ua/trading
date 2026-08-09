@@ -6,7 +6,7 @@
   "budget_per_market_usdc": 12.0,
   "max_markets_per_run": 14,
   "limit_per_city": 10,
-  "resolved_max_age_days": 35,
+  "resolved_max_age_days": 12,
   "ladder_width": 3,
   "max_basket_cost": 0.5,
   "min_cluster_prob": 0.35,
@@ -16,17 +16,42 @@
   "max_leg_price": 0.39,
   "require_underdispersion": false,
   "bias_override_c": 0.5,
-  "prefer_horizons": [1, 2],
+  "prefer_horizons": [
+    1,
+    2
+  ],
   "volatile_only": true,
   "use_clob_asks": true,
   "mark_open_to_mid": true,
-  "cities": ["singapore", "shanghai", "hong-kong", "beijing"],
-  "city_priority": ["singapore", "shanghai", "beijing", "hong-kong"],
-  "exclude_cities": ["tokyo", "seoul", "miami", "wellington", "taipei", "paris", "london"],
+  "cities": [
+    "singapore",
+    "shanghai",
+    "hong-kong",
+    "beijing"
+  ],
+  "city_priority": [
+    "singapore",
+    "shanghai",
+    "beijing",
+    "hong-kong"
+  ],
+  "exclude_cities": [
+    "tokyo",
+    "seoul",
+    "miami",
+    "wellington",
+    "taipei",
+    "paris",
+    "london"
+  ],
   "sleeves": [
     {
       "name": "core",
-      "cities": ["singapore", "shanghai", "hong-kong"],
+      "cities": [
+        "singapore",
+        "shanghai",
+        "hong-kong"
+      ],
       "max_basket_cost": 0.5,
       "max_leg_price": 0.39,
       "min_cluster_prob": 0.35,
@@ -59,7 +84,9 @@
     },
     {
       "name": "beijing",
-      "cities": ["beijing"],
+      "cities": [
+        "beijing"
+      ],
       "max_basket_cost": 0.55,
       "max_leg_price": 0.39,
       "min_cluster_prob": 0.35,
@@ -104,7 +131,21 @@
       "oos_half_wr": 1.0,
       "oos_half_pnl": 258.09
     },
-    "core": {"n": 6, "winrate": 1.0, "pnl": 218.18},
-    "beijing": {"n": 8, "winrate": 0.875, "pnl": 391.57}
+    "core": {
+      "n": 6,
+      "winrate": 1.0,
+      "pnl": 218.18
+    },
+    "beijing": {
+      "n": 8,
+      "winrate": 0.875,
+      "pnl": 391.57
+    },
+    "live_paper_12d": {
+      "winrate": 1.0,
+      "n": 9,
+      "scorecard_pnl": 418.62,
+      "session": "session_20260809_223128"
+    }
   }
 }

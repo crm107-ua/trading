@@ -34,6 +34,11 @@ python -m polymarket.research.local_lab.weather_ladder_paper \
 python -m polymarket.research.local_lab.winning_desk --maker-rounds 0
 ```
 
+## Paper replay (12d)
+
+- Resolved taken **9/9** WR **100%** · scorecard **+$418.62** · equity $150→$568.62
+- Session: `data_local/local_lab/weather_ladder/session_20260809_223128`
+
 ## Config
 
 `polymarket/config/weather_ladder_champion_v2.json` (`sleeves` + `resolved_max_age_days` para replay paper).
