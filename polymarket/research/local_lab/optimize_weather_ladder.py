@@ -160,8 +160,13 @@ def _load_resolved_cases(
             try:
                 models = fetch_historical_model_maxes(station, day)
             except Exception as exc:  # noqa: BLE001
-                print(f"skip forecast {slug}: {exc}", flush=True)
-                continue
+                # One soft retry — Open-Meteo/SSL flakes are common on long lookbacks
+                time.sleep(0.8)
+                try:
+                    models = fetch_historical_model_maxes(station, day)
+                except Exception as exc2:  # noqa: BLE001
+                    print(f"skip forecast {slug}: {exc2}", flush=True)
+                    continue
             if len(models) < 2:
                 continue
             point_temps = sorted({b.temp_c for b in event.buckets if b.temp_c is not None})
@@ -200,7 +205,8 @@ def _load_resolved_cases(
                 f"case {len(cases)}: {slug} winner={winner.name} models={models}",
                 flush=True,
             )
-            if resume_path is not None and len(cases) % 5 == 0:
+            # Persist every case during long DNA expansions (resume-safe)
+            if resume_path is not None:
                 resume_path.parent.mkdir(parents=True, exist_ok=True)
                 resume_path.write_text(json.dumps(cases, indent=2), encoding="utf-8")
     return cases
