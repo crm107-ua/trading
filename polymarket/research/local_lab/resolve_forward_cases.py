@@ -90,9 +90,8 @@ def main() -> int:
     snaps = _best_snap_per_slug(_load_snaps())
     added = 0
     resolved_checked = 0
+    shadows: list[dict[str, Any]] = []
     for slug, snap in sorted(snaps.items()):
-        if slug in have:
-            continue
         try:
             ev = fetch_temp_event(slug, use_clob=False)
         except Exception as exc:
@@ -105,6 +104,33 @@ def main() -> int:
         if winner is None:
             continue
         entries = {str(k): float(v) for k, v in (snap.get("entries") or {}).items() if v is not None}
+        gates = snap.get("gates") if isinstance(snap.get("gates"), dict) else {}
+        legs = snap.get("legs") or []
+        leg_names = {str(x.get("name")) for x in legs if x.get("name") is not None}
+        winner_in_legs = winner.name in leg_names
+        winner_in_entries = winner.name in entries
+        shadow = {
+            "ts_utc": datetime.now(timezone.utc).isoformat(),
+            "slug": slug,
+            "city": snap.get("city") or ev.city,
+            "day": snap.get("day") or (ev.day.isoformat() if ev.day else None),
+            "winner": winner.name,
+            "winner_temp": winner.temp_c,
+            "snapshot_ts": snap.get("ts_utc"),
+            "snapshot_basket": snap.get("basket_cost"),
+            "dna_take_at_snap": bool(snap.get("dna_take")),
+            "gates_passed": gates.get("gates_passed"),
+            "waiting": gates.get("waiting"),
+            "ud": snap.get("ud"),
+            "winner_in_legs": winner_in_legs,
+            "winner_in_entries": winner_in_entries,
+            "shadow_press_hit": bool(winner_in_legs),
+            "note": "shadow only — does not relax DNA; cases still filtered by take_income_wr80",
+        }
+        shadows.append(shadow)
+
+        if slug in have:
+            continue
         if len(entries) < 3:
             continue
         models = snap.get("models") or {}
@@ -126,6 +152,8 @@ def main() -> int:
             "source": "forward_watch_snapshot",
             "snapshot_ts": snap.get("ts_utc"),
             "snapshot_basket": snap.get("basket_cost"),
+            "gates_at_snap": gates or None,
+            "dna_take_at_snap": bool(snap.get("dna_take")),
         }
         print(
             f"+case {slug} winner={winner.name} basket_snap={snap.get('basket_cost')} dna_snap={snap.get('dna_take')}",
@@ -135,6 +163,12 @@ def main() -> int:
             cases.append(case)
             have.add(slug)
             added += 1
+
+    if not args.dry_run and shadows:
+        TELE.mkdir(parents=True, exist_ok=True)
+        with (TELE / "shadow_resolves.jsonl").open("a", encoding="utf-8") as f:
+            for s in shadows:
+                f.write(json.dumps(s, ensure_ascii=False) + "\n")
 
     if added and not args.dry_run:
         CASES.parent.mkdir(parents=True, exist_ok=True)
@@ -148,6 +182,7 @@ def main() -> int:
         "snapshots": len(snaps),
         "resolved_checked": resolved_checked,
         "cases_added": added,
+        "shadows_logged": len(shadows),
         "takes_before": before_n,
         "takes_after": n,
         "delta_n": n - before_n,
@@ -155,7 +190,10 @@ def main() -> int:
         "wr_point": round(wins / n, 4) if n else 0.0,
         "wilson95_lower": round(_wilson_lower(wins, n), 4),
         "by_city": dict(Counter(t.get("city") for t in after_takes)),
-        "note_es": "Forward snapshots→cases. CLOB history no cubre pre-julio; esta es la vía de n.",
+        "note_es": (
+            "Forward snapshots→cases + shadow_resolves. "
+            "CLOB history no cubre pre-julio; esta es la vía de n."
+        ),
     }
     if not args.dry_run:
         write_evidence_progress()

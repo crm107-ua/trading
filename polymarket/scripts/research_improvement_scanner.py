@@ -178,6 +178,35 @@ def scan(tele_dir: Path) -> dict[str, Any]:
             }
         )
 
+    # UD stuck: close basket but underdispersion never OK (protective gate)
+    ud_fail = 0
+    ud_total = 0
+    for n in near:
+        g = n.get("gates") or {}
+        waiting = set(g.get("waiting") or [])
+        if "ud" in waiting or "not_underdispersed" in (n.get("reasons") or []):
+            ud_fail += 1
+        if g or n.get("reasons"):
+            ud_total += 1
+    if ud_fail >= 20:
+        candidates.append(
+            {
+                "id": "ud_gate_protective_stuck",
+                "priority": "HIGH",
+                "title": "Underdispersion bloquea libros cercanos (gate protector)",
+                "evidence": {
+                    "ud_waiting_or_reject_events": ud_fail,
+                    "near_with_gate_info": ud_total,
+                    "hint": "HK suele tener ratio~2.5 vs umbral 0.65",
+                },
+                "action": (
+                    "NO quitar require_underdispersion. Seguir scoreboard + assurance_research; "
+                    "solo EDGE cuando UD converja de verdad."
+                ),
+                "dna_impact": "none",
+            }
+        )
+
     # Capital readiness reminder from live balance in latest round
     last_bal = None
     for r in reversed(rounds):
@@ -191,7 +220,7 @@ def scan(tele_dir: Path) -> dict[str, Any]:
                 "priority": "HIGH",
                 "title": f"Saldo live ${last_bal:.2f} < floor depósito $25",
                 "evidence": {"balance_pusd": last_bal},
-                "action": "Seguir what-if $100/$200; no depositar hasta rearm_income_gate=READY_TO_REARM.",
+                "action": "Seguir what-if USD100/USD200; no depositar hasta rearm_income_gate=READY_TO_REARM.",
                 "dna_impact": "none",
             }
         )

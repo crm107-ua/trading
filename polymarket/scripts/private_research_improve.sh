@@ -25,6 +25,10 @@ while true; do
   "$ROOT/.venv/bin/python" -u -m polymarket.research.local_lab.resolve_forward_cases \
     >>"$RUN/research_improve.log" 2>&1 || true
 
+  # Assurance scorecard (Wilson path, UD stuck, dual-control, capital) — NO posts
+  "$ROOT/.venv/bin/python" -u -m polymarket.research.local_lab.assurance_research --write-docs \
+    >>"$RUN/research_improve.log" 2>&1 || true
+
   # Improvement candidates from telemetry (may be empty early)
   "$ROOT/.venv/bin/python" -u "$ROOT/polymarket/scripts/research_improvement_scanner.py" \
     >>"$RUN/research_improve.log" 2>&1 || true
