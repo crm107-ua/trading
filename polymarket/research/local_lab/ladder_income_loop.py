@@ -39,6 +39,7 @@ def run_loop(
     interval_s: float,
     auto_execute: bool,
     accept_loss: str,
+    watch_only: bool = False,
 ) -> dict[str, Any]:
     load_repo_dotenv(override=True)
     cfg = load_cfg(config_path)
@@ -47,6 +48,10 @@ def run_loop(
     out_dir.mkdir(parents=True, exist_ok=True)
     history: list[dict[str, Any]] = []
     hit: dict[str, Any] | None = None
+    edges_seen = 0
+
+    if watch_only and auto_execute:
+        raise RuntimeError("Refusing watch_only + auto_execute together")
 
     for i in range(rounds):
         stack = evaluate_real_stack(cfg)
@@ -61,19 +66,38 @@ def run_loop(
             "can_execute_now": stack.get("can_execute_now"),
             "blockers": stack.get("blockers"),
             "accepted_slugs": [c["slug"] for c in (stack.get("market_now") or {}).get("accepted") or []],
+            "mode": "watch_only" if watch_only else ("auto_execute" if auto_execute else "manual_stop"),
         }
         history.append(row)
         print(json.dumps(row, indent=2), flush=True)
 
-        if stack.get("ready_to_arm") and (stack.get("market_now") or {}).get("accepted_n", 0) >= 1:
-            if auto_execute:
+        accepted_n = int((stack.get("market_now") or {}).get("accepted_n") or 0)
+        if accepted_n >= 1:
+            edges_seen += 1
+            if auto_execute and stack.get("ready_to_arm"):
                 print("=== EDGE + GATES OK → EXECUTE REAL ===", flush=True)
                 result = execute_real(cfg, accept_loss=accept_loss, session_id=f"{sid}_r{i+1}")
                 hit = {"round": i + 1, "stack": stack, "result": result}
                 break
-            hit = {"round": i + 1, "stack": stack, "result": {"executed": False, "reason": "auto_execute_off"}}
-            print("Edge ready but --auto-execute not set; stopping for manual execute.", flush=True)
-            break
+            if watch_only:
+                print(
+                    "=== EDGE DNA (WATCH_ONLY) — no post; continue scanning ===",
+                    flush=True,
+                )
+                hit = {
+                    "round": i + 1,
+                    "stack": stack,
+                    "result": {"executed": False, "reason": "watch_only"},
+                }
+                # keep looping — do not break
+            else:
+                hit = {
+                    "round": i + 1,
+                    "stack": stack,
+                    "result": {"executed": False, "reason": "auto_execute_off"},
+                }
+                print("Edge ready but --auto-execute not set; stopping for manual execute.", flush=True)
+                break
 
         # Hard stop if geoblock — cannot earn from this egress
         if i == 0 and not (stack.get("checks") or {}).get("geoblock_ok"):
@@ -82,42 +106,47 @@ def run_loop(
                 "Corre el income loop desde una región permitida por Polymarket.",
                 flush=True,
             )
-            # Still watch books for signal quality, but never execute here
             if auto_execute:
                 print("Auto-execute deshabilitado de facto por geoblock.", flush=True)
 
         if i + 1 < rounds:
             time.sleep(max(5.0, float(interval_s)))
 
+    if hit and (hit.get("result") or {}).get("executed"):
+        verdict = "INCOME_POSTED"
+    elif watch_only and edges_seen:
+        verdict = "WATCH_EDGE_SEEN"
+    elif hit and not auto_execute and not watch_only:
+        verdict = "EDGE_READY_MANUAL"
+    elif history and not history[0].get("geoblock_ok"):
+        verdict = "BLOCKED_GEOBLOCK"
+    else:
+        verdict = "NO_EDGE_YET"
+
     report = {
         "loop_id": sid,
         "ts_utc": datetime.now(timezone.utc).isoformat(),
         "auto_execute": auto_execute,
+        "watch_only": watch_only,
         "rounds_run": len(history),
+        "edges_seen": edges_seen,
         "history": history,
         "hit": hit,
-        "verdict": (
-            "INCOME_POSTED"
-            if hit and (hit.get("result") or {}).get("executed")
-            else (
-                "EDGE_READY_MANUAL"
-                if hit and not auto_execute
-                else (
-                    "BLOCKED_GEOBLOCK"
-                    if history and not history[0].get("geoblock_ok")
-                    else "NO_EDGE_YET"
-                )
-            )
-        ),
+        "verdict": verdict,
         "income_recipe": {
             "strategy": "temperature_ladder_definitive",
             "session_cap_usdc": 5.0,
             "deposit_target_usdc": 25.0,
             "run_from": "Polymarket-allowed region (not US geoblock)",
-            "command": (
+            "watch_command": (
+                "python3 -m polymarket.research.local_lab.definitive_income_system "
+                "--scale micro --income-loop --watch-only --rounds 240 --interval 90"
+            ),
+            "rearm_command": (
                 "POLY_LADDER_REAL_CONFIRM=1 python3 -m polymarket.research.local_lab.definitive_income_system "
                 "--income-loop --auto-execute --i-accept-real-loss YES --rounds 40 --interval 180"
             ),
+            "rearm_gate": "python3 -m polymarket.research.local_lab.rearm_income_gate",
         },
     }
     (out_dir / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
@@ -131,11 +160,14 @@ def main() -> int:
     p.add_argument("--rounds", type=int, default=20)
     p.add_argument("--interval", type=float, default=180.0)
     p.add_argument("--auto-execute", action="store_true")
+    p.add_argument("--watch-only", action="store_true", help="Scan forever-ish; alert edge; never post")
     p.add_argument("--i-accept-real-loss", default="")
     args = p.parse_args()
     cfg = Path(args.config)
     if not cfg.is_file():
         cfg = POLY / args.config
+    if args.watch_only and args.auto_execute:
+        raise SystemExit("Refusing --watch-only together with --auto-execute")
     if args.auto_execute and args.i_accept_real_loss.strip().upper() != "YES":
         raise SystemExit("Refusing --auto-execute without --i-accept-real-loss YES")
     if args.auto_execute and (os.getenv("POLY_LADDER_REAL_CONFIRM") or "").strip() != "1":
@@ -146,8 +178,16 @@ def main() -> int:
         interval_s=args.interval,
         auto_execute=args.auto_execute,
         accept_loss=args.i_accept_real_loss,
+        watch_only=bool(args.watch_only),
     )
-    return 0 if rep["verdict"] in ("INCOME_POSTED", "EDGE_READY_MANUAL", "NO_EDGE_YET", "BLOCKED_GEOBLOCK") else 2
+    ok = (
+        "INCOME_POSTED",
+        "EDGE_READY_MANUAL",
+        "WATCH_EDGE_SEEN",
+        "NO_EDGE_YET",
+        "BLOCKED_GEOBLOCK",
+    )
+    return 0 if rep["verdict"] in ok else 2
 
 
 if __name__ == "__main__":

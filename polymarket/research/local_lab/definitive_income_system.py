@@ -444,6 +444,7 @@ def main() -> int:
     )
     p.add_argument("--income-loop", action="store_true", help="Hand off to ladder_income_loop")
     p.add_argument("--auto-execute", action="store_true")
+    p.add_argument("--watch-only", action="store_true", help="Scan DNA edges; never post")
     p.add_argument("--i-accept-real-loss", default="")
     p.add_argument("--rounds", type=int, default=40)
     p.add_argument("--interval", type=float, default=180.0)
@@ -484,6 +485,8 @@ def main() -> int:
         if not report["dna"]["passed"]:
             print("Refusing income-loop: DNA misaligned.", flush=True)
             return 2
+        if args.watch_only and args.auto_execute:
+            raise SystemExit("Refusing --watch-only together with --auto-execute")
         if args.scale in ("high", "aggressive"):
             if (os.getenv("POLY_LADDER_HIGH_INCOME") or "").strip() != "1":
                 raise SystemExit("Refusing high-income loop without POLY_LADDER_HIGH_INCOME=1")
@@ -502,12 +505,14 @@ def main() -> int:
             interval_s=args.interval,
             auto_execute=args.auto_execute,
             accept_loss=args.i_accept_real_loss,
+            watch_only=bool(args.watch_only),
         )
         (out_dir / "income_loop.json").write_text(json.dumps(loop_rep, indent=2), encoding="utf-8")
         print(f"income_loop_verdict={loop_rep.get('verdict')}", flush=True)
         return 0 if loop_rep.get("verdict") in (
             "INCOME_POSTED",
             "EDGE_READY_MANUAL",
+            "WATCH_EDGE_SEEN",
             "NO_EDGE_YET",
             "BLOCKED_GEOBLOCK",
         ) else 2
