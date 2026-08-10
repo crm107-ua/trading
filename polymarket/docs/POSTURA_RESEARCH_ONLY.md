@@ -26,6 +26,8 @@ La **evidencia** no lo está: n=11 DNA takes, Wilson95 lower ≈0.74.
 ## Ahora en VPS
 **WATCH_ONLY** — EDGE avisa por Telegram, **no posta**.
 
+Tres procesos investigación: `ladder-private-manager` · `ladder-progress-watch` · `ladder-research-improve`.
+
 Rearme dinero real solo con `rearm_income_gate` = `READY_TO_REARM` + `POLY_LADDER_ALLOW_REARM=1`.
 
-Ver [`PREPARE_REAL_MONEY.md`](PREPARE_REAL_MONEY.md) · [`REARM_INCOME_GATE.md`](REARM_INCOME_GATE.md).
+Ver [`PROFESSIONAL_PREP.md`](PROFESSIONAL_PREP.md) · [`PREPARE_REAL_MONEY.md`](PREPARE_REAL_MONEY.md) · [`REARM_INCOME_GATE.md`](REARM_INCOME_GATE.md).

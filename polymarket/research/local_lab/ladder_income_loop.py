@@ -71,6 +71,14 @@ def run_loop(
         history.append(row)
         print(json.dumps(row, indent=2), flush=True)
 
+        # Forward telemetry (WATCH_ONLY research) — never posts
+        try:
+            from polymarket.research.local_lab.research_telemetry import log_watch_round
+
+            log_watch_round(row, stack)
+        except Exception as exc:
+            print(f"telemetry_fail {type(exc).__name__}: {exc}", flush=True)
+
         accepted_n = int((stack.get("market_now") or {}).get("accepted_n") or 0)
         if accepted_n >= 1:
             edges_seen += 1

@@ -215,7 +215,12 @@ def main() -> int:
     ap.add_argument("--budget", type=float, default=3.0)
     ap.add_argument("--run-income-tests", action="store_true")
     ap.add_argument("--write-docs", action="store_true")
-    ap.add_argument("--assume-watch-only", action="store_true", default=True)
+    ap.add_argument(
+        "--assume-watch-only",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Treat ops as watch-only when MANAGER_MODE.txt missing (default: true)",
+    )
     args = ap.parse_args()
 
     load_repo_dotenv(override=True)
@@ -233,10 +238,11 @@ def main() -> int:
     adeq["balance"] = float(args.balance)
 
     mode_file = POLY / "data_local" / "local_lab" / "vps_runs" / "MANAGER_MODE.txt"
-    currently_watch = True
+    currently_watch = False
     if mode_file.exists():
         currently_watch = "WATCH" in mode_file.read_text().upper()
-
+    elif bool(args.assume_watch_only):
+        currently_watch = True
     income = {"ran": False, "passed": False, "verdict": None, "caveat": "skipped"}
     if args.run_income_tests:
         print("running income mechanism tests (simulate_real_income)…", flush=True)
@@ -270,7 +276,8 @@ def main() -> int:
         "capital": adeq,
         "ops_mode": {
             "watch_only_required": True,
-            "currently_watch_only": currently_watch or bool(args.assume_watch_only),
+            "currently_watch_only": currently_watch,
+            "assume_watch_only": bool(args.assume_watch_only),
             "mode_file": str(mode_file) if mode_file.exists() else None,
         },
     }

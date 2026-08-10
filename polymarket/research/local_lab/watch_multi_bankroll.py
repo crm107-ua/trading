@@ -36,6 +36,7 @@ def multi_bankroll_what_if(
     *,
     live_balance: float,
     extra: list[float] | None = None,
+    live_accepted: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     balances = [float(live_balance)]
     for b in extra or [100.0, 200.0]:
@@ -49,10 +50,23 @@ def multi_bankroll_what_if(
     for bal in balances:
         sess, bud = _caps_for(bal)
         w = what_if_single_take(raw, balance=bal, session_cap=sess, budget_cfg=bud)
+        # If live accepted carries notional, prefer that for sizeability hint
+        live_notional = None
+        if live_accepted:
+            try:
+                live_notional = sum(float(c.get("notional_usdc") or 0) for c in live_accepted)
+            except Exception:
+                live_notional = None
         paths = w.get("paths") or {}
         win = paths.get("clean_win") or {}
         miss = paths.get("full_miss") or {}
         sizeable = bool(w.get("executable_now"))
+        if live_notional is not None and live_notional > 0:
+            # live basket must fit effective cap for this bankroll
+            eff = min(sess, bal * 0.95)
+            sizeable = live_notional <= eff + 1e-9
+            if sizeable and not w.get("notional_usdc"):
+                w["notional_usdc"] = round(live_notional, 4)
         any_sizeable = any_sizeable or sizeable
         rows.append(
             {
@@ -60,7 +74,8 @@ def multi_bankroll_what_if(
                 "session_cap": sess,
                 "budget": bud,
                 "sizeable": sizeable,
-                "notional": w.get("notional_usdc"),
+                "notional": w.get("notional_usdc") if not live_notional else round(min(float(w.get("notional_usdc") or live_notional), live_notional or 0) or live_notional, 4),
+                "live_accepted_notional": live_notional,
                 "block_reason": w.get("block_reason"),
                 "win_pnl": win.get("pnl"),
                 "win_equity": win.get("equity_after"),
@@ -73,10 +88,14 @@ def multi_bankroll_what_if(
         "any_sizeable": any_sizeable,
         "n_bankrolls": len(rows),
         "rows": rows,
+        "live_accepted_n": len(live_accepted or []),
         "note": "WATCH_ONLY sim — no orders. DNA edge uses live books; PnL paths are hypothetical sizing.",
     }
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "MULTI_BANKROLL_EDGE.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+    # append time series
+    with (OUT / "MULTI_BANKROLL_EDGE.jsonl").open("a", encoding="utf-8") as f:
+        f.write(json.dumps({"ts_utc": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(), **report}, ensure_ascii=False) + "\n")
     return report
 
 

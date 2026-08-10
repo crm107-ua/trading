@@ -116,6 +116,28 @@ def _edge_alert(d: dict) -> None:
             },
         )
 
+def _maybe_refresh_scan(st: dict) -> None:
+    """Lightweight pointer refresh; heavy scan lives in ladder-research-improve."""
+    last = float(st.get("last_scan_ts") or 0)
+    now = time.time()
+    if now - last < 900:
+        return
+    st["last_scan_ts"] = now
+    try:
+        import subprocess
+
+        subprocess.run(
+            [sys.executable, str(ROOT / "polymarket/scripts/research_improvement_scanner.py")],
+            cwd=str(ROOT),
+            env={**os.environ, "PYTHONPATH": str(ROOT)},
+            timeout=120,
+            check=False,
+            capture_output=True,
+        )
+    except Exception as exc:
+        print(f"scan_fail {type(exc).__name__}: {exc}", flush=True)
+
+
 def main():
     os.chdir(ROOT)
     os.environ.setdefault("PYTHONPATH", str(ROOT))
@@ -159,6 +181,8 @@ def main():
                             fields={"round": r, "accepted_n": 0},
                         )
                 save_state(st)
+        _maybe_refresh_scan(st)
+        save_state(st)
         # posted? (should not happen in watch-only; still detect)
         for path in sorted((ROOT / "polymarket/data_local/local_lab/ladder_income").glob("loop_*/report.json")) if (ROOT / "polymarket/data_local/local_lab/ladder_income").exists() else []:
             try:
