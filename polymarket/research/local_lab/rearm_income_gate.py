@@ -121,6 +121,7 @@ def decide(report: dict[str, Any]) -> dict[str, Any]:
     inc = report["income_mechanism"]
     cap = report["capital"]
     mode = report["ops_mode"]
+    runway = report.get("deposit_runway") or {}
 
     blockers: list[str] = []
     if not ev["passed_for_rearm"]:
@@ -136,20 +137,37 @@ def decide(report: dict[str, Any]) -> dict[str, Any]:
     if mode.get("watch_only_required") and not mode.get("currently_watch_only"):
         blockers.append("ops_not_in_watch_only_before_rearm_eval")
 
-    if blockers:
-        status = "NOT_READY"
-        if ev["passed_for_deposit_talk"] and not ev["passed_for_rearm"]:
-            status = "EVIDENCE_PARTIAL"
-        action = (
-            "Mantener WATCH_ONLY. Acumular takes DNA. "
-            "No activar auto-execute. No depositar solo por MC."
-        )
-    else:
+    # Runway deposit: planned capital OK even if current balance is thin
+    can_deposit_runway = bool(runway.get("can_deposit_runway_watch_only"))
+
+    if not blockers:
         status = "READY_TO_REARM"
         action = (
             "Evidencia+ingeniería+capital+income-mechanism OK. "
             "Operador puede rearmar manualmente con private_manager_live.sh "
             "+ POLY_LADDER_REAL_CONFIRM=1 + --auto-execute."
+        )
+    elif can_deposit_runway and "capital_cannot_survive_1_miss" in blockers and not ev["passed_for_rearm"]:
+        status = "DEPOSIT_RUNWAY_GO"
+        action = (
+            f"PUEDES depositar ${runway.get('deposit_target_usdc')} AHORA (runway, watch-only). "
+            "NO armar auto-execute hasta n≥50 / Wilson≥0.80. "
+            "El blocker de capital se resuelve con ese depósito; la evidencia sigue pendiente."
+        )
+        # Capital blocker is resolved by planned deposit; keep evidence blocker honest
+        blockers = [b for b in blockers if b != "capital_cannot_survive_1_miss"]
+        blockers.append("auto_execute_blocked_until_evidence")
+    elif ev["passed_for_deposit_talk"] and not ev["passed_for_rearm"]:
+        status = "EVIDENCE_PARTIAL"
+        action = (
+            "Mantener WATCH_ONLY. Acumular takes DNA. "
+            "No activar auto-execute. Evidencia parcial para depósito+trade."
+        )
+    else:
+        status = "NOT_READY"
+        action = (
+            "Mantener WATCH_ONLY. Acumular takes DNA. "
+            "No activar auto-execute. No depositar solo por MC."
         )
 
     return {
@@ -157,7 +175,12 @@ def decide(report: dict[str, Any]) -> dict[str, Any]:
         "blockers": blockers,
         "action_es": action,
         "can_enable_auto_execute": status == "READY_TO_REARM",
-        "can_recommend_deposit": bool(ev["passed_for_deposit_talk"] and cap.get("still_armed_after_1_miss")),
+        # Full trade-oriented deposit recommend still needs evidence+capital
+        "can_recommend_deposit": bool(
+            (ev["passed_for_deposit_talk"] and cap.get("still_armed_after_1_miss"))
+            or (status == "DEPOSIT_RUNWAY_GO")
+        ),
+        "can_deposit_runway_watch_only": can_deposit_runway,
     }
 
 
@@ -174,7 +197,9 @@ def render_md(report: dict[str, Any]) -> str:
         "",
         "## Evidencia",
         f"- n={ev['n']} wins={ev['wins']} WR_puntual={ev['wr_point']} Wilson95={ev['wilson95_lower']}",
-        f"- deposit_talk_ok={ev['passed_for_deposit_talk']} · rearm_ok={ev['passed_for_rearm']}",
+        f"- can_recommend_deposit={d.get('can_recommend_deposit')} · "
+        f"can_deposit_runway={d.get('can_deposit_runway_watch_only')} · "
+        f"can_auto_execute={d.get('can_enable_auto_execute')}",
         f"- {ev['note']}",
         "",
         "## Ingeniería",
@@ -187,6 +212,17 @@ def render_md(report: dict[str, Any]) -> str:
         "## Capital",
         f"- balance={report['capital'].get('balance')} · armed_after_1_miss={report['capital'].get('still_armed_after_1_miss')}",
         "",
+    ]
+    dr = report.get("deposit_runway") or {}
+    if dr:
+        lines += [
+            "## Deposit runway (planificado)",
+            f"- target=${dr.get('deposit_target_usdc')} status=`{dr.get('status')}`",
+            f"- can_deposit_runway_watch_only={dr.get('can_deposit_runway_watch_only')}",
+            f"- planned still_armed_after_1_miss={((dr.get('capital_planned') or {}).get('still_armed_after_1_miss'))}",
+            "",
+        ]
+    lines += [
         "## Ops",
         f"- watch_only={report['ops_mode'].get('currently_watch_only')}",
         "",
@@ -213,6 +249,7 @@ def main() -> int:
     ap.add_argument("--balance", type=float, default=3.4482)
     ap.add_argument("--session-cap", type=float, default=5.0)
     ap.add_argument("--budget", type=float, default=3.0)
+    ap.add_argument("--planned-deposit", type=float, default=100.0, help="Verify runway at this deposit")
     ap.add_argument("--run-income-tests", action="store_true")
     ap.add_argument("--write-docs", action="store_true")
     ap.add_argument(
@@ -268,12 +305,47 @@ def main() -> int:
                 "source": str(latest),
             }
 
+    # Planned deposit runway verification (does not arm)
+    deposit_runway: dict[str, Any] = {}
+    try:
+        from polymarket.research.local_lab.verify_deposit_runway import run as runway_run
+
+        deposit_runway = runway_run(
+            deposit=float(args.planned_deposit),
+            write_docs=False,
+            run_income_tests=False,  # reuse income already loaded
+        )
+        # Attach income we already have if runway skipped tests
+        if not deposit_runway.get("income_mechanism", {}).get("passed") and income.get("passed"):
+            deposit_runway["income_mechanism"] = income
+            # recompute runway flag with known income
+            checks = dict(deposit_runway.get("checks") or {})
+            checks["income_mechanism_ok"] = True
+            deposit_runway["checks"] = checks
+            deposit_runway["can_deposit_runway_watch_only"] = all(
+                [
+                    checks.get("engineering_ok"),
+                    checks.get("income_mechanism_ok"),
+                    checks.get("long_term_robust"),
+                    checks.get("planned_capital_survives_1_miss"),
+                    checks.get("planned_capital_executable"),
+                    checks.get("bankroll_base_positive"),
+                    checks.get("bankroll_hostile_positive"),
+                ]
+            )
+            if deposit_runway["can_deposit_runway_watch_only"]:
+                deposit_runway["status"] = "DEPOSIT_RUNWAY_GO"
+                deposit_runway["can_recommend_deposit"] = True
+    except Exception as e:
+        deposit_runway = {"error": str(e), "can_deposit_runway_watch_only": False}
+
     report = {
         "ts_utc": datetime.now(timezone.utc).isoformat(),
         "evidence": ev,
         "engineering": eng,
         "income_mechanism": income,
         "capital": adeq,
+        "deposit_runway": deposit_runway,
         "ops_mode": {
             "watch_only_required": True,
             "currently_watch_only": currently_watch,
@@ -296,8 +368,10 @@ def main() -> int:
     if args.write_docs:
         (DOCS / "REARM_INCOME_GATE.md").write_text(md, encoding="utf-8")
 
-    print(json.dumps({"decision": report["decision"], "report": str(path)}, indent=2))
-    return 0 if report["decision"]["status"] == "READY_TO_REARM" else 2
+    print(json.dumps({"decision": report["decision"], "deposit_runway_status": deposit_runway.get("status"), "report": str(path)}, indent=2))
+    # Exit 0 if rearm ready OR deposit runway ready (operator can fund)
+    st = report["decision"]["status"]
+    return 0 if st in ("READY_TO_REARM", "DEPOSIT_RUNWAY_GO") else 2
 
 
 if __name__ == "__main__":

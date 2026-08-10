@@ -1,13 +1,13 @@
 # Prepare Real Money Battery
 
-**UTC:** `2026-08-10T13:33:02.182479+00:00`
-**Veredicto prep capital:** `CAPITAL_SCALE_PREP_READY` (sim/playbook) · **Depósito:** `NOT_YET` (evidencia)
+**UTC:** `2026-08-10T13:40:49.361686+00:00`
+**Depósito runway:** `DEPOSIT_RUNWAY_GO`
+**Auto-execute:** `BLOCKED_EVIDENCE`
 
-Ingeniería + DNA durable + proyecciones de capital listas. Mantener WATCH_ONLY. NO depositar ni armar hasta n≥50 / Wilson≥0.80 + READY_TO_REARM.
+PUEDES depositar $200 AHORA para runway (watch-only). NO armar auto-execute: evidencia n=11 Wilson=0.7412 (falta n≥50, Wilson≥0.8). Tras depositar, primera sesión solo cuando READY_TO_REARM: budget $25 / cap $50.
 
-- Target deposit (cuando gates): **$100** (high)
-- Stretch: **$200** (aggressive)
-- Long-term: `LONG_TERM_ROBUST`
-- Bankroll ≥$100 all-positive (sim): `True`
+- can_deposit_runway_watch_only=`True`
+- can_enable_auto_execute=`False`
+- target=`$200` (aggressive)
 
-Detalle: [`CAPITAL_SCALE_PREP.md`](CAPITAL_SCALE_PREP.md) · [`HIGH_INCOME.md`](HIGH_INCOME.md) · `python3 -m polymarket.research.local_lab.prepare_capital_scale --write-docs`
+Detalle: [`DEPOSIT_RUNWAY.md`](DEPOSIT_RUNWAY.md)
