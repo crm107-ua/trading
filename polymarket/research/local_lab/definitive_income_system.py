@@ -19,6 +19,9 @@ Unifies strategy certification + DNA alignment + live readiness into one verdict
   POLY_LADDER_REAL_CONFIRM=1 \\
     python3 -m polymarket.research.local_lab.definitive_income_system \\
       --income-loop --auto-execute --i-accept-real-loss YES
+
+  # Real-env readiness (no orders)
+  python3 -m polymarket.research.local_lab.real_env_ready --scale high
 """
 
 from __future__ import annotations

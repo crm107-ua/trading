@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
 """
-Temperature Ladder — micro REAL money runner.
+Temperature Ladder — REAL money runner (micro + high-income scales).
 
 Default is PREFLIGHT only (no orders). To spend real capital you must pass
 ALL of:
   1) --execute-real
   2) --i-accept-real-loss YES
   3) env POLY_LADDER_REAL_CONFIRM=1
-  4) geoblock OK, balance OK, champion take present
-  5) session cap ≤ $5
+  4) geoblock OK, balance OK, press take present
+  5) session cap ≤ $5 (micro) OR ≤ $100 with POLY_LADDER_HIGH_INCOME=1
+  6) DNA revalidation at post (basket / UD / leg)
 
 After any execute attempt the process restores SAFE (ARMED=0, DRY_RUN=1).
 
-  # See how real would look (recommended first):
+  python3 -m polymarket.research.local_lab.real_env_ready --scale high
   python3 -m polymarket.research.local_lab.weather_ladder_real
-
-  # Actually post (money at risk):
-  POLY_LADDER_REAL_CONFIRM=1 \\
+  POLY_LADDER_HIGH_INCOME=1 POLY_LADDER_REAL_CONFIRM=1 \\
     python3 -m polymarket.research.local_lab.weather_ladder_real \\
+      --config polymarket/config/weather_ladder_high_income.json \\
       --execute-real --i-accept-real-loss YES
 """
 
@@ -264,6 +264,15 @@ def execute_real(
     if (os.getenv("POLY_LADDER_REAL_CONFIRM") or "").strip() != "1":
         raise RuntimeError("Refusing: set POLY_LADDER_REAL_CONFIRM=1 in the environment")
 
+    # High-income size > micro requires explicit env even if config asks for it.
+    wanted_cap = float((cfg.get("live") or {}).get("max_capital_usdc") or 5)
+    if wanted_cap > MAX_SESSION_CAP_MICRO + 1e-9:
+        if (os.getenv("POLY_LADDER_HIGH_INCOME") or "").strip() != "1":
+            raise RuntimeError(
+                "Refusing high-income size: set POLY_LADDER_HIGH_INCOME=1 "
+                "(or use micro definitive config ≤$5)"
+            )
+
     stack = evaluate_real_stack(cfg)
     if not stack["ready_to_arm"]:
         return {
@@ -279,24 +288,36 @@ def execute_real(
             "stack": stack,
         }
 
+    # Final geoblock re-check immediately before arming
+    geo_blocked, geo_msg = geoblock_blocks_real()
+    if geo_blocked:
+        return {
+            "executed": False,
+            "reason": "geoblock_at_execute",
+            "message": geo_msg,
+            "stack": stack,
+        }
+
     max_cap = float(stack["session_limits"]["effective_cap_usdc"])
     prev = _arm_real(max_capital=max_cap)
     t0 = time.perf_counter()
     posts: list[dict[str, Any]] = []
     aborted: list[dict[str, Any]] = []
+    posted_baskets: list[dict[str, Any]] = []
     try:
         gates = read_gates()
         if gates.dry_run or not gates.armed:
             raise RuntimeError("Failed to arm REAL env (DRY_RUN must be 0, ARMED=1)")
         cli = ClobLiveClient()
         cli.connect(derive_api_creds=True)
-        bal = cli.balance_collateral_usdc()
+        bal = float(cli.balance_collateral_usdc())
         cli.assert_can_trade(capital=max_cap, allow_dry=False)
 
         order_type = str(cfg.get("order_type") or "FAK")
-        # Only first accepted basket (max_markets=1)
-        c = stack["market_now"]["accepted"][0]
-        # Re-prepare fresh from live books
+        abort_partial = bool(cfg.get("abort_partial_basket", True))
+        max_markets = max(1, min(2, int(cfg.get("max_markets_per_run") or 1)))
+
+        # Fresh books at post time
         pack = prepare_candidates(cfg)
         if not pack["accepted"]:
             return {
@@ -305,96 +326,131 @@ def execute_real(
                 "stack": stack,
                 "elapsed_s": round(time.perf_counter() - t0, 2),
             }
-        c = pack["accepted"][0]
-        if float(c["notional_usdc"]) > bal + 1e-9:
-            return {
-                "executed": False,
-                "reason": "insufficient_balance_at_post",
-                "balance": bal,
-                "notional": c["notional_usdc"],
-            }
-        # DNA revalidation at post time (slip can inflate basket).
-        max_b = float(cfg.get("max_basket_cost") or 0.50)
-        post_b = cfg.get("post_max_basket_cost")
-        lim = float(post_b) if post_b is not None else max_b + 0.02
-        if float(c.get("basket_cost") or 99) > lim + 1e-12:
-            return {
-                "executed": False,
-                "reason": "basket_above_dna_at_post",
-                "basket_cost": c.get("basket_cost"),
-                "limit": lim,
-            }
-        if bool(cfg.get("require_underdispersion", True)) and not c.get("underdispersed", True):
-            return {"executed": False, "reason": "not_underdispersed_at_post"}
-        max_leg = float(cfg.get("max_leg_price") or 0.39)
-        for leg in c["legs"]:
-            if float(leg.get("price") or 99) > max_leg + 1e-12:
-                return {
-                    "executed": False,
-                    "reason": "leg_above_dna_at_post",
-                    "leg": leg.get("name"),
-                    "price": leg.get("price"),
-                    "max_leg": max_leg,
-                }
 
-        basket_posts: list[dict[str, Any]] = []
-        ok = True
-        for leg in c["legs"]:
-            try:
-                resp = cli.place_aggressive(
-                    token_id=str(leg["token_id"]),
-                    side="BUY",
-                    price=float(leg["price"]),
-                    size=float(leg["shares"]),
-                    order_type=order_type,
-                )
-                row = {
-                    "slug": c["slug"],
-                    "bucket": leg["name"],
-                    "status": resp.get("status"),
-                    "would_post": resp.get("would_post"),
-                    "orderID": resp.get("orderID"),
-                    "response": resp.get("response"),
-                }
-                basket_posts.append(row)
-                if resp.get("status") != "LIVE":
-                    ok = False
-            except Exception as exc:  # noqa: BLE001
-                ok = False
-                basket_posts.append(
+        remaining = bal
+        for c in pack["accepted"][:max_markets]:
+            if float(c["notional_usdc"]) > remaining + 1e-9:
+                aborted.append(
                     {
                         "slug": c["slug"],
-                        "bucket": leg["name"],
-                        "status": "ERROR",
-                        "error": f"{type(exc).__name__}: {exc}",
+                        "status": "SKIP_INSUFFICIENT",
+                        "notional": c["notional_usdc"],
+                        "balance_left": remaining,
                     }
                 )
-        if ok:
-            posts = basket_posts
-            # Day pnl unknown until resolution — record 0 mark, inventory held
-            record_session_pnl(0.0)
-        else:
-            aborted = basket_posts
-            try:
-                cli.cancel_all()
-            except Exception:
-                pass
+                continue
+            # DNA revalidation at post time (slip can inflate basket).
+            max_b = float(cfg.get("max_basket_cost") or 0.50)
+            post_b = cfg.get("post_max_basket_cost")
+            lim = float(post_b) if post_b is not None else max_b + 0.02
+            if float(c.get("basket_cost") or 99) > lim + 1e-12:
+                aborted.append(
+                    {
+                        "slug": c["slug"],
+                        "status": "SKIP_BASKET_DNA",
+                        "basket_cost": c.get("basket_cost"),
+                        "limit": lim,
+                    }
+                )
+                continue
+            if bool(cfg.get("require_underdispersion", True)) and not c.get("underdispersed", True):
+                aborted.append({"slug": c["slug"], "status": "SKIP_NOT_UD"})
+                continue
+            max_leg = float(cfg.get("max_leg_price") or 0.39)
+            bad_leg = next(
+                (
+                    leg
+                    for leg in c["legs"]
+                    if float(leg.get("price") or 99) > max_leg + 1e-12
+                ),
+                None,
+            )
+            if bad_leg is not None:
+                aborted.append(
+                    {
+                        "slug": c["slug"],
+                        "status": "SKIP_LEG_DNA",
+                        "leg": bad_leg.get("name"),
+                        "price": bad_leg.get("price"),
+                    }
+                )
+                continue
+
+            basket_posts: list[dict[str, Any]] = []
+            ok = True
+            for leg in c["legs"]:
+                try:
+                    resp = cli.place_aggressive(
+                        token_id=str(leg["token_id"]),
+                        side="BUY",
+                        price=float(leg["price"]),
+                        size=float(leg["shares"]),
+                        order_type=order_type,
+                    )
+                    row = {
+                        "slug": c["slug"],
+                        "bucket": leg["name"],
+                        "status": resp.get("status"),
+                        "would_post": resp.get("would_post"),
+                        "orderID": resp.get("orderID"),
+                        "response": resp.get("response"),
+                    }
+                    basket_posts.append(row)
+                    if resp.get("status") != "LIVE":
+                        ok = False
+                except Exception as exc:  # noqa: BLE001
+                    ok = False
+                    basket_posts.append(
+                        {
+                            "slug": c["slug"],
+                            "bucket": leg["name"],
+                            "status": "ERROR",
+                            "error": f"{type(exc).__name__}: {exc}",
+                        }
+                    )
+            if ok:
+                posts.extend(basket_posts)
+                posted_baskets.append(
+                    {
+                        "slug": c["slug"],
+                        "city": c["city"],
+                        "notional_usdc": c["notional_usdc"],
+                        "basket_cost": c.get("basket_cost"),
+                        "legs": len(c["legs"]),
+                    }
+                )
+                remaining -= float(c["notional_usdc"])
+                record_session_pnl(0.0)
+            else:
+                aborted.extend(basket_posts)
+                if abort_partial:
+                    try:
+                        cli.cancel_all()
+                    except Exception:
+                        pass
+                    break
 
         return {
-            "executed": ok,
+            "executed": len(posted_baskets) > 0,
             "session_id": session_id,
             "ts_utc": datetime.now(timezone.utc).isoformat(),
             "onchain": True,
-            "slug": c["slug"],
-            "city": c["city"],
-            "notional_usdc": c["notional_usdc"],
+            "posted_baskets": posted_baskets,
+            "slug": posted_baskets[0]["slug"] if posted_baskets else None,
+            "city": posted_baskets[0]["city"] if posted_baskets else None,
+            "notional_usdc": round(sum(b["notional_usdc"] for b in posted_baskets), 4),
             "posts": posts,
             "aborted": aborted,
             "balance_before": round(bal, 4),
             "hold_to_resolution": True,
             "elapsed_s": round(time.perf_counter() - t0, 2),
-            "verdict": "REAL_POSTED" if ok else "REAL_ABORT_PARTIAL",
+            "verdict": (
+                "REAL_POSTED"
+                if posted_baskets and not aborted
+                else ("REAL_POSTED_PARTIAL_SESSION" if posted_baskets else "REAL_ABORT_PARTIAL")
+            ),
             "note": "Positions held to resolution; redeem/claim separately if needed.",
+            "safe_restore": True,
         }
     finally:
         _restore_prev(prev)
