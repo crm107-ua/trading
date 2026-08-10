@@ -340,6 +340,8 @@ def render_md(report: dict[str, Any]) -> str:
         "",
         "- DNA live sigue press-only ≤0.50 / leg≤0.39 / UD.",
         "- Ganancias de esta sim **no** autorizan depósito hasta READY_TO_REARM.",
+        "- Óptimo **largo plazo** ≠ max PnL paper: ver `long_term_robustness --write-docs` "
+        "y [`LONG_HORIZON_OPTIMAL.md`](LONG_HORIZON_OPTIMAL.md).",
         "",
     ]
     return "\n".join(lines)

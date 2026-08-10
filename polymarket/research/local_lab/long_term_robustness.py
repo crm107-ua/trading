@@ -157,7 +157,50 @@ def make_profiles() -> dict[str, tuple[ProfileFn, float | None]]:
         ),
         0.45,
     )
+    # Near-live micro-tweak (tighter leg) — still UD + basket≤0.50
+    profiles["near_leg36"] = (
+        lambda c: (
+            P(0.50, 0.36, 0.5)
+            if c["city"] in CORE
+            else (P(0.50, 0.36, 1.0) if c["city"] == "beijing" else None)
+        ),
+        None,
+    )
     return profiles
+
+
+def make_punctual_adversaries() -> dict[str, tuple[ProfileFn, float | None]]:
+    """Max-PnL / relaxed profiles that look good on one window but fail durability."""
+
+    def R(mb: float, ml: float, ud: bool, bias: float) -> TrialFilters:
+        return TrialFilters(mb, ml, 0.35, 0.01, ud, 3, 12.0, bias)
+
+    adv: dict[str, tuple[ProfileFn, float | None]] = {}
+    adv["punctual_basket58_no_ud"] = (
+        lambda c: (
+            R(0.58, 0.39, False, 1.0)
+            if c["city"] in CORE or c["city"] == "beijing"
+            else None
+        ),
+        None,
+    )
+    adv["punctual_basket52_leg36_no_ud"] = (
+        lambda c: (
+            R(0.52, 0.36, False, 0.5)
+            if c["city"] in CORE
+            else (R(0.52, 0.36, False, 1.0) if c["city"] == "beijing" else None)
+        ),
+        None,
+    )
+    adv["punctual_select_core"] = (
+        lambda c: (
+            TrialFilters(0.50, 0.39, 0.35, 0.01, False, 3, 12.0, 0.5)
+            if c["city"] in CORE
+            else (TrialFilters(0.50, 0.39, 0.35, 0.01, False, 3, 12.0, 1.0) if c["city"] == "beijing" else None)
+        ),
+        None,
+    )
+    return adv
 
 
 def expanding_walk_forward(taken: list[dict[str, Any]], *, week_days: int = 7) -> dict[str, Any]:
@@ -311,29 +354,97 @@ def friction_durability(taken: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def score_profile(report: dict[str, Any]) -> float:
-    """Higher is more long-term durable."""
+    """Higher is more long-term durable (NOT max paper PnL)."""
     overall = report["overall"]
     wf = report["walk_forward"]
     sens = report["sensitivity"]
     fr = report["friction"]
     weeks = report["weekly"]
+    halves = report.get("halves") or []
+    loco = report.get("leave_one_city") or []
     if overall["n"] < 5:
         return -1e9
     score = 0.0
-    score += 100 * overall["wr"]
-    score += 0.05 * overall["pnl"]
-    score += 80 * (wf.get("oos_wr") or 0)
+    # Stability first
+    score += 120 * overall["wr"]
+    score += 90 * (wf.get("oos_wr") or 0)
     if wf.get("min_fold_wr_n2") is not None:
-        score += 60 * float(wf["min_fold_wr_n2"])
+        score += 70 * float(wf["min_fold_wr_n2"])
+    # Half-calendar floor
+    if halves:
+        score += 40 * min(h["wr"] for h in halves)
+    # Leave-one-city floor
+    loco_ok = [r for r in loco if r["n"] >= 3]
+    if loco_ok:
+        score += 35 * min(r["wr"] for r in loco_ok)
     # weekly: penalize any week with n>=2 and wr<0.8
     bad_weeks = sum(1 for w in weeks if w["n"] >= 2 and w["wr"] < 0.80)
-    score -= 40 * bad_weeks
+    score -= 50 * bad_weeks
     sens_pass = sum(1 for s in sens if s["pass"])
     score += 3 * sens_pass
-    score += 20 * sum(1 for f in fr if f["pass"])
-    # prefer more trades but not at cost of WR
-    score += min(overall["n"], 15)
+    score += 25 * sum(1 for f in fr if f["pass"])
+    # Mild frequency bonus — capped so it never outweighs WR collapse
+    score += min(overall["n"], 12)
+    # Tiny PnL term (does not dominate): ~0.02 * pnl
+    score += 0.02 * float(overall["pnl"])
+    # Gate bonus
+    if report.get("gate", {}).get("passed"):
+        score += 50
     return score
+
+
+def render_long_horizon_md(report: dict[str, Any]) -> str:
+    best = report["best"]
+    adv = report.get("adversaries") or []
+    lines = [
+        "# Óptimo a largo plazo (no PnL puntual)",
+        "",
+        f"**UTC:** `{report['ts_utc']}`",
+        f"**Universo:** {report['universe']['n']} cases "
+        f"({report['universe']['day_min']} → {report['universe']['day_max']})",
+        "",
+        "> Criterio: **robustez** (walk-forward, semanas, mitades, leave-one-city, "
+        "sensibilidad, fricción). Maximizar PnL paper de una ventana **no** es óptimo.",
+        "",
+        "## Champion durable",
+        f"- profile=`{best['profile']}`",
+        f"- overall n={best['overall']['n']} WR={best['overall']['wr']} pnl={best['overall']['pnl']}",
+        f"- walk-forward OOS WR={best['walk_forward'].get('oos_wr')} n={best['walk_forward'].get('oos_n')}",
+        f"- verdict=`{best['gate']['verdict']}` score={round(best.get('score') or 0, 1)}",
+        f"- config=`weather_ladder_final_longterm.json` (= DNA press-only ≤0.50 / leg≤0.39 / UD)",
+        "",
+        "## Por qué no las variantes “más PnL”",
+    ]
+    for a in adv:
+        fails = [k for k, v in (a.get("checks") or {}).items() if not v]
+        lines.append(
+            f"- `{a['profile']}` n={a['overall']['n']} WR={a['overall']['wr']} "
+            f"pnl={a['overall']['pnl']} → `{a['verdict']}` fails={fails}"
+        )
+    lines += [
+        "",
+        "## Ranking perfiles durables",
+    ]
+    for p in report.get("profiles") or []:
+        lines.append(
+            f"- `{p['profile']}` n={p['overall']['n']} WR={p['overall']['wr']} "
+            f"OOS={p.get('oos_wr')} score={round(p.get('score') or 0, 1)} "
+            f"verdict={p.get('verdict')}"
+        )
+    lines += [
+        "",
+        "## Regla operativa",
+        "",
+        "1. Estrategia canónica largo plazo = `income_wr80` / DNA live (press-only + UD + BJ≤0.50).",
+        "2. Más ingreso durable = **más capital / más n forward**, no relajar basket/UD/select.",
+        "3. Re-certificar con `long_term_robustness` cuando suba n; no promover paper agresivo.",
+        "4. Depósito solo con `READY_TO_REARM` (n≥50, Wilson≥0.80).",
+        "",
+        "Ver también: [`FINAL_LONGTERM_STRATEGY.md`](FINAL_LONGTERM_STRATEGY.md) · "
+        "[`SIM_GAINS_REPORT.md`](SIM_GAINS_REPORT.md) (sim PnL ≠ óptimo LT).",
+        "",
+    ]
+    return "\n".join(lines)
 
 
 def long_term_gate(best: dict[str, Any]) -> dict[str, Any]:
@@ -532,12 +643,18 @@ def evaluate_profile(
         "friction": friction_durability(taken),
         "loss_slugs": [t["slug"] for t in taken if not t.get("win")],
     }
-    report["score"] = score_profile(report)
     report["gate"] = long_term_gate(report)
+    report["score"] = score_profile(report)
     return report
 
 
 def main() -> int:
+    import argparse
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--write-docs", action="store_true")
+    args = ap.parse_args()
+
     cases = json.loads(CASES.read_text(encoding="utf-8"))
     # Focus universe on champion cities
     cases = [c for c in cases if c["city"] in CORE or c["city"] == "beijing"]
@@ -560,10 +677,33 @@ def main() -> int:
             flush=True,
         )
 
+    # Punctual adversaries: must not win long-term selection
+    adversaries = []
+    for name, (prof, post_b) in make_punctual_adversaries().items():
+        print(f"adversary {name}...", flush=True)
+        rep = evaluate_profile(name, prof, cases, post_max_basket=post_b)
+        adversaries.append(
+            {
+                "profile": rep["profile"],
+                "overall": rep["overall"],
+                "oos_wr": rep["walk_forward"].get("oos_wr"),
+                "score": rep["score"],
+                "verdict": rep["gate"]["verdict"],
+                "checks": rep["gate"]["checks"],
+            }
+        )
+        print(
+            f"  {name}: n={rep['overall']['n']} WR={rep['overall']['wr']} "
+            f"verdict={rep['gate']['verdict']} (expected NOT durable)",
+            flush=True,
+        )
+
     # Prefer profiles that pass; else highest score among WR>=0.9
+    # Never select a punctual adversary as best.
     passing = [r for r in results if r["gate"]["passed"]]
     if passing:
-        best = max(passing, key=lambda r: (r["overall"]["n"], r["score"]))
+        # Among durable: maximize durability score, then n (frequency without WR loss)
+        best = max(passing, key=lambda r: (r["score"], r["overall"]["n"], r["overall"]["wr"]))
     else:
         candidates = [r for r in results if r["overall"]["wr"] >= 0.9 and r["overall"]["n"] >= 5]
         best = max(candidates or results, key=lambda r: r["score"])
@@ -586,9 +726,6 @@ def main() -> int:
                 (not rolls)
                 or min(x["wr"] for x in rolls) + 1e-12 >= 0.75
             )
-            # require the soft extras
-            required = [k for k in ch if k != "weekly_wr_ge_80_strict"] + ["weekly_wr_ge_80_strict", "rolling4_min_wr_ge_75"]
-            # rebuild passed
             soft_passed = all(ch.get(k, False) for k in ch) and ch["rolling4_min_wr_ge_75"]
             if soft_passed and r["overall"]["n"] >= 5:
                 r = deepcopy(r)
@@ -603,14 +740,18 @@ def main() -> int:
                         "all weeks profitable, OOS/halves/friction/sensitivity pass."
                     ),
                 }
+                r["score"] = score_profile(r)
                 best = r
                 cfg = freeze_final_config(best["profile"], best)
                 break
 
     OUT.mkdir(parents=True, exist_ok=True)
+    DOCS = POLY / "docs"
+    VPS = POLY / "data_local" / "local_lab" / "vps_runs"
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     report = {
         "ts_utc": datetime.now(timezone.utc).isoformat(),
+        "selection_objective": "long_horizon_durability_not_max_pnl",
         "universe": {
             "n": len(cases),
             "day_min": min(c["day"] for c in cases),
@@ -628,15 +769,103 @@ def main() -> int:
             }
             for r in sorted(results, key=lambda x: -x["score"])
         ],
+        "adversaries": adversaries,
         "best": best,
         "final_config": str(FINAL_CFG),
         "final_demo_label": cfg.get("demo_label"),
+        "optimal_rule_es": (
+            "Óptimo largo plazo = income_wr80 / DNA press-only. "
+            "Más PnL paper con basket/UD relajados falla walk-forward/semanas/ciudades. "
+            "Escalar ingreso con capital y n forward, no aflojando filtros."
+        ),
     }
     path = OUT / f"long_term_{stamp}.json"
     path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     (OUT / "latest.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
 
-    print(json.dumps({"best_profile": best["profile"], "gate": best["gate"], "overall": best["overall"], "oos": best["walk_forward"]}, indent=2)[:4000])
+    md = render_long_horizon_md(report)
+    (OUT / "LONG_HORIZON_OPTIMAL.md").write_text(md, encoding="utf-8")
+    VPS.mkdir(parents=True, exist_ok=True)
+    (VPS / "LONG_HORIZON_OPTIMAL.md").write_text(md, encoding="utf-8")
+
+    # Refresh FINAL_LONGTERM_STRATEGY.md summary
+    final_md = "\n".join(
+        [
+            "# Estrategia final a largo plazo",
+            "",
+            "**Config canónica:** `polymarket/config/weather_ladder_final_longterm.json`",
+            "**Óptimo durable:** [`LONG_HORIZON_OPTIMAL.md`](LONG_HORIZON_OPTIMAL.md)",
+            "**Sistema de producción:** [`DEFINITIVE_INCOME_SYSTEM.md`](DEFINITIVE_INCOME_SYSTEM.md)",
+            f"**Veredicto:** `{best['gate']['verdict']}` · profile=`{best['profile']}`",
+            "",
+            "## Qué la hace durable (no solo “ahora”)",
+            "",
+            "| Regla | Por qué |",
+            "|-------|---------|",
+            "| Solo `press_under` | El tier `select` / sin UD baja WR y rompe semanas/ciudades |",
+            "| Underdispersion obligatoria | Evita entradas con ensemble disperso |",
+            "| Beijing basket ≤ 0.50 | Mata la pérdida open-skew a basket 0.55+ |",
+            "| Sizing wing-safe + `max_per_city` | No quema bankroll; hits en ala siguen PnL>0 |",
+            "| Objetivo = robustez | Walk-forward / mitades / leave-one-city / fricción — **no** max PnL paper |",
+            "",
+            "## Certificación",
+            "",
+            f"Universo {report['universe']['n']} cases "
+            f"({report['universe']['day_min']} → {report['universe']['day_max']}):",
+            "",
+            f"- Overall **{best['overall']['wins']}/{best['overall']['n']}** "
+            f"WR={best['overall']['wr']} pnl={best['overall']['pnl']}",
+            f"- Walk-forward OOS WR={best['walk_forward'].get('oos_wr')} "
+            f"n={best['walk_forward'].get('oos_n')}",
+            f"- Score durable={round(best.get('score') or 0, 1)}",
+            "",
+            "## Adversarios puntuales (rechazados)",
+            "",
+        ]
+        + [
+            f"- `{a['profile']}`: WR={a['overall']['wr']} pnl={a['overall']['pnl']} → `{a['verdict']}`"
+            for a in adversaries
+        ]
+        + [
+            "",
+            "## Operación",
+            "",
+            "```bash",
+            "python3 -m polymarket.research.local_lab.long_term_robustness --write-docs",
+            "python3 -m polymarket.research.local_lab.definitive_income_system",
+            "python3 -m polymarket.research.local_lab.simulate_real_income",
+            "```",
+            "",
+            "## Límite honesto",
+            "",
+            "Robustez sobre ~30 días de weather Polymarket. No hay un año de historia; "
+            "la garantía es estructural (press-only + UD + anti-overfit). "
+            "Más ingreso durable = más capital y más evidencia forward, no filtros más flojos.",
+            "",
+        ]
+    )
+    if args.write_docs:
+        DOCS.mkdir(parents=True, exist_ok=True)
+        (DOCS / "LONG_HORIZON_OPTIMAL.md").write_text(md, encoding="utf-8")
+        (DOCS / "FINAL_LONGTERM_STRATEGY.md").write_text(final_md, encoding="utf-8")
+
+    print(
+        json.dumps(
+            {
+                "best_profile": best["profile"],
+                "gate": best["gate"],
+                "overall": best["overall"],
+                "oos": {
+                    "oos_n": best["walk_forward"].get("oos_n"),
+                    "oos_wr": best["walk_forward"].get("oos_wr"),
+                    "oos_pnl": best["walk_forward"].get("oos_pnl"),
+                },
+                "adversaries_rejected": [a["profile"] for a in adversaries if a["verdict"] != "LONG_TERM_ROBUST"],
+                "optimal_rule_es": report["optimal_rule_es"],
+            },
+            indent=2,
+        )[:4500]
+    )
     print(f"\nFINAL_CFG -> {FINAL_CFG}")
     print(f"VERDICT: {best['gate']['verdict']} -> {path}", flush=True)
     return 0 if best["gate"]["passed"] else 2
