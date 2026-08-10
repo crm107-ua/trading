@@ -294,10 +294,30 @@ def dna_stress() -> dict[str, Any]:
         n = len(taken)
         friction = []
         if hasattr(m, "friction_wr"):
-            for slip in (0.01, 0.02, 0.03):
-                friction.append(m.friction_wr(taken, {"slip": slip, "fee_bps": 50, "fill": 0.9}))
+            for name, slip, fee, fill in (
+                ("slip1c", 0.01, 0.0, 0.95),
+                ("slip2c_fee50", 0.02, 50.0, 0.90),
+                ("slip3c_fee100", 0.03, 100.0, 0.85),
+            ):
+                try:
+                    friction.append(
+                        m.friction_wr(
+                            taken,
+                            {
+                                "name": name,
+                                "entry_slip_cents": slip,
+                                "taker_fee_bps": fee,
+                                "fill_ratio": fill,
+                            },
+                        )
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    friction.append({"scenario": name, "error": f"{type(exc).__name__}: {exc}"})
+        stress_ok = n >= 1 and (
+            not friction or all("error" not in f for f in friction)
+        )
         return {
-            "passed": n >= 1,
+            "passed": stress_ok,
             "n": n,
             "wins": wins,
             "wilson95": round(_wilson_lower(wins, n), 4),
