@@ -125,8 +125,17 @@ def main() -> int:
     resolved_checked = 0
     shadows: list[dict[str, Any]] = []
 
-    # Also check open→closed for cases we already have (e.g. D+0 added early)
-    slugs_to_check = set(snaps.keys()) | set(by_slug.keys())
+    from datetime import date, timedelta
+
+    cutoff = (datetime.now(timezone.utc).date() - timedelta(days=3)).isoformat()
+    unfinished = [c["slug"] for c in cases if c.get("slug") and not c.get("resolved_closed")]
+    recent_days = [
+        c["slug"]
+        for c in cases
+        if c.get("slug") and str(c.get("day") or "") >= cutoff
+    ]
+    # Prefer forward snaps; refresh unfinished + last 3 days (not full archive every loop)
+    slugs_to_check = set(snaps.keys()) | set(unfinished) | set(recent_days)
 
     for slug in sorted(slugs_to_check):
         snap = snaps.get(slug)
