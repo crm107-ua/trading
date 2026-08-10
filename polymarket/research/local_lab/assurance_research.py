@@ -280,11 +280,8 @@ def close_book_persistence(snaps: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def dna_stress() -> dict[str, Any]:
-    from polymarket.research.local_lab.assure_wr80_income import run_assurance
-
     if not CASES.exists():
         return {"passed": False, "error": "missing_cases"}
-    # run_assurance may need specific signature — fall back to take + friction
     try:
         from polymarket.research.local_lab import assure_wr80_income as m
 
@@ -295,7 +292,6 @@ def dna_stress() -> dict[str, Any]:
         taken = m.take_income_wr80(cases)
         wins = sum(1 for t in taken if t.get("win") or float(t.get("pnl") or 0) > 0)
         n = len(taken)
-        # light friction probe via module helpers if present
         friction = []
         if hasattr(m, "friction_wr"):
             for slip in (0.01, 0.02, 0.03):
