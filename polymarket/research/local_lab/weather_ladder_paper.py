@@ -231,6 +231,7 @@ def plan_event(
             quotes = _quotes_for_event(event, fc.bucket_probs)
             quotes = [q for q in quotes if min_ask <= q.market_price <= max_ask]
             meta["entry_pricing"] = "live_ask"
+            meta["entries_all"] = {q.name: float(q.market_price) for q in quotes}
 
         require_ud = bool(tier_cfg.get("require_underdispersion", True))
         budget = float(tier_cfg.get("budget_per_market_usdc", 8.0)) * float(

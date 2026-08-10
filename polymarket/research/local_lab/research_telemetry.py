@@ -123,6 +123,81 @@ def forward_hit_count() -> dict[str, Any]:
     }
 
 
+def write_forward_progress() -> dict[str, Any]:
+    """How many live books we're tracking toward future DNA n."""
+    path = TELE / "quote_snapshots.jsonl"
+    rows: list[dict[str, Any]] = []
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                rows.append(json.loads(line))
+            except Exception:
+                continue
+    best: dict[str, dict[str, Any]] = {}
+    for r in rows:
+        slug = str(r.get("slug") or "")
+        if not slug or len(r.get("entries") or {}) < 3:
+            continue
+        cur = best.get(slug)
+        if cur is None or float(r.get("basket_cost") or 99) < float(cur.get("basket_cost") or 99):
+            best[slug] = r
+    pending = []
+    close = []
+    for slug, r in sorted(best.items(), key=lambda kv: float(kv[1].get("basket_cost") or 99)):
+        item = {
+            "slug": slug,
+            "city": r.get("city"),
+            "day": r.get("day"),
+            "best_basket": r.get("basket_cost"),
+            "gap": round(max(0.0, float(r.get("basket_cost") or 0) - 0.50), 4),
+            "entries_n": len(r.get("entries") or {}),
+            "dna_take_seen": bool(r.get("dna_take")),
+        }
+        pending.append(item)
+        if item["gap"] <= 0.12:
+            close.append(item)
+    hist = research_sample_stats()
+    out = {
+        "ts_utc": _ts(),
+        "snapshots_total": len(rows),
+        "markets_tracked": len(best),
+        "close_to_dna_gap_le_12c": close,
+        "pending_resolve": pending,
+        "historical_n": hist.get("n"),
+        "historical_wilson": hist.get("wilson95_lower"),
+        "n_to_go_micro": max(0, MIN_N_GO - int(hist.get("n") or 0)),
+        "note_es": (
+            "Cada mercado tracked con snapshot se puede convertir en case DNA al resolver. "
+            "Esa es la vía para subir n (CLOB history no cubre pre-julio)."
+        ),
+    }
+    TELE.mkdir(parents=True, exist_ok=True)
+    (TELE / "FORWARD_PROGRESS.json").write_text(json.dumps(out, indent=2), encoding="utf-8")
+    vps = POLY / "data_local" / "local_lab" / "vps_runs"
+    vps.mkdir(parents=True, exist_ok=True)
+    (vps / "FORWARD_PROGRESS.json").write_text(json.dumps(out, indent=2), encoding="utf-8")
+    lines = [
+        "# Forward progress",
+        "",
+        f"- tracked markets: **{len(best)}** (snapshots {len(rows)})",
+        f"- historical DNA n: **{hist.get('n')}** · Wilson {hist.get('wilson95_lower')}",
+        f"- faltan a GO_MICRO: **{max(0, MIN_N_GO - int(hist.get('n') or 0))}**",
+        "",
+        "## Close to DNA (gap ≤ 12¢)",
+    ]
+    for c in close:
+        lines.append(f"- {c['city']} {c['day']}: basket {c['best_basket']} (gap {c['gap']})")
+    if not close:
+        lines.append("- (ninguno ahora)")
+    lines.extend(["", "## All tracked", ""])
+    for p in pending:
+        lines.append(f"- {p['city']} {p['day']}: {p['best_basket']} gap={p['gap']}")
+    (vps / "FORWARD_PROGRESS.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return out
+
+
 def write_evidence_progress() -> dict[str, Any]:
     hist = research_sample_stats()
     fwd = forward_hit_count()
@@ -152,6 +227,10 @@ def write_evidence_progress() -> dict[str, Any]:
     vps = POLY / "data_local" / "local_lab" / "vps_runs"
     vps.mkdir(parents=True, exist_ok=True)
     (vps / "EVIDENCE_PROGRESS.json").write_text(json.dumps(progress, indent=2), encoding="utf-8")
+    try:
+        progress["forward_progress"] = write_forward_progress()
+    except Exception as exc:
+        progress["forward_progress_error"] = f"{type(exc).__name__}: {exc}"
     return progress
 
 

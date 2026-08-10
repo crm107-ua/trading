@@ -193,11 +193,13 @@ def prepare_candidates(cfg: dict[str, Any]) -> dict[str, Any]:
         plan, meta = plan_event(event, cfg, today=today)
         if plan is None or not plan.take:
             legs = meta.get("legs") or []
-            entries = {
-                str(x.get("name")): float(x["price"])
-                for x in legs
-                if x.get("name") is not None and x.get("price") is not None
-            }
+            entries = dict(meta.get("entries_all") or {})
+            if len(entries) < 3:
+                entries = {
+                    str(x.get("name")): float(x["price"])
+                    for x in legs
+                    if x.get("name") is not None and x.get("price") is not None
+                }
             row = {
                 "slug": event.slug,
                 "city": event.city,
@@ -214,10 +216,11 @@ def prepare_candidates(cfg: dict[str, Any]) -> dict[str, Any]:
             }
             skipped.append(row)
             # Near-miss: positive EV but basket slightly above champion max
+            # Widened upper band so we keep denser telemetry on "almost" books.
             bc = meta.get("basket_cost")
             be = meta.get("basket_ev")
-            if bc is not None and be is not None and float(be) > 0 and 0.5 < float(bc) <= 0.72:
-                near_miss.append({**row, "watch": "basket_slightly_rich"})
+            if bc is not None and 0.5 < float(bc) <= 0.85:
+                near_miss.append({**row, "watch": "basket_slightly_rich", "basket_ev": be})
             continue
         if len(accepted) >= max_markets:
             skipped.append({"slug": event.slug, "city": event.city, "skip": "max_markets"})
@@ -271,11 +274,13 @@ def prepare_candidates(cfg: dict[str, Any]) -> dict[str, Any]:
             continue
         by_city[city_l] = by_city.get(city_l, 0) + 1
         leg_rows = [asdict(l) for l in live_plan.legs]
-        entries = {
-            str(x.get("name")): float(x["price"])
-            for x in leg_rows
-            if x.get("name") is not None and x.get("price") is not None
-        }
+        entries = dict(meta.get("entries_all") or {})
+        if len(entries) < 3:
+            entries = {
+                str(x.get("name")): float(x["price"])
+                for x in leg_rows
+                if x.get("name") is not None and x.get("price") is not None
+            }
         accepted.append(
             {
                 "slug": event.slug,

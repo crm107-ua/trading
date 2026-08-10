@@ -37,17 +37,23 @@ NEAR_MISS_RECHECK_GAP = 0.08
 NEAR_MISS_RECHECK_SLEEP_S = 30.0
 # Adaptive sleep: far books → slower poll; close books → denser (still DNA-safe).
 GAP_FAR = 0.15
+GAP_WATCH = 0.12  # denser watch when best book within 12¢ of DNA
 INTERVAL_FAR_MULT = 1.5
 INTERVAL_CLOSE_S = 60.0
+INTERVAL_WATCH_S = 75.0
 HEARTBEAT_EVERY = 10
 
 
 def _min_basket_gap(stack: dict[str, Any]) -> float | None:
-    misses = (stack.get("market_now") or {}).get("near_miss") or []
+    """Best (lowest) gap over DNA 0.50 across near_miss + skipped + accepted."""
+    market = stack.get("market_now") or {}
+    rows = []
+    for key in ("near_miss", "skipped", "accepted"):
+        rows.extend(market.get(key) or [])
     gaps: list[float] = []
-    for nm in misses:
+    for nm in rows:
         b = nm.get("basket_cost")
-        if isinstance(b, (int, float)):
+        if isinstance(b, (int, float)) and float(b) > 0:
             gaps.append(max(0.0, float(b) - 0.50))
     return min(gaps) if gaps else None
 
@@ -58,6 +64,8 @@ def _adaptive_interval(base_s: float, gap: float | None) -> float:
         return base * INTERVAL_FAR_MULT
     if gap <= NEAR_MISS_RECHECK_GAP + 1e-12:
         return min(base, INTERVAL_CLOSE_S)
+    if gap <= GAP_WATCH + 1e-12:
+        return min(base, INTERVAL_WATCH_S)
     if gap >= GAP_FAR - 1e-12:
         return base * INTERVAL_FAR_MULT
     return base
