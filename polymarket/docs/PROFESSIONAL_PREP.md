@@ -22,9 +22,10 @@
 ## Mejoras permitidas ahora
 
 - **Activo:** recheck +30s si `gap_basket ≤ 0.08` (p.ej. HK 0.579) — DNA intacta.
-- Interval adaptativo por hora UTC (más denso en horas calientes).
-- Priorizar ciudades con menos BLOCKED por libro.
+- **Activo:** intervalo adaptativo — gap≥0.15 → ×1.5 (~135s); gap≤0.08 → 60s.
+- **Activo:** heartbeat cada 10 rounds + blockers limpios en watch-only.
 - Digest Telegram periódico + `IMPROVEMENT_CANDIDATES.json`.
+- Priorizar ciudades con menos BLOCKED por libro (scan).
 
 ## Mejoras prohibidas hasta READY_TO_REARM
 

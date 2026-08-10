@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Watch-only private manager — DNA vigilante x3 bankrolls, NO auto-execute.
+# IMPORTANT: never write bare $100/$200 in double-quoted bash (set -u → $1 unbound).
 set -u
 cd /var/www/html/trader
 source .venv/bin/activate
@@ -50,14 +51,14 @@ PY
 )"
 
 echo "WATCH_ONLY" > "$MODE_FILE"
-notify 'WATCH-ONLY ON x3 | live+$100+$200 | RESEARCH_ONLY | SAFE | EDGE->Telegram sin post'
+notify 'WATCH-ONLY ON x3 | live+USD100+USD200 | RESEARCH_ONLY | SAFE | EDGE->Telegram sin post'
 python3 - <<'PY'
 from pathlib import Path
 Path("polymarket/data_local/local_lab/vps_runs/LATEST_STATUS.md").write_text(
     """# Ladder Manager — WATCH ONLY x3
 
 - **Modo:** WATCH_ONLY (sin auto-execute, sin arm)
-- **Bankrolls vigilados:** saldo live · $100 · $200 (what-if)
+- **Bankrolls vigilados:** saldo live · USD100 · USD200 (what-if)
 - **Postura:** RESEARCH_ONLY
 - **SAFE:** ARMED=0 · DRY_RUN=1
 - **Si EDGE DNA:** Telegram con tamaño/PnL hipotético en las 3 carteras · **no posta**
@@ -73,23 +74,29 @@ python -u -m polymarket.research.local_lab.definitive_income_system \
   --rounds 240 --interval 90 2>&1 | while IFS= read -r line; do
     echo "$line" >> "$LOG"
     if echo "$line" | grep -q '"accepted_n": [1-9]'; then
-      notify 'EDGE DNA — WATCH x3 (live/$100/$200). NO se postea. Mira Telegram para what-if.'
+      notify 'EDGE DNA — WATCH x3 (live/USD100/USD200). NO se postea. Mira Telegram para what-if.'
       ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-      printf '%s\n' "# Estado $ts
+      cat > "$STATUS" <<EOF
+# Estado ${ts}
 
 **Modo: WATCH_ONLY x3** · **EDGE DNA** (sin post)
 
-Bankrolls: live · \$100 · \$200 — aviso Telegram con what-if.
-" > "$STATUS"
+Bankrolls: live · USD100 · USD200 — aviso Telegram con what-if.
+EOF
     fi
     if echo "$line" | grep -q '"accepted_n": 0'; then
       ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-      printf '%s\n' "# Estado $ts
+      cat > "$STATUS" <<EOF
+# Estado ${ts}
 
 **Modo: WATCH_ONLY x3** · **WAIT** (sin take press)
 
-Vigilando live/\$100/\$200 cada ~90s. No auto-execute.
-" > "$STATUS"
+Vigilando live/USD100/USD200. Interval adaptativo. No auto-execute.
+EOF
+    fi
+    if echo "$line" | grep -q 'HEARTBEAT'; then
+      ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+      echo "[$ts] $line" >> "$ALERTS"
     fi
     if echo "$line" | grep -q 'verdict='; then
       notify "Watch loop fin: $line"

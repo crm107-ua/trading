@@ -35,6 +35,11 @@ OUT = POLY / "data_local" / "local_lab" / "ladder_income"
 # gap over 0.50, recheck books once after a short wait in the same round.
 NEAR_MISS_RECHECK_GAP = 0.08
 NEAR_MISS_RECHECK_SLEEP_S = 30.0
+# Adaptive sleep: far books → slower poll; close books → denser (still DNA-safe).
+GAP_FAR = 0.15
+INTERVAL_FAR_MULT = 1.5
+INTERVAL_CLOSE_S = 60.0
+HEARTBEAT_EVERY = 10
 
 
 def _min_basket_gap(stack: dict[str, Any]) -> float | None:
@@ -47,13 +52,45 @@ def _min_basket_gap(stack: dict[str, Any]) -> float | None:
     return min(gaps) if gaps else None
 
 
+def _adaptive_interval(base_s: float, gap: float | None) -> float:
+    base = max(5.0, float(base_s))
+    if gap is None:
+        return base * INTERVAL_FAR_MULT
+    if gap <= NEAR_MISS_RECHECK_GAP + 1e-12:
+        return min(base, INTERVAL_CLOSE_S)
+    if gap >= GAP_FAR - 1e-12:
+        return base * INTERVAL_FAR_MULT
+    return base
+
+
+def _watch_blockers(stack: dict[str, Any], *, watch_only: bool) -> list[str]:
+    """Slim blockers for telemetry — avoid contradictory arm-gate noise in watch-only."""
+    raw = list(stack.get("blockers") or [])
+    if not watch_only:
+        return raw
+    drop = {
+        "champion_take_available",
+        "missing_POLY_LADDER_REAL_CONFIRM=1",
+        "confirm_env_POLY_LADDER_REAL_CONFIRM",
+    }
+    out = [b for b in raw if b not in drop]
+    if int((stack.get("market_now") or {}).get("accepted_n") or 0) == 0:
+        if "no_champion_take_right_now" not in out:
+            out.append("no_champion_take_right_now")
+    out.append("watch_only_no_post")
+    return out
+
+
 def _row_from_stack(
     *,
     stack: dict[str, Any],
     round_id: int,
     mode: str,
     recheck: bool = False,
+    watch_only: bool = False,
+    interval_next_s: float | None = None,
 ) -> dict[str, Any]:
+    gap = _min_basket_gap(stack)
     row: dict[str, Any] = {
         "round": round_id,
         "ts_utc": datetime.now(timezone.utc).isoformat(),
@@ -63,13 +100,15 @@ def _row_from_stack(
         "near_miss_n": len((stack.get("market_now") or {}).get("near_miss") or []),
         "ready_to_arm": stack.get("ready_to_arm"),
         "can_execute_now": stack.get("can_execute_now"),
-        "blockers": stack.get("blockers"),
+        "blockers": _watch_blockers(stack, watch_only=watch_only),
         "accepted_slugs": [c["slug"] for c in (stack.get("market_now") or {}).get("accepted") or []],
         "mode": mode,
+        "min_gap_basket": round(gap, 4) if gap is not None else None,
     }
+    if interval_next_s is not None:
+        row["interval_next_s"] = round(float(interval_next_s), 1)
     if recheck:
         row["recheck"] = True
-        row["min_gap_basket"] = _min_basket_gap(stack)
     return row
 
 
@@ -98,7 +137,15 @@ def run_loop(
     for i in range(rounds):
         t0 = time.monotonic()
         stack = evaluate_real_stack(cfg)
-        row = _row_from_stack(stack=stack, round_id=i + 1, mode=mode)
+        gap = _min_basket_gap(stack)
+        next_iv = _adaptive_interval(interval_s, gap) if watch_only else max(5.0, float(interval_s))
+        row = _row_from_stack(
+            stack=stack,
+            round_id=i + 1,
+            mode=mode,
+            watch_only=watch_only,
+            interval_next_s=next_iv,
+        )
         history.append(row)
         print(json.dumps(row, indent=2), flush=True)
 
@@ -111,7 +158,6 @@ def run_loop(
             print(f"telemetry_fail {type(exc).__name__}: {exc}", flush=True)
 
         accepted_n = int((stack.get("market_now") or {}).get("accepted_n") or 0)
-        gap = _min_basket_gap(stack)
         # Close near-miss recheck (ops only; DNA unchanged)
         if (
             watch_only
@@ -126,7 +172,16 @@ def run_loop(
             )
             time.sleep(NEAR_MISS_RECHECK_SLEEP_S)
             stack = evaluate_real_stack(cfg)
-            row = _row_from_stack(stack=stack, round_id=i + 1, mode=mode, recheck=True)
+            gap = _min_basket_gap(stack)
+            next_iv = _adaptive_interval(interval_s, gap)
+            row = _row_from_stack(
+                stack=stack,
+                round_id=i + 1,
+                mode=mode,
+                recheck=True,
+                watch_only=watch_only,
+                interval_next_s=next_iv,
+            )
             history.append(row)
             print(json.dumps(row, indent=2), flush=True)
             try:
@@ -136,6 +191,13 @@ def run_loop(
             except Exception as exc:
                 print(f"telemetry_fail {type(exc).__name__}: {exc}", flush=True)
             accepted_n = int((stack.get("market_now") or {}).get("accepted_n") or 0)
+
+        if watch_only and (i + 1) % HEARTBEAT_EVERY == 0:
+            print(
+                f"HEARTBEAT round={i+1} edges_seen={edges_seen} "
+                f"gap={gap} next_iv={next_iv:.0f}s bal={row.get('balance_pusd')}",
+                flush=True,
+            )
 
         if accepted_n >= 1:
             edges_seen += 1
@@ -176,7 +238,7 @@ def run_loop(
 
         if i + 1 < rounds:
             elapsed = time.monotonic() - t0
-            remaining = max(5.0, float(interval_s) - elapsed)
+            remaining = max(5.0, float(next_iv) - elapsed)
             time.sleep(remaining)
 
     if hit and (hit.get("result") or {}).get("executed"):

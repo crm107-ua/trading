@@ -168,6 +168,9 @@ def log_watch_round(row: dict[str, Any], stack: dict[str, Any] | None = None) ->
         "ready_to_arm": row.get("ready_to_arm"),
         "blockers": row.get("blockers"),
         "accepted_slugs": row.get("accepted_slugs"),
+        "min_gap_basket": row.get("min_gap_basket"),
+        "interval_next_s": row.get("interval_next_s"),
+        "recheck": row.get("recheck"),
     }
     _append_jsonl(TELE / "watch_rounds.jsonl", slim)
 
