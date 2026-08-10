@@ -257,22 +257,28 @@ def run_loop(
                 threshold=NEAR_MISS_RECHECK_GAP,
             )
             # Second denser pass when still ≤5¢
-            if (
-                accepted_n == 0
-                and gap is not None
-                and gap <= NEAR_MISS_RECHECK2_GAP + 1e-12
-            ):
-                stack, gap, next_iv, accepted_n = _do_recheck(
-                    cfg=cfg,
-                    interval_s=interval_s,
-                    round_id=i + 1,
-                    mode=mode,
-                    history=history,
-                    pass_n=2,
-                    sleep_s=NEAR_MISS_RECHECK2_SLEEP_S,
-                    gap=gap,
-                    threshold=NEAR_MISS_RECHECK2_GAP,
-                )
+            if accepted_n == 0 and gap is not None:
+                do_second = gap <= NEAR_MISS_RECHECK2_GAP + 1e-12
+                # Also densify when any book already has 2/3 DNA gates and gap≤8¢
+                if (not do_second) and gap <= NEAR_MISS_RECHECK_GAP + 1e-12:
+                    if _best_gates_passed(stack) >= 2:
+                        do_second = True
+                if do_second:
+                    stack, gap, next_iv, accepted_n = _do_recheck(
+                        cfg=cfg,
+                        interval_s=interval_s,
+                        round_id=i + 1,
+                        mode=mode,
+                        history=history,
+                        pass_n=2,
+                        sleep_s=NEAR_MISS_RECHECK2_SLEEP_S,
+                        gap=gap,
+                        threshold=(
+                            NEAR_MISS_RECHECK2_GAP
+                            if gap <= NEAR_MISS_RECHECK2_GAP + 1e-12
+                            else NEAR_MISS_RECHECK_GAP
+                        ),
+                    )
 
         if watch_only and (i + 1) % HEARTBEAT_EVERY == 0:
             print(
