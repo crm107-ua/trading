@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Watch-only private manager — DNA vigilante x3 bankrolls, NO auto-execute.
-# IMPORTANT: never write bare $100/$200 in double-quoted bash (set -u → $1 unbound).
+# IMPORTANT: never write bare dollar-amounts like USD100 as $100 under set -u (unbound $1).
 set -u
 cd /var/www/html/trader
 source .venv/bin/activate

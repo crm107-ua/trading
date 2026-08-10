@@ -35,12 +35,16 @@ OUT = POLY / "data_local" / "local_lab" / "ladder_income"
 # gap over 0.50, recheck books once after a short wait in the same round.
 NEAR_MISS_RECHECK_GAP = 0.08
 NEAR_MISS_RECHECK_SLEEP_S = 30.0
+# Second pass when still very close (≤5¢): denser capture without relaxing DNA.
+NEAR_MISS_RECHECK2_GAP = 0.05
+NEAR_MISS_RECHECK2_SLEEP_S = 90.0
 # Adaptive sleep: far books → slower poll; close books → denser (still DNA-safe).
 GAP_FAR = 0.15
 GAP_WATCH = 0.12  # denser watch when best book within 12¢ of DNA
 INTERVAL_FAR_MULT = 1.5
 INTERVAL_CLOSE_S = 60.0
 INTERVAL_WATCH_S = 75.0
+INTERVAL_GATES2_S = 45.0  # denser when any market has 2/3 DNA gates
 HEARTBEAT_EVERY = 10
 
 
@@ -58,8 +62,24 @@ def _min_basket_gap(stack: dict[str, Any]) -> float | None:
     return min(gaps) if gaps else None
 
 
-def _adaptive_interval(base_s: float, gap: float | None) -> float:
+def _best_gates_passed(stack: dict[str, Any]) -> int:
+    try:
+        from polymarket.research.local_lab.research_telemetry import gate_scoreboard
+    except Exception:
+        return 0
+    market = stack.get("market_now") or {}
+    best = 0
+    for key in ("accepted", "near_miss", "skipped"):
+        for block in market.get(key) or []:
+            sb = gate_scoreboard(block)
+            best = max(best, int(sb.get("gates_passed") or 0))
+    return best
+
+
+def _adaptive_interval(base_s: float, gap: float | None, *, gates_passed: int = 0) -> float:
     base = max(5.0, float(base_s))
+    if gates_passed >= 2 and gap is not None and gap <= NEAR_MISS_RECHECK_GAP + 1e-12:
+        return min(base, INTERVAL_GATES2_S)
     if gap is None:
         return base * INTERVAL_FAR_MULT
     if gap <= NEAR_MISS_RECHECK_GAP + 1e-12:
@@ -95,10 +115,12 @@ def _row_from_stack(
     round_id: int,
     mode: str,
     recheck: bool = False,
+    recheck_pass: int | None = None,
     watch_only: bool = False,
     interval_next_s: float | None = None,
 ) -> dict[str, Any]:
     gap = _min_basket_gap(stack)
+    gates_n = _best_gates_passed(stack)
     row: dict[str, Any] = {
         "round": round_id,
         "ts_utc": datetime.now(timezone.utc).isoformat(),
@@ -112,12 +134,57 @@ def _row_from_stack(
         "accepted_slugs": [c["slug"] for c in (stack.get("market_now") or {}).get("accepted") or []],
         "mode": mode,
         "min_gap_basket": round(gap, 4) if gap is not None else None,
+        "best_gates_passed": gates_n,
     }
     if interval_next_s is not None:
         row["interval_next_s"] = round(float(interval_next_s), 1)
     if recheck:
         row["recheck"] = True
+        row["recheck_pass"] = int(recheck_pass or 1)
     return row
+
+
+def _do_recheck(
+    *,
+    cfg: dict[str, Any],
+    interval_s: float,
+    round_id: int,
+    mode: str,
+    history: list[dict[str, Any]],
+    pass_n: int,
+    sleep_s: float,
+    gap: float,
+    threshold: float,
+) -> tuple[dict[str, Any], float | None, float, int]:
+    print(
+        f"=== NEAR_MISS RECHECK#{pass_n} gap_basket={gap:.4f}≤{threshold} "
+        f"sleep {sleep_s:.0f}s (DNA unchanged) ===",
+        flush=True,
+    )
+    time.sleep(sleep_s)
+    stack = evaluate_real_stack(cfg)
+    gap2 = _min_basket_gap(stack)
+    gates_n = _best_gates_passed(stack)
+    next_iv = _adaptive_interval(interval_s, gap2, gates_passed=gates_n)
+    row = _row_from_stack(
+        stack=stack,
+        round_id=round_id,
+        mode=mode,
+        recheck=True,
+        recheck_pass=pass_n,
+        watch_only=True,
+        interval_next_s=next_iv,
+    )
+    history.append(row)
+    print(json.dumps(row, indent=2), flush=True)
+    try:
+        from polymarket.research.local_lab.research_telemetry import log_watch_round
+
+        log_watch_round(row, stack)
+    except Exception as exc:
+        print(f"telemetry_fail {type(exc).__name__}: {exc}", flush=True)
+    accepted_n = int((stack.get("market_now") or {}).get("accepted_n") or 0)
+    return stack, gap2, next_iv, accepted_n
 
 
 def run_loop(
@@ -146,7 +213,12 @@ def run_loop(
         t0 = time.monotonic()
         stack = evaluate_real_stack(cfg)
         gap = _min_basket_gap(stack)
-        next_iv = _adaptive_interval(interval_s, gap) if watch_only else max(5.0, float(interval_s))
+        gates_n = _best_gates_passed(stack)
+        next_iv = (
+            _adaptive_interval(interval_s, gap, gates_passed=gates_n)
+            if watch_only
+            else max(5.0, float(interval_s))
+        )
         row = _row_from_stack(
             stack=stack,
             round_id=i + 1,
@@ -173,37 +245,40 @@ def run_loop(
             and gap is not None
             and gap <= NEAR_MISS_RECHECK_GAP + 1e-12
         ):
-            print(
-                f"=== NEAR_MISS RECHECK gap_basket={gap:.4f}≤{NEAR_MISS_RECHECK_GAP} "
-                f"sleep {NEAR_MISS_RECHECK_SLEEP_S:.0f}s (DNA unchanged) ===",
-                flush=True,
-            )
-            time.sleep(NEAR_MISS_RECHECK_SLEEP_S)
-            stack = evaluate_real_stack(cfg)
-            gap = _min_basket_gap(stack)
-            next_iv = _adaptive_interval(interval_s, gap)
-            row = _row_from_stack(
-                stack=stack,
+            stack, gap, next_iv, accepted_n = _do_recheck(
+                cfg=cfg,
+                interval_s=interval_s,
                 round_id=i + 1,
                 mode=mode,
-                recheck=True,
-                watch_only=watch_only,
-                interval_next_s=next_iv,
+                history=history,
+                pass_n=1,
+                sleep_s=NEAR_MISS_RECHECK_SLEEP_S,
+                gap=gap,
+                threshold=NEAR_MISS_RECHECK_GAP,
             )
-            history.append(row)
-            print(json.dumps(row, indent=2), flush=True)
-            try:
-                from polymarket.research.local_lab.research_telemetry import log_watch_round
-
-                log_watch_round(row, stack)
-            except Exception as exc:
-                print(f"telemetry_fail {type(exc).__name__}: {exc}", flush=True)
-            accepted_n = int((stack.get("market_now") or {}).get("accepted_n") or 0)
+            # Second denser pass when still ≤5¢
+            if (
+                accepted_n == 0
+                and gap is not None
+                and gap <= NEAR_MISS_RECHECK2_GAP + 1e-12
+            ):
+                stack, gap, next_iv, accepted_n = _do_recheck(
+                    cfg=cfg,
+                    interval_s=interval_s,
+                    round_id=i + 1,
+                    mode=mode,
+                    history=history,
+                    pass_n=2,
+                    sleep_s=NEAR_MISS_RECHECK2_SLEEP_S,
+                    gap=gap,
+                    threshold=NEAR_MISS_RECHECK2_GAP,
+                )
 
         if watch_only and (i + 1) % HEARTBEAT_EVERY == 0:
             print(
                 f"HEARTBEAT round={i+1} edges_seen={edges_seen} "
-                f"gap={gap} next_iv={next_iv:.0f}s bal={row.get('balance_pusd')}",
+                f"gap={gap} gates={_best_gates_passed(stack)} next_iv={next_iv:.0f}s "
+                f"bal={row.get('balance_pusd')}",
                 flush=True,
             )
 

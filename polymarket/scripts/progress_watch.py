@@ -112,7 +112,7 @@ def _edge_alert(d: dict) -> None:
                 "accepted_n": acc,
                 "balance_live": live_bal,
                 "acción": "NO se postea",
-                "bankrolls": "live/$100/$200 (detalle falló)",
+                "bankrolls": "live/USD100/USD200 (detalle falló)",
             },
         )
 
@@ -160,6 +160,7 @@ def _close_call_alert(d: dict, st: dict) -> None:
                     "gap_basket": round(gap_f, 4),
                     "round": d.get("round"),
                     "near_miss_n": d.get("near_miss_n"),
+                    "gates": d.get("best_gates_passed"),
                     "interval_s": d.get("interval_next_s"),
                     "acción": "Vigilando; DNA intacta; NO se postea",
                 },
@@ -167,6 +168,68 @@ def _close_call_alert(d: dict, st: dict) -> None:
     elif gap_f > 0.08:
         # allow re-alert if we drift away then come back
         st["close_call_sent"] = False
+
+
+def _gates_scoreboard_alert(d: dict, st: dict) -> None:
+    """Telegram when any live book hits 2/3 DNA gates (still missing one — no post)."""
+    gates = d.get("best_gates_passed")
+    try:
+        g = int(gates) if gates is not None else 0
+    except Exception:
+        g = 0
+    # Also read GATE_SCOREBOARD.json for detail
+    detail = ""
+    waiting = ""
+    city = ""
+    try:
+        sb_path = RUN / "GATE_SCOREBOARD.json"
+        if not sb_path.exists():
+            sb_path = RUN / "telemetry" / "GATE_SCOREBOARD.json"
+        if sb_path.exists():
+            sb = json.loads(sb_path.read_text(encoding="utf-8"))
+            rows = sb.get("gates_2_of_3") or sb.get("all") or []
+            top = None
+            for r in rows:
+                gl = r.get("gates_live") or r
+                if int(gl.get("gates_passed") or 0) >= 2:
+                    top = r
+                    break
+            if top:
+                gl = top.get("gates_live") or top
+                city = f"{top.get('city')} {top.get('day')}"
+                waiting = ",".join(gl.get("waiting") or [])
+                detail = (
+                    f"{gl.get('gates_passed')}/3 basket={gl.get('basket')} "
+                    f"leg={gl.get('max_leg')} ud={gl.get('ud_ratio')}"
+                )
+                g = max(g, int(gl.get("gates_passed") or 0))
+    except Exception as exc:
+        print(f"gates_sb_fail {type(exc).__name__}: {exc}", flush=True)
+
+    if g < 2:
+        st["gates2_sent"] = False
+        return
+    prev_best = int(st.get("best_gates") or 0)
+    improved = g > prev_best
+    st["best_gates"] = max(prev_best, g)
+    key = f"{city}|{waiting}|{g}"
+    if improved or (not st.get("gates2_sent")) or st.get("gates2_key") != key:
+        st["gates2_sent"] = True
+        st["gates2_key"] = key
+        alert(
+            f"GATES {g}/3 {city or d.get('best_gates_slug') or ''} waiting={waiting or '?'} {detail} "
+            f"round={d.get('round')} (WATCH ONLY, DNA intacta, no post)",
+            title=f"AVANCE · DNA gates {g}/3",
+            fields={
+                "gates": g,
+                "city": city or None,
+                "waiting": waiting or None,
+                "detalle": detail or None,
+                "gap_basket": d.get("min_gap_basket"),
+                "round": d.get("round"),
+                "acción": "Falta 1 gate; vigilando; NO se postea",
+            },
+        )
 
 
 def main():
@@ -178,8 +241,8 @@ def main():
         fields={
             "canal": "@waxochitobot",
             "modo": "WATCH_ONLY",
-            "bankrolls": "live + $100 + $200",
-            "aviso": "EDGE en cualquiera → Telegram con what-if x3 (sin post)",
+            "bankrolls": "live + USD100 + USD200",
+            "aviso": "EDGE o gates 2/3 → Telegram (sin post)",
         },
     )
     st = load_state()
@@ -193,6 +256,7 @@ def main():
                 st["last_round"] = max(r, int(st.get("last_round") or 0))
                 st["last_ts"] = d.get("ts_utc")
                 _close_call_alert(d, st)
+                _gates_scoreboard_alert(d, st)
                 if acc >= 1:
                     # New edge or still open: alert once per edge open cycle
                     if not st.get("had_edge"):
@@ -202,7 +266,7 @@ def main():
                         alert(
                             f"EDGE sigue abierto round={r} accepted_n={acc} (x3 bankrolls)",
                             title="AVANCE · EDGE sigue (WATCH ONLY x3)",
-                            fields={"round": r, "accepted_n": acc, "bankrolls": "live/$100/$200"},
+                            fields={"round": r, "accepted_n": acc, "bankrolls": "live/USD100/USD200"},
                         )
                 else:
                     # edge closed — allow fresh alert next time
