@@ -44,6 +44,41 @@ GAMMA = "https://gamma-api.polymarket.com"
 
 HIGH_CFG = POLY / "config" / "weather_ladder_high_income.json"
 DEF_CFG = POLY / "config" / "weather_ladder_definitive_real.json"
+CASES = POLY / "data_local" / "local_lab" / "weather_optimize" / "cases.json"
+
+# Wide live universe for hyperreal (DNA gates still only certify core)
+DNA_CITIES = ("singapore", "shanghai", "hong-kong", "beijing")
+# Extra cities seen in cases.json + common Polymarket weather probes
+EXTRA_CITIES = (
+    "seoul",
+    "tokyo",
+    "taipei",
+    "miami",
+    "wellington",
+    "london",
+    "nyc",
+    "new-york-city",
+    "chicago",
+    "dallas",
+    "austin",
+    "los-angeles",
+    "san-francisco",
+    "toronto",
+    "paris",
+    "berlin",
+    "mumbai",
+    "delhi",
+    "bangkok",
+    "jakarta",
+    "manila",
+    "sydney",
+    "melbourne",
+)
+WIDE_HORIZONS = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)
+# Diagnostic-only basket thresholds (never promote to live DNA)
+COUNTERFACTUAL_BASKETS = (0.50, 0.52, 0.55, 0.58, 0.60, 0.65, 0.70, 0.80)
+DEPOSIT_WHATIFS = (50.0, 100.0, 200.0, 500.0, 1000.0)
+SLIP_STRESS_CENTS = (0.0, 0.01, 0.02, 0.05)
 
 
 def _fetch_book(client: httpx.Client, token_id: str) -> dict[str, Any]:
@@ -285,6 +320,293 @@ def dna_distance(row: dict[str, Any], *, max_basket: float = 0.50, max_leg: floa
     }
 
 
+def wide_scan_cfg(base: dict[str, Any]) -> dict[str, Any]:
+    """Maximize open-market coverage for hyperreal (not for live posting)."""
+    cfg = dict(base)
+    cfg["cities"] = list(DNA_CITIES) + list(EXTRA_CITIES)
+    cfg["city_priority"] = list(DNA_CITIES) + list(EXTRA_CITIES)
+    cfg["exclude_cities"] = []
+    cfg["prefer_horizons"] = list(WIDE_HORIZONS)
+    cfg["limit_per_city"] = 40
+    cfg["max_markets_per_run"] = 160
+    cfg["max_per_city"] = 16
+    cfg["resolved_max_age_days"] = 0
+    cfg["open_only"] = True
+    cfg["use_clob_asks"] = True
+    return cfg
+
+
+def _wilson_lower(k: int, n: int, z: float = 1.96) -> float:
+    if n <= 0:
+        return 0.0
+    p = k / n
+    z2 = z * z
+    den = 1.0 + z2 / n
+    centre = p + z2 / (2.0 * n)
+    marg = z * math.sqrt((p * (1.0 - p) + z2 / (4.0 * n)) / n)
+    return max(0.0, (centre - marg) / den)
+
+
+def historical_cases_breadth() -> dict[str, Any]:
+    """Contemplate full resolved-case universe (not just live)."""
+    from collections import Counter
+
+    from polymarket.research.local_lab.assure_wr80_income import take_income_wr80
+
+    if not CASES.exists():
+        return {"ok": False, "reason": "no_cases"}
+    cases = json.loads(CASES.read_text(encoding="utf-8"))
+    takes = take_income_wr80(cases)
+    by_city = Counter(c.get("city") for c in cases)
+    take_city = Counter(t.get("city") for t in takes)
+    by_hz = Counter(c.get("horizon") for c in cases if c.get("horizon") is not None)
+    take_hz = Counter(t.get("horizon") for t in takes if t.get("horizon") is not None)
+    days = sorted({c.get("day") for c in cases if c.get("day")})
+    wins = [bool(t.get("win")) for t in takes]
+    # Streak taxonomy
+    max_win_streak = max_loss_streak = cur_w = cur_l = 0
+    for w in wins:
+        if w:
+            cur_w += 1
+            cur_l = 0
+            max_win_streak = max(max_win_streak, cur_w)
+        else:
+            cur_l += 1
+            cur_w = 0
+            max_loss_streak = max(max_loss_streak, cur_l)
+    n = len(takes)
+    k = sum(1 for w in wins if w)
+    baskets = [float(t.get("basket_cost") or t.get("basket") or 0) for t in takes]
+    pnls = [float(t.get("pnl") or 0) for t in takes]
+    return {
+        "ok": True,
+        "n_cases": len(cases),
+        "n_dna_takes": n,
+        "dna_wins": k,
+        "dna_wr_point": round(k / n, 4) if n else None,
+        "dna_wilson95": round(_wilson_lower(k, n), 4) if n else None,
+        "day_min": days[0] if days else None,
+        "day_max": days[-1] if days else None,
+        "n_days": len(days),
+        "n_cities": len(by_city),
+        "n_horizons": len(by_hz),
+        "cases_by_city": dict(by_city),
+        "dna_takes_by_city": dict(take_city),
+        "cases_by_horizon": {str(k): v for k, v in sorted(by_hz.items(), key=lambda x: (x[0] is None, x[0]))},
+        "dna_takes_by_horizon": {str(k): v for k, v in sorted(take_hz.items(), key=lambda x: (x[0] is None, x[0]))},
+        "max_win_streak": max_win_streak,
+        "max_loss_streak": max_loss_streak,
+        "basket_min": round(min(baskets), 4) if baskets else None,
+        "basket_max": round(max(baskets), 4) if baskets else None,
+        "basket_mean": round(sum(baskets) / len(baskets), 4) if baskets else None,
+        "pnl_sum": round(sum(pnls), 4) if pnls else None,
+        "coverage_note": "Historical resolved universe; live scan is separate.",
+    }
+
+
+def contemplate_case_matrix(
+    *,
+    hist: dict[str, Any],
+    pack: dict[str, Any],
+    book_reports: list[dict[str, Any]],
+    balance: float | None,
+) -> dict[str, Any]:
+    """Many what-if / taxonomy cases beyond the live DNA take snapshot."""
+    from collections import Counter
+
+    rows = list(pack.get("accepted") or []) + list(pack.get("near_miss") or []) + list(pack.get("skipped") or [])
+    # Dedup by slug
+    seen: set[str] = set()
+    uniq: list[dict[str, Any]] = []
+    for r in rows:
+        s = r.get("slug")
+        if not s or s in seen:
+            continue
+        seen.add(s)
+        uniq.append(r)
+
+    skip_tax = Counter(str(r.get("skip") or "accepted") for r in uniq)
+    gate_tax = Counter()
+    distances = []
+    for r in uniq:
+        d = dna_distance(r)
+        g = d["gates"]
+        key = (
+            f"b{'1' if g['basket_ok'] else '0'}"
+            f"_l{'1' if g['leg_ok'] else '0'}"
+            f"_u{'1' if g['ud_ok'] else '0'}"
+        )
+        gate_tax[key] += 1
+        distances.append(
+            {
+                "slug": r.get("slug"),
+                "city": r.get("city"),
+                "day": r.get("day"),
+                "skip": r.get("skip"),
+                **d,
+            }
+        )
+    distances.sort(
+        key=lambda x: (
+            -int(x.get("gates_passed") or 0),
+            float(x.get("gap_basket") if x.get("gap_basket") is not None else 99),
+        )
+    )
+
+    # Counterfactual: how many open rows would pass if basket max were X (leg+UD fixed)
+    counterfactual = []
+    for mx in COUNTERFACTUAL_BASKETS:
+        n_pass = 0
+        for r in uniq:
+            d = dna_distance(r, max_basket=mx)
+            if d["gates_passed"] == 3:
+                n_pass += 1
+        counterfactual.append(
+            {
+                "max_basket": mx,
+                "would_pass_gates": n_pass,
+                "note": "diagnostic_only_not_live_dna" if mx > 0.50 + 1e-12 else "canonical_dna",
+            }
+        )
+
+    # Slip stress on book walks: recompute live basket + slip vs DNA 0.50
+    slip_stress = []
+    for slip in SLIP_STRESS_CENTS:
+        n_under = 0
+        for b in book_reports:
+            live = b.get("live_basket_best_ask_plus_slip")
+            # live already includes default +0.01; approximate delta
+            if live is None:
+                continue
+            adj = float(live) - 0.01 + float(slip)
+            if adj <= 0.50 + 1e-12 and b.get("dna_universe"):
+                # still need leg+UD from dna_distance if present
+                dd = b.get("dna_distance") or {}
+                g = dd.get("gates") or {}
+                if g.get("leg_ok") and g.get("ud_ok"):
+                    n_under += 1
+        slip_stress.append({"slip_cents": slip, "dna_city_rows_basket_ok_with_leg_ud": n_under})
+
+    # Deposit what-ifs: miss runway after deposit (budget $12 / worst miss ~budget)
+    deposit_cases = []
+    bal0 = float(balance or 0.0)
+    for dep in DEPOSIT_WHATIFS:
+        after = round(bal0 + dep, 2)
+        for budget, n_miss in ((12.0, 1), (12.0, 2), (25.0, 1), (25.0, 2), (25.0, 3), (50.0, 2)):
+            miss = budget  # conservative full-budget miss
+            left = after - miss * n_miss
+            deposit_cases.append(
+                {
+                    "deposit": dep,
+                    "balance_after": after,
+                    "budget": budget,
+                    "n_misses": n_miss,
+                    "left": round(left, 2),
+                    "survives": left >= budget * 0.95,
+                    "runway_go_style": dep >= 100 and after >= 100,
+                }
+            )
+
+    # City × horizon live matrix (presence + closest basket)
+    matrix = []
+    by_ch: dict[tuple[str, Any], dict[str, Any]] = {}
+    for r in uniq:
+        city = str(r.get("city") or "")
+        day = r.get("day")
+        key = (city, day)
+        bc = r.get("basket_cost")
+        prev = by_ch.get(key)
+        if prev is None or (bc is not None and float(bc) < float(prev.get("basket") or 99)):
+            d = dna_distance(r)
+            by_ch[key] = {
+                "city": city,
+                "day": day,
+                "slug": r.get("slug"),
+                "basket": bc,
+                "gates_passed": d["gates_passed"],
+                "ud": d["ud"],
+                "skip": r.get("skip"),
+            }
+    matrix = sorted(by_ch.values(), key=lambda x: (str(x.get("city")), str(x.get("day"))))
+
+    # Book liquidity taxonomy
+    liq = Counter()
+    for b in book_reports:
+        f25 = ((b.get("fill_sims") or {}).get("budget_25") or {})
+        if not b.get("leg_books") and b.get("ok") is False:
+            liq["no_book"] += 1
+        elif f25.get("all_legs_complete_at_cap"):
+            liq["fillable_25"] += 1
+        elif f25.get("abort_partial_would_trigger"):
+            liq["abort_partial_25"] += 1
+        else:
+            liq["other"] += 1
+
+    return {
+        "n_unique_open_rows": len(uniq),
+        "skip_taxonomy": dict(skip_tax),
+        "gate_taxonomy": dict(gate_tax),
+        "closest_distances": distances[:20],
+        "counterfactual_basket_thresholds": counterfactual,
+        "slip_stress": slip_stress,
+        "deposit_whatifs": deposit_cases,
+        "city_day_matrix": matrix,
+        "liquidity_taxonomy": dict(liq),
+        "historical_streaks": {
+            "max_win_streak": hist.get("max_win_streak"),
+            "max_loss_streak": hist.get("max_loss_streak"),
+            "wilson95": hist.get("dna_wilson95"),
+            "n_dna_takes": hist.get("n_dna_takes"),
+        },
+        "invariants_es": [
+            "Counterfactuales >0.50 NO cambian DNA live.",
+            "Depósito what-if ≠ permiso de auto-execute.",
+            "Taxonomía de skips explica por qué no hay take ahora.",
+        ],
+    }
+
+
+def calendar_probe_slugs(cities: list[str], horizons: tuple[int, ...]) -> list[str]:
+    """Force calendar slug probes beyond search discovery."""
+    from datetime import timedelta
+
+    months = [
+        "january",
+        "february",
+        "march",
+        "april",
+        "may",
+        "june",
+        "july",
+        "august",
+        "september",
+        "october",
+        "november",
+        "december",
+    ]
+    today = datetime.now(timezone.utc).date()
+    slugs = []
+    with httpx.Client(timeout=20.0) as client:
+        for city in cities:
+            for hz in horizons:
+                d = today + timedelta(days=hz)
+                slug = f"highest-temperature-in-{city}-on-{months[d.month - 1]}-{d.day}-{d.year}"
+                try:
+                    r = client.get(f"{GAMMA}/events", params={"slug": slug})
+                    if r.status_code == 200 and r.json():
+                        slugs.append(slug)
+                except Exception:
+                    continue
+    # de-dupe
+    seen: set[str] = set()
+    out = []
+    for s in slugs:
+        if s not in seen:
+            seen.add(s)
+            out.append(s)
+    return out
+
+
 def _ensure_leg_tokens(cand: dict[str, Any]) -> dict[str, Any]:
     """If legs lack token_id, re-fetch live event and map by bucket name."""
     legs = list(cand.get("legs") or [])
@@ -309,13 +631,25 @@ def _ensure_leg_tokens(cand: dict[str, Any]) -> dict[str, Any]:
             if row.get("price") is None and b.ask is not None:
                 row["price"] = b.ask
         new_legs.append(row)
-    # If no legs, synthesize from cheapest asks near center — skip
+    # If plan had no legs, build token map for top-3 cheapest asks (diagnostic only)
+    if not new_legs and ev.buckets:
+        cheap = sorted([b for b in ev.buckets if b.ask is not None], key=lambda b: float(b.ask))[:3]
+        for b in cheap:
+            new_legs.append(
+                {
+                    "name": b.name,
+                    "price": b.ask,
+                    "token_id": b.token_yes,
+                    "dollars": 4.0,
+                    "shares": 4.0 / float(b.ask) if b.ask else 0,
+                }
+            )
     out = dict(cand)
     out["legs"] = new_legs
     return out
 
 
-def run(*, budgets: list[float] | None = None, write_docs: bool = False) -> dict[str, Any]:
+def run(*, budgets: list[float] | None = None, write_docs: bool = False, wide: bool = True) -> dict[str, Any]:
     load_repo_dotenv(override=True)
     os.environ["POLY_LIVE_ARMED"] = "0"
     os.environ["POLY_LIVE_DRY_RUN"] = "1"
@@ -331,6 +665,13 @@ def run(*, budgets: list[float] | None = None, write_docs: bool = False) -> dict
     cfg_high = load_cfg(HIGH_CFG)
     cfg_def = load_cfg(DEF_CFG)
 
+    hist = historical_cases_breadth()
+    print(
+        f"historical cases n={hist.get('n_cases')} dna_takes={hist.get('n_dna_takes')} "
+        f"days={hist.get('n_days')}",
+        flush=True,
+    )
+
     print("latency probes…", flush=True)
     with httpx.Client(timeout=20.0) as client:
         latency = probe_latency(client)
@@ -341,24 +682,94 @@ def run(*, budgets: list[float] | None = None, write_docs: bool = False) -> dict
         stack_high = evaluate_real_stack(cfg_high)
         os.environ.pop("POLY_LADDER_HIGH_INCOME", None)
 
-        print("prepare_candidates (full open books)…", flush=True)
-        cfg_scan = dict(cfg_high)
-        cfg_scan["max_markets_per_run"] = 12
-        cfg_scan["max_per_city"] = 3
+        print("wide prepare_candidates…", flush=True)
+        cfg_scan = wide_scan_cfg(cfg_high) if wide else dict(cfg_high)
+        if not wide:
+            cfg_scan["max_markets_per_run"] = 12
+            cfg_scan["max_per_city"] = 3
         pack = prepare_candidates(cfg_scan)
 
-        targets = list(pack.get("accepted") or [])
-        for nm in (pack.get("near_miss") or [])[:10]:
-            targets.append(nm)
+        # Extra calendar probes → synthetic skipped rows if missing from pack
+        # Calendar slug spam only on cities that historically exist / DNA core
+        print("calendar slug probes…", flush=True)
+        cal_cities = list(DNA_CITIES) + ["seoul", "tokyo", "taipei", "miami", "wellington"]
+        cal_slugs = calendar_probe_slugs(cal_cities, WIDE_HORIZONS if wide else (0, 1, 2, 3))
+        known = {r.get("slug") for r in (pack.get("accepted") or [])}
+        known |= {r.get("slug") for r in (pack.get("near_miss") or [])}
+        known |= {r.get("slug") for r in (pack.get("skipped") or [])}
+        extra_rows = []
+        from polymarket.src.weather.markets import fetch_temp_event
+
+        for slug in cal_slugs:
+            if slug in known:
+                continue
+            try:
+                ev = fetch_temp_event(slug, use_clob=True)
+            except Exception:
+                continue
+            if ev is None or ev.closed:
+                continue
+            # Build diagnostic candidate from cheapest 3 asks
+            cheap = sorted([b for b in ev.buckets if b.ask is not None], key=lambda b: float(b.ask))[:3]
+            if len(cheap) < 3:
+                continue
+            bc = sum(float(b.ask) for b in cheap)
+            legs = [
+                {
+                    "name": b.name,
+                    "price": b.ask,
+                    "token_id": b.token_yes,
+                    "dollars": 4.0,
+                    "shares": 4.0 / float(b.ask),
+                }
+                for b in cheap
+            ]
+            row = {
+                "slug": slug,
+                "city": ev.city,
+                "day": ev.day.isoformat() if hasattr(ev.day, "isoformat") else str(ev.day),
+                "skip": "calendar_probe_not_in_plan",
+                "basket_cost": round(bc, 4),
+                "legs": legs,
+                "underdispersed": None,
+                "dna_take": False,
+                "source": "calendar_probe",
+            }
+            extra_rows.append(row)
+            known.add(slug)
+
+        # Targets: ALL accepted + ALL near_miss + ALL skipped with legs + calendar extras
+        targets: list[dict[str, Any]] = []
+        seen_t: set[str] = set()
+
+        def _add(rows: list[dict[str, Any]]) -> None:
+            for r in rows:
+                s = r.get("slug")
+                if not s or s in seen_t:
+                    continue
+                if not r.get("legs") and r.get("source") != "calendar_probe":
+                    continue
+                seen_t.add(s)
+                targets.append(r)
+
+        _add(list(pack.get("accepted") or []))
+        _add(list(pack.get("near_miss") or []))
         skipped = [s for s in (pack.get("skipped") or []) if s.get("legs")]
         skipped.sort(key=lambda s: float(s.get("basket_cost") or 99))
-        for s in skipped[:10]:
-            if s.get("slug") not in {t.get("slug") for t in targets}:
-                targets.append(s)
+        _add(skipped)
+        _add(extra_rows)
 
-        print(f"book-walk {len(targets)} candidates…", flush=True)
+        print(
+            f"book-walk {len(targets)} candidates "
+            f"(accepted={len(pack.get('accepted') or [])} "
+            f"near={len(pack.get('near_miss') or [])} "
+            f"skipped_legs={len(skipped)} calendar_extra={len(extra_rows)})…",
+            flush=True,
+        )
         book_reports = []
-        for cand0 in targets:
+        for i, cand0 in enumerate(targets):
+            if i and i % 5 == 0:
+                print(f"  …{i}/{len(targets)}", flush=True)
             cand = _ensure_leg_tokens(cand0)
             if cand.get("legs") and not any(l.get("token_id") for l in cand["legs"]):
                 book_reports.append(
@@ -368,6 +779,7 @@ def run(*, budgets: list[float] | None = None, write_docs: bool = False) -> dict
                         "ok": False,
                         "reason": "legs_without_token_id",
                         "plan_basket": cand.get("basket_cost"),
+                        "dna_universe": str(cand.get("city") or "").lower() in DNA_CITIES,
                         "dna_distance": dna_distance(cand),
                     }
                 )
@@ -375,10 +787,16 @@ def run(*, budgets: list[float] | None = None, write_docs: bool = False) -> dict
             try:
                 rep = analyze_candidate_books(client, cand, budgets=budgets)
                 rep["dna_distance"] = dna_distance(cand)
+                rep["dna_universe"] = str(cand.get("city") or "").lower() in DNA_CITIES
                 book_reports.append(rep)
             except Exception as e:
                 book_reports.append(
-                    {"slug": cand.get("slug"), "ok": False, "error": f"{type(e).__name__}: {e}"}
+                    {
+                        "slug": cand.get("slug"),
+                        "ok": False,
+                        "error": f"{type(e).__name__}: {e}",
+                        "dna_universe": str(cand.get("city") or "").lower() in DNA_CITIES,
+                    }
                 )
 
     geo = check_geoblock()
@@ -475,12 +893,62 @@ def run(*, budgets: list[float] | None = None, write_docs: bool = False) -> dict
         verdict = "HYPERREAL_MARKET_FAIL"
         action = f"Fallos de mercado live: {fails}"
 
+    # Coverage stats across all book walks
+    dna_books = [b for b in book_reports if b.get("dna_universe")]
+    extra_books = [b for b in book_reports if b.get("dna_universe") is False]
+    fillable_any = sum(
+        1
+        for b in book_reports
+        if ((b.get("fill_sims") or {}).get("budget_25") or {}).get("all_legs_complete_at_cap")
+    )
+    fillable_dna_universe = sum(
+        1
+        for b in dna_books
+        if ((b.get("fill_sims") or {}).get("budget_25") or {}).get("all_legs_complete_at_cap")
+    )
+    baskets = [float(b.get("plan_basket") or b.get("live_basket_best_ask_plus_slip") or 99) for b in dna_books]
+    baskets = [x for x in baskets if x < 90]
+    closest_bc = min(baskets) if baskets else None
+
+    many = contemplate_case_matrix(
+        hist=hist,
+        pack=pack,
+        book_reports=book_reports,
+        balance=float(bal) if bal is not None else None,
+    )
+
     report = {
         "ts_utc": datetime.now(timezone.utc).isoformat(),
         "verdict": verdict,
         "action_es": action,
         "passed": required_ok,
         "checks": checks,
+        "coverage": {
+            "wide": wide,
+            "horizons": list(WIDE_HORIZONS) if wide else [0, 1, 2, 3],
+            "cities_scanned": list(cfg_scan.get("cities") or []),
+            "events_open_pack": pack.get("events_open"),
+            "targets_book_walked": len(targets),
+            "calendar_slugs_found": len(cal_slugs),
+            "calendar_extras_added": len(extra_rows),
+            "book_reports": len(book_reports),
+            "dna_universe_books": len(dna_books),
+            "extra_city_books": len(extra_books),
+            "fillable_budget25_any": fillable_any,
+            "fillable_budget25_dna_cities": fillable_dna_universe,
+            "closest_dna_city_basket": closest_bc,
+            "historical": hist,
+            "case_matrix": {
+                "n_unique_open_rows": many.get("n_unique_open_rows"),
+                "skip_taxonomy": many.get("skip_taxonomy"),
+                "gate_taxonomy": many.get("gate_taxonomy"),
+                "liquidity_taxonomy": many.get("liquidity_taxonomy"),
+                "counterfactual_n": len(many.get("counterfactual_basket_thresholds") or []),
+                "deposit_whatifs_n": len(many.get("deposit_whatifs") or []),
+                "city_day_matrix_n": len(many.get("city_day_matrix") or []),
+            },
+        },
+        "many_cases": many,
         "latency": latency,
         "geoblock": {"raw": geo_raw, "blocked": geo_blocked, "msg": geo_msg},
         "wallet": {
@@ -537,6 +1005,8 @@ def run(*, budgets: list[float] | None = None, write_docs: bool = False) -> dict
 
 
 def render_md(report: dict[str, Any]) -> str:
+    w = report.get("wallet") or {}
+    many = report.get("many_cases") or {}
     lines = [
         "# Hyperreal market verify — Polymarket LIVE",
         "",
@@ -549,7 +1019,58 @@ def render_md(report: dict[str, Any]) -> str:
     ]
     for k, v in (report.get("checks") or {}).items():
         lines.append(f"- `{k}`={v}")
-    w = report.get("wallet") or {}
+    cov = report.get("coverage") or {}
+    hist = cov.get("historical") or {}
+    lines += [
+        "",
+        "## Cobertura ampliada",
+        f"- wide={cov.get('wide')} horizons={cov.get('horizons')} cities={cov.get('cities_scanned')}",
+        f"- events_open={cov.get('events_open_pack')} calendar_slugs={cov.get('calendar_slugs_found')} "
+        f"extras={cov.get('calendar_extras_added')}",
+        f"- book_walks={cov.get('book_reports')} (DNA cities={cov.get('dna_universe_books')} "
+        f"extra={cov.get('extra_city_books')})",
+        f"- fillable@$25: any={cov.get('fillable_budget25_any')} dna_cities={cov.get('fillable_budget25_dna_cities')}",
+        f"- closest DNA-city basket live≈{cov.get('closest_dna_city_basket')}",
+        f"- histórico cases={hist.get('n_cases')} dna_takes={hist.get('n_dna_takes')} "
+        f"WR={hist.get('dna_wr_point')} Wilson95={hist.get('dna_wilson95')} "
+        f"days={hist.get('n_days')} ({hist.get('day_min')}→{hist.get('day_max')})",
+        f"- streaks win={hist.get('max_win_streak')} loss={hist.get('max_loss_streak')} "
+        f"basket_mean={hist.get('basket_mean')}",
+        f"- histórico by_city={hist.get('cases_by_city')} dna_takes_by_city={hist.get('dna_takes_by_city')}",
+        f"- histórico by_horizon={hist.get('cases_by_horizon')}",
+        "",
+        "## Matriz de muchos casos",
+        f"- open_rows únicos={many.get('n_unique_open_rows')}",
+        f"- skip_taxonomy={many.get('skip_taxonomy')}",
+        f"- gate_taxonomy (b/l/u)={many.get('gate_taxonomy')}",
+        f"- liquidity_taxonomy={many.get('liquidity_taxonomy')}",
+        "",
+        "### Counterfactual basket (diagnóstico; DNA live sigue ≤0.50)",
+    ]
+    for c in many.get("counterfactual_basket_thresholds") or []:
+        lines.append(
+            f"- max_basket={c.get('max_basket')} → would_pass={c.get('would_pass_gates')} ({c.get('note')})"
+        )
+    lines += ["", "### Slip stress (DNA cities + leg+UD)"]
+    for s in many.get("slip_stress") or []:
+        lines.append(f"- slip={s.get('slip_cents')} → rows_ok={s.get('dna_city_rows_basket_ok_with_leg_ud')}")
+    lines += ["", "### Deposit what-if (sobrevive N misses)"]
+    for d in many.get("deposit_whatifs") or []:
+        if d.get("budget") == 25.0 and d.get("n_misses") in (1, 2, 3) and d.get("deposit") in (100.0, 200.0, 500.0):
+            lines.append(
+                f"- dep=${d.get('deposit'):.0f} +bal→{d.get('balance_after')} "
+                f"budget={d.get('budget')} misses={d.get('n_misses')} "
+                f"left={d.get('left')} survives={d.get('survives')}"
+            )
+    lines += [
+        "",
+        "### City×day matrix (live)",
+    ]
+    for m in (many.get("city_day_matrix") or [])[:40]:
+        lines.append(
+            f"- {m.get('city')} {m.get('day')} bc={m.get('basket')} "
+            f"gates={m.get('gates_passed')}/3 ud={m.get('ud')} skip={m.get('skip')}"
+        )
     lines += [
         "",
         "## Wallet / geo",
@@ -568,17 +1089,17 @@ def render_md(report: dict[str, Any]) -> str:
         "",
         "## Closest to DNA now",
     ]
-    for n in ((report.get("scan") or {}).get("closest_near") or [])[:8]:
+    for n in ((report.get("scan") or {}).get("closest_near") or [])[:12]:
         lines.append(
             f"- {n.get('city')} {n.get('day')} basket={n.get('basket')} "
             f"max_leg={n.get('max_leg')} ud={n.get('ud')} gates={n.get('gates_passed')}/3 "
             f"gap_b={n.get('gap_basket')} skip={n.get('skip')}"
         )
-    lines += ["", "## Book walks (muestra)"]
-    for b in (report.get("book_walks") or [])[:6]:
+    lines += ["", "## Book walks (todos)"]
+    for b in report.get("book_walks") or []:
         lines.append(
-            f"- `{b.get('slug')}` dna={b.get('dna_take')} plan_bc={b.get('plan_basket')} "
-            f"live_bc={b.get('live_basket_best_ask_plus_slip')} "
+            f"- `{b.get('slug')}` dna={b.get('dna_take')} dna_city={b.get('dna_universe')} "
+            f"plan_bc={b.get('plan_basket')} live_bc={b.get('live_basket_best_ask_plus_slip')} "
             f"fill25={((b.get('fill_sims') or {}).get('budget_25') or {}).get('all_legs_complete_at_cap')} "
             f"abort={((b.get('fill_sims') or {}).get('budget_25') or {}).get('abort_partial_would_trigger')}"
         )
@@ -589,6 +1110,8 @@ def render_md(report: dict[str, Any]) -> str:
     ]
     for inv in report.get("invariants_es") or []:
         lines.append(f"- {inv}")
+    for inv in many.get("invariants_es") or []:
+        lines.append(f"- {inv}")
     lines.append("")
     return "\n".join(lines)
 
@@ -596,10 +1119,12 @@ def render_md(report: dict[str, Any]) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--write-docs", action="store_true")
+    ap.add_argument("--narrow", action="store_true", help="Fast scan (fewer cities/horizons)")
     ap.add_argument("--budgets", default="12,25,50")
     args = ap.parse_args()
     budgets = [float(x) for x in str(args.budgets).split(",") if x.strip()]
-    rep = run(budgets=budgets, write_docs=bool(args.write_docs))
+    rep = run(budgets=budgets, write_docs=bool(args.write_docs), wide=not bool(args.narrow))
+    many = rep.get("many_cases") or {}
     # compact print
     print(
         json.dumps(
@@ -610,11 +1135,38 @@ def main() -> int:
                 "wallet": rep["wallet"],
                 "geoblock_blocked": (rep.get("geoblock") or {}).get("blocked"),
                 "latency": rep.get("latency"),
+                "coverage": {
+                    k: (rep.get("coverage") or {}).get(k)
+                    for k in (
+                        "wide",
+                        "events_open_pack",
+                        "targets_book_walked",
+                        "calendar_slugs_found",
+                        "book_reports",
+                        "fillable_budget25_any",
+                        "closest_dna_city_basket",
+                        "case_matrix",
+                    )
+                },
+                "historical": {
+                    k: ((rep.get("coverage") or {}).get("historical") or {}).get(k)
+                    for k in (
+                        "n_cases",
+                        "n_dna_takes",
+                        "dna_wilson95",
+                        "max_win_streak",
+                        "max_loss_streak",
+                        "cases_by_city",
+                    )
+                },
+                "skip_taxonomy": many.get("skip_taxonomy"),
+                "gate_taxonomy": many.get("gate_taxonomy"),
+                "counterfactual": many.get("counterfactual_basket_thresholds"),
                 "stack_high": {
                     k: (rep.get("stack_high") or {}).get(k)
                     for k in ("events_open", "accepted_n", "near_miss_n", "ready_to_arm")
                 },
-                "closest_near": ((rep.get("scan") or {}).get("closest_near") or [])[:5],
+                "closest_near": ((rep.get("scan") or {}).get("closest_near") or [])[:8],
                 "book_walks_n": len(rep.get("book_walks") or []),
                 "book_sample": [
                     {
@@ -626,7 +1178,7 @@ def main() -> int:
                             "all_legs_complete_at_cap"
                         ),
                     }
-                    for b in (rep.get("book_walks") or [])[:5]
+                    for b in (rep.get("book_walks") or [])[:8]
                 ],
             },
             indent=2,
