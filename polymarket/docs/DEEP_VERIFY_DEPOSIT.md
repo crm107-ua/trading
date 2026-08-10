@@ -1,6 +1,6 @@
 # Deep verify — depósito runway
 
-**UTC:** `2026-08-10T13:45:30.969409+00:00`
+**UTC:** `2026-08-10T14:13:12.462582+00:00`
 **Veredicto:** `DEEP_VERIFY_DEPOSIT_RUNWAY_PASS` · score=13/13
 
 Verificación profunda PASS para depositar $100–$200 en runway watch-only. Auto-execute sigue bloqueado por evidencia (n<50).

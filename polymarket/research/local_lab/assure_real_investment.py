@@ -146,11 +146,7 @@ def matrix_deposit_budget_miss(balance_now: float) -> dict[str, Any]:
                 r["deposit"] == 100 and r["budget"] == 12 and r["n_misses"] == 5 and r["still_tradeable"]
                 for r in rows
             ),
-            "current_3usd_cannot_size25": any(
-                r["deposit"] == 25 and r["budget"] == 25 and r["status"] == "budget_exceeds_balance"
-                for r in rows
-            )
-            or (balance_now + 25 < 25),  # always true framing
+            "raw_balance_blocks_budget25": float(balance_now) < 25.0 - 1e-9,
             "no_ruin_in_recommended_1to3": all(
                 r["still_tradeable"]
                 for r in rows
