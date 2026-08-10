@@ -1,15 +1,14 @@
 {
   "strategy": "temperature_ladder_income_wr80",
-  "demo_label": "weather_ladder_micro_real_wr80_v1",
-  "notes": "Real micro uses income_wr80 profile: PRESS-ONLY, BJ basket<=0.50, wing-safe sizing. Max $5/session. Explicit confirm required.",
-  "initial_capital_usdc": 5.0,
-  "budget_per_market_usdc": 3.0,
-  "max_markets_per_run": 1,
-  "max_per_city": 1,
+  "demo_label": "weather_ladder_income_wr80_v1",
+  "notes": "Income profile targeting point WR>=80% on expanded resolved set. PRESS-ONLY (no select tier). Beijing basket max 0.50 (not 0.55). Wing-safe underdispersion sizing. Paper/research gate — real money still needs allowed region + deposit.",
+  "initial_capital_usdc": 150.0,
+  "budget_per_market_usdc": 12.0,
+  "max_markets_per_run": 12,
+  "max_per_city": 3,
   "sort_mode": "horizon_first",
-  "limit_per_city": 6,
-  "resolved_max_age_days": 0,
-  "open_only": true,
+  "limit_per_city": 12,
+  "resolved_max_age_days": 70,
   "ladder_width": 3,
   "max_basket_cost": 0.5,
   "min_cluster_prob": 0.35,
@@ -23,11 +22,6 @@
   "volatile_only": true,
   "use_clob_asks": true,
   "mark_open_to_mid": true,
-  "enforce_live_floors": true,
-  "entry_slip_cents": 0.01,
-  "order_type": "FAK",
-  "abort_partial_basket": true,
-  "smoke_post_when_empty": false,
   "cities": ["singapore", "shanghai", "hong-kong", "beijing"],
   "city_priority": ["singapore", "shanghai", "beijing", "hong-kong"],
   "exclude_cities": ["tokyo", "seoul", "miami", "wellington", "taipei", "paris", "london"],
@@ -40,7 +34,6 @@
       "min_cluster_prob": 0.35,
       "min_basket_ev": 0.01,
       "bias_override_c": 0.5,
-      "budget_per_market_usdc": 3.0,
       "tiers": [
         {
           "name": "press_under",
@@ -63,7 +56,7 @@
       "min_cluster_prob": 0.35,
       "min_basket_ev": 0.01,
       "bias_override_c": 1.0,
-      "budget_per_market_usdc": 3.0,
+      "budget_per_market_usdc": 12.0,
       "tiers": [
         {
           "name": "press_under",
@@ -79,10 +72,11 @@
       ]
     }
   ],
-  "live": {
-    "max_capital_usdc": 5.0,
-    "require_dry_run": false,
-    "max_session_loss_usdc": 3.0,
-    "hold_to_resolution": true
+  "income_wr80_gate": {
+    "min_point_winrate": 0.80,
+    "min_oos_half_winrate": 0.80,
+    "min_n": 8,
+    "min_pnl_usdc": 100.0,
+    "min_stress_winrate": 0.80
   }
 }

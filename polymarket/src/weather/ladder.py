@@ -213,12 +213,20 @@ def build_ladder_plan(
     if take and total_ev >= 0.08 and unit_cost <= 0.45:
         press *= 1.15
     eff_budget = budget * press
-    # Center-heavier when underdispersed: square probability weights
+    # Center-heavier when underdispersed, but blend with raw probs and enforce a
+    # floor per leg so a wing winner (HK 2026-07-17 style) cannot starve PnL.
     if under and take:
-        total_p = sum(max(0.0, p) for _, p, _ in tuples) or 1.0
-        squared = [(n, (max(0.0, p) ** 2), px) for n, p, px in tuples]
-        z = sum(p for _, p, _ in squared) or 1.0
-        tuples_sized = [(n, p / z, px) for n, p, px in squared]
+        raw = [max(0.0, p) for _, p, _ in tuples]
+        z_raw = sum(raw) or 1.0
+        sq = [p * p for p in raw]
+        z_sq = sum(sq) or 1.0
+        blend = [0.55 * (p / z_raw) + 0.45 * (s / z_sq) for p, s in zip(raw, sq)]
+        # Min ~28% budget/leg on 3-wide ladders — near-equal wings so a
+        # non-center winner still prints positive PnL (HK 2026-07-17).
+        min_frac = 0.28
+        blend = [max(min_frac, b) for b in blend]
+        z_b = sum(blend) or 1.0
+        tuples_sized = [(n, b / z_b, px) for (n, _, px), b in zip(tuples, blend)]
         sized = size_ladder(tuples_sized, eff_budget)
     else:
         sized = size_ladder(tuples, eff_budget)
