@@ -21,7 +21,7 @@
   "require_underdispersion": true,
   "post_max_basket_cost": 0.52,
   "bias_override_c": 0.5,
-  "prefer_horizons": [0, 1, 2],
+  "prefer_horizons": [0, 1, 2, 3],
   "volatile_only": true,
   "use_clob_asks": true,
   "mark_open_to_mid": true,

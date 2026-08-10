@@ -42,9 +42,10 @@ NEAR_MISS_RECHECK2_SLEEP_S = 90.0
 GAP_FAR = 0.15
 GAP_WATCH = 0.12  # denser watch when best book within 12¢ of DNA
 INTERVAL_FAR_MULT = 1.5
-INTERVAL_CLOSE_S = 60.0
+INTERVAL_CLOSE_S = 45.0
 INTERVAL_WATCH_S = 75.0
-INTERVAL_GATES2_S = 45.0  # denser when any market has 2/3 DNA gates
+INTERVAL_GATES2_S = 30.0  # denser when any market has 2/3 DNA gates
+INTERVAL_ULTRA_CLOSE_S = 30.0  # gap ≤4¢
 HEARTBEAT_EVERY = 10
 
 
@@ -78,6 +79,8 @@ def _best_gates_passed(stack: dict[str, Any]) -> int:
 
 def _adaptive_interval(base_s: float, gap: float | None, *, gates_passed: int = 0) -> float:
     base = max(5.0, float(base_s))
+    if gap is not None and gap <= 0.04 + 1e-12:
+        return min(base, INTERVAL_ULTRA_CLOSE_S)
     if gates_passed >= 2 and gap is not None and gap <= NEAR_MISS_RECHECK_GAP + 1e-12:
         return min(base, INTERVAL_GATES2_S)
     if gap is None:

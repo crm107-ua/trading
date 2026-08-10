@@ -4,22 +4,19 @@
 | Bloqueo | Estado |
 |---------|--------|
 | Evidencia DNA | n≈11, Wilson≈0.74 → falta n≥50 / Wilson≥0.80 |
-| Histórico pre‑julio | **CLOB prices-history vacío** → no fabricar cases viejos |
-| Edge live | HK gap~4¢ pero **UD stuck** (ratio~2.7); BJ 2/3 espera basket |
-| Capital | ~$3.45 no aguanta 1 miss |
+| CLOB history | vacío incluso post-julio en probes → **solo forward** |
+| Edge live | HK gap~4¢ UD stuck; BJ 2/3 espera basket |
+| Capital | ~$3.45 no aguanta 1 miss (sim $25 sí) |
 
-## Camino (actualizado)
-1. **Forward snapshots** — asks vivos (`quote_snapshots.jsonl`).
-2. **`resolve_forward_cases`** — al cerrar: case DNA + `shadow_resolves.jsonl`.
-3. **`assurance_research`** — scorecard Wilson path / UD stuck / dual-control / capital.
-4. **WATCH** densificado cerca de DNA; scoreboard gates; Telegram 2/3.
-5. **No aflojar DNA**. Capital solo con `READY_TO_REARM`.
+## Camino
+1. Forward snapshots D+0..D+3 + recheck denso (30–45s cerca).
+2. `resolve_forward_cases` añade **y actualiza** cases al cerrar.
+3. `evidence_sprint` cada ~3 min → `MONEY_READY_STATUS.md`.
+4. Meter dinero **solo** si `READY_TO_REARM` + `can_recommend_deposit`.
 
 ## Comandos
 ```bash
 python -m polymarket.research.local_lab.resolve_forward_cases
 python -m polymarket.research.local_lab.assurance_research --write-docs
-python -m polymarket.research.local_lab.verify_real_income_prep --write-docs
+python -m polymarket.research.local_lab.rearm_income_gate --run-income-tests
 ```
-
-Artefactos: `ASSURANCE_SCORECARD.md` · `GATE_SCOREBOARD.json` · `FORWARD_PROGRESS.md` · `EVIDENCE_PROGRESS.json` · `shadow_resolves.jsonl`
