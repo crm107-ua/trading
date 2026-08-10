@@ -1,14 +1,11 @@
 #!/usr/bin/env bash
-# Watch-only private manager — DNA vigilante, NO auto-execute, NO arm real.
-# Alerta EDGE por Telegram; el operador decide. RESEARCH_ONLY posture.
+# Watch-only private manager — DNA vigilante x3 bankrolls, NO auto-execute.
 set -u
 cd /var/www/html/trader
 source .venv/bin/activate
 export PYTHONPATH=/var/www/html/trader
-# Force SAFE — never arm from this script
 export POLY_LIVE_ARMED=0
 export POLY_LIVE_DRY_RUN=1
-# Do NOT set POLY_LADDER_REAL_CONFIRM here (blocks accidental execute)
 unset POLY_LADDER_REAL_CONFIRM || true
 export POLY_LADDER_WATCH_ONLY=1
 
@@ -53,44 +50,45 @@ PY
 )"
 
 echo "WATCH_ONLY" > "$MODE_FILE"
-notify "WATCH-ONLY ON | RESEARCH_ONLY | SAFE | avisa EDGE sin postear | DNA estricto"
-python3 - <<PY
+notify 'WATCH-ONLY ON x3 | live+$100+$200 | RESEARCH_ONLY | SAFE | EDGE->Telegram sin post'
+python3 - <<'PY'
 from pathlib import Path
-Path("$STATUS").write_text("""# Ladder Manager — WATCH ONLY
+Path("polymarket/data_local/local_lab/vps_runs/LATEST_STATUS.md").write_text(
+    """# Ladder Manager — WATCH ONLY x3
 
 - **Modo:** WATCH_ONLY (sin auto-execute, sin arm)
+- **Bankrolls vigilados:** saldo live · $100 · $200 (what-if)
 - **Postura:** RESEARCH_ONLY
 - **SAFE:** ARMED=0 · DRY_RUN=1
-- **Política:** avisa EDGE DNA; no posta órdenes
-- **Rearme dinero real:** solo si `rearm_income_gate` = READY
-- **Avisos:** Telegram + \`ALERTS.log\`
+- **Si EDGE DNA:** Telegram con tamaño/PnL hipotético en las 3 carteras · **no posta**
+- **Rearme dinero real:** solo si rearm_income_gate = READY
 
-Última arrancada: PM2 watch-only.
-""")
+Última arrancada: PM2 watch-only x3.
+"""
+)
 PY
 
-# income-loop WITHOUT --auto-execute; --watch-only keeps scanning after edge
 python -u -m polymarket.research.local_lab.definitive_income_system \
   --scale micro --income-loop --watch-only \
   --rounds 240 --interval 90 2>&1 | while IFS= read -r line; do
     echo "$line" >> "$LOG"
+    if echo "$line" | grep -q '"accepted_n": [1-9]'; then
+      notify 'EDGE DNA — WATCH x3 (live/$100/$200). NO se postea. Mira Telegram para what-if.'
+      ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+      printf '%s\n' "# Estado $ts
+
+**Modo: WATCH_ONLY x3** · **EDGE DNA** (sin post)
+
+Bankrolls: live · \$100 · \$200 — aviso Telegram con what-if.
+" > "$STATUS"
+    fi
     if echo "$line" | grep -q '"accepted_n": 0'; then
       ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
       printf '%s\n' "# Estado $ts
 
-**Modo: WATCH_ONLY** · **WAIT** (sin take press)
+**Modo: WATCH_ONLY x3** · **WAIT** (sin take press)
 
-Vigilando cada ~90s. No auto-execute. No fuerza near-miss.
-" > "$STATUS"
-    fi
-    if echo "$line" | grep -q '"accepted_n": [1-9]'; then
-      notify "EDGE DNA detectado — WATCH ONLY (NO se postea). Revisa y decide manual."
-      ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-      printf '%s\n' "# Estado $ts
-
-**Modo: WATCH_ONLY** · **EDGE DNA** (sin post)
-
-Aviso enviado. Dinero real OFF hasta rearm gate READY + decisión del operador.
+Vigilando live/\$100/\$200 cada ~90s. No auto-execute.
 " > "$STATUS"
     fi
     if echo "$line" | grep -q 'verdict='; then
@@ -98,4 +96,4 @@ Aviso enviado. Dinero real OFF hasta rearm gate READY + decisión del operador.
     fi
   done
 
-notify "WATCH-ONLY detenido (fin de rounds o crash)"
+notify 'WATCH-ONLY detenido (fin de rounds o crash)'

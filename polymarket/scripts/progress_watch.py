@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-"""Watch ladder manager progress and write human alerts on advances."""
+"""Watch ladder manager progress and write human alerts on advances.
+
+Tracks 3 bankrolls on EDGE: live wallet + $100 + $200 (sim what-if, no posts).
+"""
 from __future__ import annotations
-import json, time, os
+import json, time, os, sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -26,7 +29,6 @@ def alert(msg: str, title: str = "AVISO", fields: dict | None = None):
     )
     print(line, flush=True)
     try:
-        import sys
         sys.path.insert(0, str(ROOT / "polymarket/scripts"))
         from tg_notify import send
         send(title, fields or {"detalle": msg})
@@ -39,7 +41,7 @@ def load_state():
             return json.loads(STATE.read_text())
         except Exception:
             pass
-    return {"last_round": 0, "posted": False, "had_edge": False}
+    return {"last_round": 0, "posted": False, "had_edge": False, "last_edge_slugs": []}
 
 def save_state(st):
     STATE.write_text(json.dumps(st), encoding="utf-8")
@@ -74,15 +76,57 @@ def latest_rounds():
                         pass
     return rows
 
+def _edge_alert(d: dict) -> None:
+    """Build multi-bankroll what-if and Telegram on DNA edge."""
+    live_bal = float(d.get("balance_pusd") or 3.4482)
+    r = d.get("round")
+    acc = d.get("accepted_n")
+    slugs = d.get("accepted_slugs") or []
+    try:
+        sys.path.insert(0, str(ROOT))
+        from polymarket.research.local_lab.watch_multi_bankroll import (
+            multi_bankroll_what_if,
+            telegram_fields,
+            format_plain,
+        )
+        report = multi_bankroll_what_if(live_balance=live_bal, extra=[100.0, 200.0])
+        fields = telegram_fields(report, round_id=r, accepted_n=acc)
+        if slugs:
+            fields["slugs"] = ",".join(str(s) for s in slugs[:3])
+        plain = format_plain(report)
+        (RUN / "MULTI_BANKROLL_EDGE.md").write_text(
+            f"# EDGE multi-bankroll\n\n`{ts()}`\n\n```\n{plain}\n```\n",
+            encoding="utf-8",
+        )
+        alert(
+            plain.replace("\n", " | "),
+            title="EDGE DNA · 3 bankrolls (WATCH ONLY)",
+            fields=fields,
+        )
+    except Exception as exc:
+        alert(
+            f"EDGE round={r} (multi-bankroll failed: {type(exc).__name__}: {exc})",
+            title="AVANCE · EDGE DNA (WATCH ONLY)",
+            fields={
+                "round": r,
+                "accepted_n": acc,
+                "balance_live": live_bal,
+                "acción": "NO se postea",
+                "bankrolls": "live/$100/$200 (detalle falló)",
+            },
+        )
+
 def main():
     os.chdir(ROOT)
+    os.environ.setdefault("PYTHONPATH", str(ROOT))
     alert(
-        "WATCHER Telegram activo (WATCH_ONLY)",
-        title="SISTEMA · Watcher ON",
+        "WATCHER Telegram activo (WATCH_ONLY x3)",
+        title="SISTEMA · Watcher ON x3",
         fields={
             "canal": "@waxochitobot",
             "modo": "WATCH_ONLY",
-            "aviso": "EDGE = alerta sin post · rearm gate antes de dinero real",
+            "bankrolls": "live + $100 + $200",
+            "aviso": "EDGE en cualquiera → Telegram con what-if x3 (sin post)",
         },
     )
     st = load_state()
@@ -94,27 +138,28 @@ def main():
             acc = int(d.get("accepted_n") or 0)
             if r > int(st.get("last_round") or 0):
                 st["last_round"] = r
-                if acc >= 1 and not st.get("had_edge"):
-                    st["had_edge"] = True
-                    alert(
-                        f"EDGE round={r}",
-                        title="AVANCE · EDGE DNA (WATCH ONLY)",
-                        fields={
-                            "round": r,
-                            "accepted_n": acc,
-                            "balance": d.get("balance_pusd"),
-                            "acción": "NO se postea — decide manual / espera rearm gate",
-                        },
-                    )
-                elif acc >= 1 and r % 10 == 0:
-                    # throttle repeat edge spam
-                    alert(
-                        f"EDGE sigue abierto round={r} accepted_n={acc}",
-                        title="AVANCE · EDGE sigue (WATCH ONLY)",
-                        fields={"round": r, "accepted_n": acc},
-                    )
+                if acc >= 1:
+                    # New edge or still open: alert once per edge open cycle
+                    if not st.get("had_edge"):
+                        st["had_edge"] = True
+                        _edge_alert(d)
+                    elif r % 15 == 0:
+                        alert(
+                            f"EDGE sigue abierto round={r} accepted_n={acc} (x3 bankrolls)",
+                            title="AVANCE · EDGE sigue (WATCH ONLY x3)",
+                            fields={"round": r, "accepted_n": acc, "bankrolls": "live/$100/$200"},
+                        )
+                else:
+                    # edge closed — allow fresh alert next time
+                    if st.get("had_edge"):
+                        st["had_edge"] = False
+                        alert(
+                            f"EDGE cerrado round={r} — vuelve WAIT",
+                            title="ESTADO · WAIT",
+                            fields={"round": r, "accepted_n": 0},
+                        )
                 save_state(st)
-        # posted?
+        # posted? (should not happen in watch-only; still detect)
         for path in sorted((ROOT / "polymarket/data_local/local_lab/ladder_income").glob("loop_*/report.json")) if (ROOT / "polymarket/data_local/local_lab/ladder_income").exists() else []:
             try:
                 rep = json.loads(path.read_text())
