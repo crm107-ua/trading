@@ -21,7 +21,7 @@
   "require_underdispersion": true,
   "post_max_basket_cost": 0.52,
   "bias_override_c": 0.5,
-  "prefer_horizons": [1, 2],
+  "prefer_horizons": [0, 1, 2],
   "volatile_only": true,
   "use_clob_asks": true,
   "mark_open_to_mid": true,
@@ -32,7 +32,7 @@
   "smoke_post_when_empty": false,
   "block_floor_trap": true,
   "cities": ["singapore", "shanghai", "beijing", "hong-kong"],
-  "city_priority": ["singapore", "shanghai", "beijing", "hong-kong"],
+  "city_priority": ["hong-kong", "beijing", "singapore", "shanghai"],
   "exclude_cities": ["tokyo", "seoul", "miami", "wellington", "taipei", "paris", "london"],
   "sleeves": [
     {

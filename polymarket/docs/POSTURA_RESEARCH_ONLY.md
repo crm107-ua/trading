@@ -30,4 +30,5 @@ Tres procesos investigación: `ladder-private-manager` · `ladder-progress-watch
 
 Rearme dinero real solo con `rearm_income_gate` = `READY_TO_REARM` + `POLY_LADDER_ALLOW_REARM=1`.
 
-Ver [`PROFESSIONAL_PREP.md`](PROFESSIONAL_PREP.md) · [`PREPARE_REAL_MONEY.md`](PREPARE_REAL_MONEY.md) · [`REARM_INCOME_GATE.md`](REARM_INCOME_GATE.md).
+Ver [`RESEARCH_PATH.md`](RESEARCH_PATH.md) · [`POSTURA_RESEARCH_ONLY.md`](POSTURA_RESEARCH_ONLY.md) · [`REARM_INCOME_GATE.md`](REARM_INCOME_GATE.md) · [`PREPARE_REAL_MONEY.md`](PREPARE_REAL_MONEY.md).
+

@@ -52,7 +52,12 @@ class TrialFilters:
     bias_override: float | None = None  # added to all station bias
 
 
-def _discover_more_slugs(cities: list[str], *, per_city: int = 12) -> list[str]:
+def _discover_more_slugs(
+    cities: list[str],
+    *,
+    per_city: int = 12,
+    lookback_days: int = 120,
+) -> list[str]:
     slugs = discover_temperature_slugs(cities=cities, limit_per_city=per_city)
     # Also probe explicit recent calendar slugs (search can miss)
     today = datetime.now(timezone.utc).date()
@@ -72,7 +77,7 @@ def _discover_more_slugs(cities: list[str], *, per_city: int = 12) -> list[str]:
     ]
     with httpx.Client(timeout=20.0) as client:
         for city in cities:
-            for delta in range(0, 45):
+            for delta in range(0, int(lookback_days)):
                 d = today - timedelta(days=delta)
                 slug = f"highest-temperature-in-{city}-on-{months[d.month-1]}-{d.day}-{d.year}"
                 if slug in slugs:
@@ -100,10 +105,10 @@ def _load_resolved_cases(
 ) -> list[dict[str, Any]]:
     """Prefetch resolved events with forecasts + entry quotes (expensive I/O once)."""
     today = datetime.now(timezone.utc).date()
-    # Priority cities first (longer lookback for SG/SH edge research)
-    pri = [c.lower() for c in (priority_cities or ["singapore", "shanghai"])]
+    # Priority cities first (longer lookback for HK/BJ/SG/SH DNA evidence)
+    pri = [c.lower() for c in (priority_cities or ["hong-kong", "beijing", "singapore", "shanghai"])]
     ordered_cities = sorted(cities, key=lambda c: (0 if c.lower() in pri else 1, c))
-    slugs = _discover_more_slugs(ordered_cities, per_city=14)
+    slugs = _discover_more_slugs(ordered_cities, per_city=14, lookback_days=max(120, int(max_age_days) + 10))
     # Prefer priority city slugs early
     slugs.sort(key=lambda s: (0 if any(f"-{c}-" in s or s.startswith(f"highest-temperature-in-{c}-") for c in pri) else 1, s))
 
