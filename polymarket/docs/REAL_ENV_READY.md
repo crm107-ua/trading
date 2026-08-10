@@ -45,4 +45,4 @@
 
 Semana conservadora **~$118** · limpia **~$207**. Hoy a menudo **$0** sin edge press.
 
-Ver [`HIGH_INCOME.md`](HIGH_INCOME.md) · [`DEFINITIVE_INCOME_SYSTEM.md`](DEFINITIVE_INCOME_SYSTEM.md)
+Ver [`HIGH_INCOME.md`](HIGH_INCOME.md) · [`DEFINITIVE_INCOME_SYSTEM.md`](DEFINITIVE_INCOME_SYSTEM.md) · [`WALLET_TAKE_REALITY.md`](WALLET_TAKE_REALITY.md)
