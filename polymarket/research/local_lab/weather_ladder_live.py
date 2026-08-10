@@ -192,6 +192,12 @@ def prepare_candidates(cfg: dict[str, Any]) -> dict[str, Any]:
             continue
         plan, meta = plan_event(event, cfg, today=today)
         if plan is None or not plan.take:
+            legs = meta.get("legs") or []
+            entries = {
+                str(x.get("name")): float(x["price"])
+                for x in legs
+                if x.get("name") is not None and x.get("price") is not None
+            }
             row = {
                 "slug": event.slug,
                 "city": event.city,
@@ -200,6 +206,11 @@ def prepare_candidates(cfg: dict[str, Any]) -> dict[str, Any]:
                 "basket_cost": meta.get("basket_cost"),
                 "basket_ev": meta.get("basket_ev"),
                 "tier": meta.get("tier"),
+                "underdispersed": meta.get("underdispersed"),
+                "models": meta.get("models"),
+                "legs": legs,
+                "entries": entries,
+                "dna_take": False,
             }
             skipped.append(row)
             # Near-miss: positive EV but basket slightly above champion max
@@ -259,6 +270,12 @@ def prepare_candidates(cfg: dict[str, Any]) -> dict[str, Any]:
             )
             continue
         by_city[city_l] = by_city.get(city_l, 0) + 1
+        leg_rows = [asdict(l) for l in live_plan.legs]
+        entries = {
+            str(x.get("name")): float(x["price"])
+            for x in leg_rows
+            if x.get("name") is not None and x.get("price") is not None
+        }
         accepted.append(
             {
                 "slug": event.slug,
@@ -273,7 +290,10 @@ def prepare_candidates(cfg: dict[str, Any]) -> dict[str, Any]:
                 "underdispersed": live_plan.underdispersed,
                 "center_temp": live_plan.center_temp,
                 "notional_usdc": round(sum(l.dollars for l in live_plan.legs), 4),
-                "legs": [asdict(l) for l in live_plan.legs],
+                "legs": leg_rows,
+                "entries": entries,
+                "models": meta.get("models"),
+                "dna_take": True,
                 "plan_reason": live_plan.reason,
                 "meta": {k: v for k, v in meta.items() if k not in ("legs",)},
             }

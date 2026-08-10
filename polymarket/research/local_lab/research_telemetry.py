@@ -156,7 +156,7 @@ def write_evidence_progress() -> dict[str, Any]:
 
 
 def log_watch_round(row: dict[str, Any], stack: dict[str, Any] | None = None) -> None:
-    """Persist slim round + near-miss gaps; DNA hits if any."""
+    """Persist slim round + near-miss gaps; DNA hits if any; quote snapshots."""
     slim = {
         "ts_utc": row.get("ts_utc") or _ts(),
         "round": row.get("round"),
@@ -211,6 +211,42 @@ def log_watch_round(row: dict[str, Any], stack: dict[str, Any] | None = None) ->
                 "win": None,
                 "pnl": None,
                 "source": "watch_only_forward",
+            },
+        )
+
+    # Forward quote snapshots (asks we saw) → future cases after resolve
+    seen_slugs: set[str] = set()
+    for block in (market.get("accepted") or []) + (market.get("near_miss") or []) + (market.get("skipped") or []):
+        slug = block.get("slug")
+        if not slug or slug in seen_slugs:
+            continue
+        entries = block.get("entries") or {}
+        if not entries and block.get("legs"):
+            entries = {
+                str(x.get("name")): float(x["price"])
+                for x in block.get("legs") or []
+                if x.get("name") is not None and x.get("price") is not None
+            }
+        if len(entries) < 3:
+            continue
+        seen_slugs.add(str(slug))
+        _append_jsonl(
+            TELE / "quote_snapshots.jsonl",
+            {
+                "ts_utc": slim["ts_utc"],
+                "round": slim["round"],
+                "slug": slug,
+                "city": block.get("city"),
+                "day": block.get("day"),
+                "basket_cost": block.get("basket_cost"),
+                "basket_ev": block.get("basket_ev"),
+                "underdispersed": block.get("underdispersed"),
+                "models": block.get("models"),
+                "entries": entries,
+                "legs": block.get("legs"),
+                "dna_take": bool(block.get("dna_take") or block.get("accepted")),
+                "skip": block.get("skip"),
+                "source": "watch_live",
             },
         )
 

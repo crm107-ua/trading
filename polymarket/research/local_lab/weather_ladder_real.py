@@ -199,6 +199,10 @@ def evaluate_real_stack(cfg: dict[str, Any]) -> dict[str, Any]:
                     "basket_cost": c.get("basket_cost"),
                     "basket_ev": c.get("basket_ev"),
                     "notional_usdc": c.get("notional_usdc"),
+                    "underdispersed": c.get("underdispersed"),
+                    "models": c.get("models"),
+                    "entries": c.get("entries"),
+                    "dna_take": True,
                     "legs": [
                         {"name": l["name"], "price": l["price"], "shares": l["shares"], "dollars": l["dollars"]}
                         for l in c.get("legs") or []
@@ -207,6 +211,7 @@ def evaluate_real_stack(cfg: dict[str, Any]) -> dict[str, Any]:
                 for c in accepted
             ],
             "near_miss": pack["near_miss"],
+            "skipped": pack.get("skipped") or [],
             "notional_total_usdc": round(notional, 4),
         },
         "geoblock": {

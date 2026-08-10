@@ -21,6 +21,10 @@ while true; do
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "[$ts] improve_loop=$loop" | tee -a "$RUN/research_improve.log"
 
+  # Resolve forward snapshots into DNA cases when markets close
+  "$ROOT/.venv/bin/python" -u -m polymarket.research.local_lab.resolve_forward_cases \
+    >>"$RUN/research_improve.log" 2>&1 || true
+
   # Improvement candidates from telemetry (may be empty early)
   "$ROOT/.venv/bin/python" -u "$ROOT/polymarket/scripts/research_improvement_scanner.py" \
     >>"$RUN/research_improve.log" 2>&1 || true
