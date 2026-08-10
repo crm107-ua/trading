@@ -49,8 +49,22 @@ POLY = Path(__file__).resolve().parents[2]
 DEFAULT_CFG = POLY / "config" / "weather_ladder_definitive_real.json"
 # Definitive real sleeve = final long-term DNA; micro_real kept as alias path.
 OUT = POLY / "data_local" / "local_lab" / "weather_ladder_real"
-MAX_SESSION_CAP = 5.0
+MAX_SESSION_CAP_MICRO = 5.0
+MAX_SESSION_CAP_HIGH = 100.0  # hard ceiling even in high-income mode
 STRATEGY_ID = "temperature_ladder_definitive"
+
+
+def _session_cap(cfg: dict[str, Any]) -> float:
+    """Micro default $5; high-income may raise up to hard ceiling with env flag."""
+    live = cfg.get("live") or {}
+    wanted = float(live.get("max_capital_usdc") or cfg.get("initial_capital_usdc") or 5.0)
+    high = bool(live.get("high_income")) or wanted > MAX_SESSION_CAP_MICRO + 1e-9
+    if high:
+        if (os.getenv("POLY_LADDER_HIGH_INCOME") or "").strip() != "1":
+            # Fall back to micro until explicitly armed for size
+            return min(MAX_SESSION_CAP_MICRO, wanted)
+        return min(MAX_SESSION_CAP_HIGH, max(MAX_SESSION_CAP_MICRO, wanted))
+    return min(MAX_SESSION_CAP_MICRO, wanted)
 
 
 def _restore_safe() -> None:
@@ -82,10 +96,9 @@ def _restore_prev(prev: dict[str, str]) -> None:
 def evaluate_real_stack(cfg: dict[str, Any]) -> dict[str, Any]:
     """Full picture of how real money sits right now (no posts)."""
     load_repo_dotenv(override=True)
-    max_cap = min(
-        MAX_SESSION_CAP,
-        float((cfg.get("live") or {}).get("max_capital_usdc") or cfg.get("initial_capital_usdc") or 5),
-    )
+    max_cap = _session_cap(cfg)
+    min_bal = float((cfg.get("live") or {}).get("min_balance_to_arm_usdc") or 2.0)
+    bal_gate = max(2.0, min(min_bal, max_cap))
     gates0 = read_gates()
     cli = ClobLiveClient()
     bal = None
@@ -103,53 +116,68 @@ def evaluate_real_stack(cfg: dict[str, Any]) -> dict[str, Any]:
     notional = sum(float(c.get("notional_usdc") or 0) for c in accepted)
     eff_cap = max_cap if bal is None else min(max_cap, round(bal * 0.95, 2))
 
+    high_env = (os.getenv("POLY_LADDER_HIGH_INCOME") or "").strip() == "1"
+    high_wanted = bool((cfg.get("live") or {}).get("high_income")) or float(
+        (cfg.get("live") or {}).get("max_capital_usdc") or 0
+    ) > MAX_SESSION_CAP_MICRO + 1e-9
+    max_markets_limit = 2 if high_wanted else 1
+
     checks = {
         "env_starts_safe": (not gates0.armed) and gates0.dry_run,
         "signing_ready": gates0.signing_ready or bal is not None,
         "balance_readable": bal is not None,
         "balance_gte_2": (bal or 0) >= 2.0,
+        "balance_gte_min_arm": (bal or 0) >= bal_gate - 1e-9,
         "geoblock_ok": not geo_blocked,
         "day_loss_ok": not day_loss_breached(),
         "champion_take_available": len(accepted) >= 1,
         "notional_fits_cap": notional <= eff_cap + 1e-9 if accepted else True,
         "notional_fits_balance": (bal is None) or (notional <= (bal or 0) + 1e-9),
         "smoke_disabled": not bool(cfg.get("smoke_post_when_empty")),
-        "max_markets_1": int(cfg.get("max_markets_per_run", 99)) <= 1,
-        "session_cap_le_5": max_cap <= MAX_SESSION_CAP + 1e-9,
+        "max_markets_ok": int(cfg.get("max_markets_per_run", 99)) <= max_markets_limit,
+        "session_cap_ok": max_cap
+        <= ((MAX_SESSION_CAP_HIGH if high_env else MAX_SESSION_CAP_MICRO) + 1e-9),
+        "high_income_env_if_needed": (not high_wanted)
+        or high_env
+        or max_cap <= MAX_SESSION_CAP_MICRO + 1e-9,
     }
     confirm_env = (os.getenv("POLY_LADDER_REAL_CONFIRM") or "").strip() == "1"
 
-    ready_to_arm = all(
-        checks[k]
-        for k in (
-            "signing_ready",
-            "balance_readable",
-            "balance_gte_2",
-            "geoblock_ok",
-            "day_loss_ok",
-            "champion_take_available",
-            "notional_fits_cap",
-            "notional_fits_balance",
-            "smoke_disabled",
-            "max_markets_1",
-            "session_cap_le_5",
-        )
+    ready_keys = (
+        "signing_ready",
+        "balance_readable",
+        "balance_gte_2",
+        "balance_gte_min_arm",
+        "geoblock_ok",
+        "day_loss_ok",
+        "champion_take_available",
+        "notional_fits_cap",
+        "notional_fits_balance",
+        "smoke_disabled",
+        "max_markets_ok",
+        "session_cap_ok",
+        "high_income_env_if_needed",
     )
+    ready_to_arm = all(checks[k] for k in ready_keys)
 
+    deposit_target = float((cfg.get("live") or {}).get("deposit_target_usdc") or 25.0)
     deposit_needed = None
-    if bal is not None and bal < 25:
-        deposit_needed = round(25.0 - bal, 2)
+    if bal is not None and bal < deposit_target:
+        deposit_needed = round(deposit_target - bal, 2)
 
     return {
         "ts_utc": datetime.now(timezone.utc).isoformat(),
-        "strategy": STRATEGY_ID,
+        "strategy": cfg.get("strategy") or STRATEGY_ID,
         "config_demo": cfg.get("demo_label"),
+        "income_mode": cfg.get("income_mode") or ("high" if high_wanted else "micro"),
         "wallet": {
             "eoa": gates0.eoa,
             "funder": gates0.funder,
             "balance_pusd": round(bal, 4) if bal is not None else None,
             "balance_error": bal_err,
-            "suggested_deposit_to_25": deposit_needed,
+            "suggested_deposit_to_25": deposit_needed if deposit_target <= 25 else None,
+            "suggested_deposit_to_target": deposit_needed,
+            "deposit_target_usdc": deposit_target,
         },
         "session_limits": {
             "max_capital_usdc": max_cap,
@@ -157,6 +185,7 @@ def evaluate_real_stack(cfg: dict[str, Any]) -> dict[str, Any]:
             "budget_per_market_usdc": cfg.get("budget_per_market_usdc"),
             "max_markets": cfg.get("max_markets_per_run"),
             "hold_to_resolution": bool((cfg.get("live") or {}).get("hold_to_resolution", True)),
+            "high_income_env": high_env,
         },
         "market_now": {
             "events_open": pack["events_open"],
@@ -193,30 +222,32 @@ def evaluate_real_stack(cfg: dict[str, Any]) -> dict[str, Any]:
         "can_execute_now": ready_to_arm and confirm_env and len(accepted) >= 1,
         "blockers": [k for k, v in checks.items() if not v]
         + ([] if confirm_env else ["missing_POLY_LADDER_REAL_CONFIRM=1"])
-        + ([] if accepted else ["no_champion_take_right_now"]),
+        + ([] if accepted else ["no_champion_take_right_now"])
+        + (
+            []
+            if (not high_wanted or high_env or max_cap <= MAX_SESSION_CAP_MICRO)
+            else ["missing_POLY_LADDER_HIGH_INCOME=1"]
+        ),
         "how_it_works": [
-            "1. Mantienes USDC/pUSD en la wallet Polymarket (funder) — ideal ≥$25.",
-            "2. Sistema definitivo espera basket press-only (≤0.50, pierna ≤0.39, underdispersion).",
-            "3. Al aparecer: compra FAK las 3 piernas YES (min 5 shares c/u).",
-            "4. Hold hasta resolución: la pierna ganadora paga $1/share.",
-            "5. Cap sesión $5; tras correr vuelve SAFE (ARMED=0).",
-            "6. Entrypoint: python3 -m polymarket.research.local_lab.definitive_income_system",
+            "1. Deposita según escala: micro≥$25 · high≥$100 · aggressive≥$200.",
+            "2. Más ingreso = más $ por el MISMO basket press (no baskets peores).",
+            "3. High-income real: POLY_LADDER_HIGH_INCOME=1 + POLY_LADDER_REAL_CONFIRM=1.",
+            "4. Compra FAK 3 piernas YES; hold hasta resolución.",
+            "5. Cap sesión según config (micro $5 / high hasta $50–100); vuelve SAFE.",
+            "6. Entrypoint: definitive_income_system --scale high",
         ],
         "commands": {
-            "system_status": "python3 -m polymarket.research.local_lab.definitive_income_system",
-            "preflight": "python3 -m polymarket.research.local_lab.weather_ladder_real",
-            "watch_until_edge": (
-                "python3 -m polymarket.research.local_lab.weather_ladder_live "
-                "--mode watch --watch-rounds 40 --watch-interval 180 "
-                "--config polymarket/config/weather_ladder_definitive_real.json"
+            "system_status": "python3 -m polymarket.research.local_lab.definitive_income_system --scale high",
+            "projections": "python3 -m polymarket.research.local_lab.high_income_project",
+            "preflight": (
+                "python3 -m polymarket.research.local_lab.weather_ladder_real "
+                "--config polymarket/config/weather_ladder_high_income.json"
             ),
-            "execute_real": (
-                "POLY_LADDER_REAL_CONFIRM=1 python3 -m polymarket.research.local_lab.weather_ladder_real "
-                "--execute-real --i-accept-real-loss YES"
-            ),
-            "income_loop": (
-                "POLY_LADDER_REAL_CONFIRM=1 python3 -m polymarket.research.local_lab.definitive_income_system "
-                "--income-loop --auto-execute --i-accept-real-loss YES --rounds 40 --interval 180"
+            "income_loop_high": (
+                "POLY_LADDER_HIGH_INCOME=1 POLY_LADDER_REAL_CONFIRM=1 "
+                "python3 -m polymarket.research.local_lab.definitive_income_system "
+                "--scale high --income-loop --auto-execute --i-accept-real-loss YES "
+                "--rounds 40 --interval 180"
             ),
         },
     }
