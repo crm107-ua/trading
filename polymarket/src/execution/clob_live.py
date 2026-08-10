@@ -64,6 +64,7 @@ def read_gates() -> LiveGates:
     funder = (
         (os.getenv("POLY_FUNDER_ADDRESS") or "").strip()
         or (os.getenv("POLYMARKET_PROXY_WALLET") or "").strip()
+        or (os.getenv("POLYMARKET_WALLET_ADDRESS") or "").strip()
         or eoa
     )
     sig = int((os.getenv("POLY_SIGNATURE_TYPE") or "3").strip() or "3")
@@ -145,26 +146,73 @@ class ClobLiveClient:
         self.gates = read_gates()
         self._client: Any = None
 
-    def connect(self) -> None:
+    def connect(self, *, derive_api_creds: bool = True) -> None:
+        """Connect to CLOB. If API keys missing, derive them from POLY_PRIVATE_KEY."""
         from py_clob_client_v2 import ApiCreds, ClobClient
 
         g = self.gates
-        if g.missing:
-            raise RuntimeError(f"Credenciales incompletas: {', '.join(g.missing)}")
+        pk = (os.getenv("POLY_PRIVATE_KEY") or "").strip()
+        if not pk:
+            raise RuntimeError("Credenciales incompletas: POLY_PRIVATE_KEY")
         host = (os.getenv("POLY_CLOB_HOST") or "https://clob.polymarket.com").rstrip("/")
-        creds = ApiCreds(
-            api_key=os.environ["POLY_CLOB_API_KEY"].strip(),
-            api_secret=os.environ["POLY_CLOB_API_SECRET"].strip(),
-            api_passphrase=os.environ["POLY_CLOB_API_PASSPHRASE"].strip(),
-        )
-        self._client = ClobClient(
-            host,
-            chain_id=int(os.getenv("POLY_CHAIN_ID") or "137"),
-            key=os.environ["POLY_PRIVATE_KEY"].strip(),
-            creds=creds,
-            signature_type=g.signature_type,
-            funder=g.funder or None,
-        )
+        chain_id = int(os.getenv("POLY_CHAIN_ID") or "137")
+
+        key = (os.getenv("POLY_CLOB_API_KEY") or "").strip()
+        secret = (os.getenv("POLY_CLOB_API_SECRET") or "").strip()
+        phrase = (os.getenv("POLY_CLOB_API_PASSPHRASE") or "").strip()
+
+        if key and secret and phrase:
+            creds = ApiCreds(api_key=key, api_secret=secret, api_passphrase=phrase)
+            self._client = ClobClient(
+                host,
+                chain_id=chain_id,
+                key=pk,
+                creds=creds,
+                signature_type=g.signature_type,
+                funder=g.funder or None,
+            )
+        elif derive_api_creds:
+            # L2 keys can be derived from the private key (no need to store in .env for dry).
+            base = ClobClient(
+                host,
+                chain_id=chain_id,
+                key=pk,
+                signature_type=g.signature_type,
+                funder=g.funder or None,
+            )
+            derived = None
+            last_err: Exception | None = None
+            for fn_name in ("derive_api_key", "create_or_derive_api_key"):
+                fn = getattr(base, fn_name, None)
+                if fn is None:
+                    continue
+                try:
+                    derived = fn()
+                    break
+                except Exception as exc:  # noqa: BLE001
+                    last_err = exc
+                    continue
+            if derived is None:
+                raise RuntimeError(f"No se pudieron derivar API creds: {last_err}")
+            if hasattr(derived, "api_key"):
+                creds = derived
+            else:
+                creds = ApiCreds(
+                    api_key=str(derived["api_key"]),
+                    api_secret=str(derived["api_secret"]),
+                    api_passphrase=str(derived["api_passphrase"]),
+                )
+            # Keep process env in sync for subsequent read_gates()/health checks.
+            os.environ["POLY_CLOB_API_KEY"] = creds.api_key
+            os.environ["POLY_CLOB_API_SECRET"] = creds.api_secret
+            os.environ["POLY_CLOB_API_PASSPHRASE"] = creds.api_passphrase
+            base.set_api_creds(creds)
+            self._client = base
+            self.gates = read_gates()
+        else:
+            raise RuntimeError(
+                f"Credenciales incompletas: {', '.join(g.missing) or 'CLOB API'}"
+            )
 
     @property
     def client(self) -> Any:

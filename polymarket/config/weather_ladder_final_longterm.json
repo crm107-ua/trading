@@ -1,0 +1,128 @@
+{
+  "strategy": "temperature_ladder_final_longterm",
+  "demo_label": "weather_ladder_final_longterm_v1",
+  "notes": "FINAL long-term profile=income_wr80. Press-only, wing-safe sizing, certified by long_term_robustness.py. Evidence WR=1.0 n=11 OOS=1.0.",
+  "initial_capital_usdc": 150.0,
+  "budget_per_market_usdc": 12.0,
+  "max_markets_per_run": 12,
+  "max_per_city": 3,
+  "sort_mode": "horizon_first",
+  "limit_per_city": 12,
+  "resolved_max_age_days": 70,
+  "ladder_width": 3,
+  "max_basket_cost": 0.5,
+  "min_cluster_prob": 0.35,
+  "min_basket_ev": 0.01,
+  "min_leg_ask": 0.015,
+  "max_leg_ask": 0.7,
+  "max_leg_price": 0.39,
+  "require_underdispersion": true,
+  "post_max_basket_cost": null,
+  "bias_override_c": 0.5,
+  "prefer_horizons": [
+    1,
+    2
+  ],
+  "volatile_only": true,
+  "use_clob_asks": true,
+  "mark_open_to_mid": true,
+  "cities": [
+    "singapore",
+    "shanghai",
+    "beijing",
+    "hong-kong"
+  ],
+  "city_priority": [
+    "singapore",
+    "shanghai",
+    "beijing",
+    "hong-kong"
+  ],
+  "exclude_cities": [
+    "tokyo",
+    "seoul",
+    "miami",
+    "wellington",
+    "taipei",
+    "paris",
+    "london"
+  ],
+  "sleeves": [
+    {
+      "name": "core_press",
+      "cities": [
+        "singapore",
+        "shanghai",
+        "hong-kong"
+      ],
+      "max_basket_cost": 0.5,
+      "max_leg_price": 0.39,
+      "min_cluster_prob": 0.35,
+      "min_basket_ev": 0.01,
+      "bias_override_c": 0.5,
+      "tiers": [
+        {
+          "name": "press_under",
+          "max_basket_cost": 0.5,
+          "max_leg_price": 0.39,
+          "min_cluster_prob": 0.35,
+          "min_basket_ev": 0.01,
+          "require_underdispersion": true,
+          "bias_override_c": 0.5,
+          "budget_mult": 1.0,
+          "ladder_width": 3
+        }
+      ]
+    },
+    {
+      "name": "beijing_press",
+      "cities": [
+        "beijing"
+      ],
+      "max_basket_cost": 0.5,
+      "max_leg_price": 0.39,
+      "min_cluster_prob": 0.35,
+      "min_basket_ev": 0.01,
+      "bias_override_c": 1.0,
+      "tiers": [
+        {
+          "name": "press_under",
+          "max_basket_cost": 0.5,
+          "max_leg_price": 0.39,
+          "min_cluster_prob": 0.35,
+          "min_basket_ev": 0.01,
+          "require_underdispersion": true,
+          "bias_override_c": 1.0,
+          "budget_mult": 1.0,
+          "ladder_width": 3
+        }
+      ]
+    }
+  ],
+  "long_term": {
+    "profile": "income_wr80",
+    "certification": {
+      "passed": true,
+      "checks": {
+        "overall_n_ge_6": true,
+        "overall_wr_ge_90": true,
+        "overall_pnl_positive": true,
+        "oos_walkforward_wr_ge_80": true,
+        "oos_walkforward_n_ge_4": true,
+        "weekly_wr_ge_80_strict": true,
+        "both_halves_wr_ge_80": true,
+        "sensitivity_pass_rate_ge_70": true,
+        "friction_all_pass": true,
+        "leave_one_city_ok": true
+      },
+      "verdict": "LONG_TERM_ROBUST",
+      "sensitivity_pass_rate": 1.0
+    },
+    "overall": {
+      "n": 11,
+      "wins": 11,
+      "wr": 1.0,
+      "pnl": 659.41
+    }
+  }
+}

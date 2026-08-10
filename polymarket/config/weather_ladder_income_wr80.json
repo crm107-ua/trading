@@ -1,0 +1,110 @@
+{
+  "strategy": "temperature_ladder_income_wr80",
+  "demo_label": "weather_ladder_income_wr80_v1",
+  "notes": "Alias of final long-term certified profile (see weather_ladder_final_longterm.json). Income profile targeting point WR>=80% on expanded resolved set. PRESS-ONLY (no select tier). Beijing basket max 0.50 (not 0.55). Wing-safe underdispersion sizing. Paper/research gate \u2014 real money still needs allowed region + deposit.",
+  "initial_capital_usdc": 150.0,
+  "budget_per_market_usdc": 12.0,
+  "max_markets_per_run": 12,
+  "max_per_city": 3,
+  "sort_mode": "horizon_first",
+  "limit_per_city": 12,
+  "resolved_max_age_days": 70,
+  "ladder_width": 3,
+  "max_basket_cost": 0.5,
+  "min_cluster_prob": 0.35,
+  "min_basket_ev": 0.01,
+  "min_leg_ask": 0.015,
+  "max_leg_ask": 0.7,
+  "max_leg_price": 0.39,
+  "require_underdispersion": true,
+  "bias_override_c": 0.5,
+  "prefer_horizons": [
+    1,
+    2
+  ],
+  "volatile_only": true,
+  "use_clob_asks": true,
+  "mark_open_to_mid": true,
+  "cities": [
+    "singapore",
+    "shanghai",
+    "hong-kong",
+    "beijing"
+  ],
+  "city_priority": [
+    "singapore",
+    "shanghai",
+    "beijing",
+    "hong-kong"
+  ],
+  "exclude_cities": [
+    "tokyo",
+    "seoul",
+    "miami",
+    "wellington",
+    "taipei",
+    "paris",
+    "london"
+  ],
+  "sleeves": [
+    {
+      "name": "core_press",
+      "cities": [
+        "singapore",
+        "shanghai",
+        "hong-kong"
+      ],
+      "max_basket_cost": 0.5,
+      "max_leg_price": 0.39,
+      "min_cluster_prob": 0.35,
+      "min_basket_ev": 0.01,
+      "bias_override_c": 0.5,
+      "tiers": [
+        {
+          "name": "press_under",
+          "max_basket_cost": 0.5,
+          "max_leg_price": 0.39,
+          "min_cluster_prob": 0.35,
+          "min_basket_ev": 0.01,
+          "require_underdispersion": true,
+          "bias_override_c": 0.5,
+          "budget_mult": 1.0,
+          "ladder_width": 3
+        }
+      ]
+    },
+    {
+      "name": "beijing_press",
+      "cities": [
+        "beijing"
+      ],
+      "max_basket_cost": 0.5,
+      "max_leg_price": 0.39,
+      "min_cluster_prob": 0.35,
+      "min_basket_ev": 0.01,
+      "bias_override_c": 1.0,
+      "budget_per_market_usdc": 12.0,
+      "tiers": [
+        {
+          "name": "press_under",
+          "max_basket_cost": 0.5,
+          "max_leg_price": 0.39,
+          "min_cluster_prob": 0.35,
+          "min_basket_ev": 0.01,
+          "require_underdispersion": true,
+          "bias_override_c": 1.0,
+          "budget_mult": 1.0,
+          "ladder_width": 3
+        }
+      ]
+    }
+  ],
+  "income_wr80_gate": {
+    "min_point_winrate": 0.8,
+    "min_oos_half_winrate": 0.8,
+    "min_n": 8,
+    "min_pnl_usdc": 100.0,
+    "min_stress_winrate": 0.8
+  },
+  "final_longterm_pointer": "weather_ladder_final_longterm.json"
+}

@@ -1,0 +1,30 @@
+{
+  "strategy": "temperature_ladder",
+  "demo_label": "weather_ladder_v1",
+  "notes": "SurferX temperature ladder: 3-4 adjacent buckets, EV filter, underdispersion press. Paper only.",
+  "initial_capital_usdc": 100.0,
+  "budget_per_market_usdc": 8.0,
+  "max_markets_per_run": 6,
+  "ladder_width": 3,
+  "max_basket_cost": 0.50,
+  "min_cluster_prob": 0.50,
+  "min_basket_ev": 0.015,
+  "min_leg_ask": 0.015,
+  "max_leg_ask": 0.70,
+  "max_leg_price": 0.42,
+  "require_underdispersion": true,
+  "prefer_horizons": [1, 2],
+  "volatile_only": true,
+  "cities": [
+    "singapore",
+    "shanghai",
+    "tokyo",
+    "seoul",
+    "hong-kong",
+    "wellington",
+    "beijing",
+    "taipei"
+  ],
+  "use_clob_asks": true,
+  "mark_open_to_mid": true
+}

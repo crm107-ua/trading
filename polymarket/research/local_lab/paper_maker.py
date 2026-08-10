@@ -32,6 +32,7 @@ from polymarket.src.pricing.fair_value import estimate_fair_values
 from polymarket.src.signals.features import build_market_features
 from polymarket.src.ai.decision_engine import (
     Decision,
+    assemble_quote_context,
     decide_inventory_exit,
     decide_quote_action,
     grind_mode_enabled,
@@ -101,12 +102,44 @@ class PaperSession:
     _entries_paused_until: float = 0.0
     _session_entries_killed: bool = False
     _last_exit_nim_mono: float = 0.0
+    _recent_decisions: list[dict[str, Any]] = field(default_factory=list)
 
     def _strategy_fn(self):
         fn = STRATEGIES[self.strategy_id]
         if self.strategy_id == "maker_16":
             return lambda fair, bb, ba, spot, strike: fn(fair, self.cfg, bb, ba)
         return lambda fair, bb, ba, spot, strike: fn(fair, bb, ba, spot, strike, self.cfg)
+
+    def _remember_decision(self, decision: Decision, *, kind: str = "quote") -> None:
+        self._recent_decisions.append(
+            {
+                "kind": kind,
+                "action": decision.action,
+                "reason": decision.reason,
+                "confidence": round(float(decision.confidence), 3),
+                "source": decision.source,
+            }
+        )
+        if len(self._recent_decisions) > 5:
+            self._recent_decisions = self._recent_decisions[-5:]
+
+    def _context_extras(self) -> dict[str, Any]:
+        """Session provenance for the Context Engineering ingest stage."""
+        return {
+            "session_context": {
+                "strategy_id": self.strategy_id,
+                "demo_label": self.cfg.get("demo_label"),
+                "fills": len(self.fills),
+                "quotes_logged": self.quotes_logged,
+                "decision_count": self._decision_count,
+                "nim_decisions_used": self.nim_decisions_used,
+                "nim_rule_holds": self.nim_rule_holds,
+                "inventory_shares": round(self.inventory_shares, 4),
+                "bankroll": round(self.bankroll, 4),
+                "entry_fills": self._entry_fills,
+            },
+            "recent_decisions": list(self._recent_decisions),
+        }
 
     def _spot_delta_usd(self, window_ms: int = 3000) -> float:
         if len(self.spot_history) < 2:
@@ -1085,9 +1118,12 @@ class PaperSession:
                 "fast_path_min_spread_cents": float(self.cfg.get("fast_path_min_spread_cents", 1.0)),
                 "edge_abs": abs(fair - ((state["best_bid"] + state["best_ask"]) / 2)) if state["best_bid"] is not None and state["best_ask"] is not None else None,
                 "min_edge": float(self.cfg.get("min_edge", 0.03)),
+                **self._context_extras(),
             }
+            assembled_ctx = assemble_quote_context(snap)
             decision, nim = decide_quote_action(snapshot=snap, latency_budget_ms=3000)
             self._decision_count += 1
+            self._remember_decision(decision, kind="quote")
             self._log_progress(minutes, decision)
             if nim is not None:
                 self.nim_decisions_used += 1
@@ -1111,6 +1147,13 @@ class PaperSession:
                             "nim_model": nim.model if nim else None,
                             "nim_latency_ms": nim.latency_ms if nim else None,
                             "nim_cache_hit": nim.cache_hit if nim else False,
+                            "context_route": assembled_ctx.route.value if assembled_ctx else None,
+                            "context_sources": (
+                                assembled_ctx.selected_source_ids if assembled_ctx else None
+                            ),
+                            "context_tokens": (
+                                assembled_ctx.token_estimate if assembled_ctx else None
+                            ),
                         },
                         ensure_ascii=False,
                     )
@@ -1215,9 +1258,13 @@ async def run_paper_session(
     session_id: str | None = None,
     config_path: Path | None = None,
 ) -> dict[str, Any]:
-    from polymarket.src.ai.env_loader import require_nvidia_api_key
+    from polymarket.src.ai.decision_engine import fast_path_enabled
+    from polymarket.src.ai.env_loader import load_repo_dotenv, require_nvidia_api_key
 
-    require_nvidia_api_key()
+    load_repo_dotenv()
+    # Fast path is pure rules — allow paper without NVIDIA key for comparisons/labs.
+    if not fast_path_enabled():
+        require_nvidia_api_key()
     if strategy_id not in STRATEGIES:
         raise ValueError(f"Unknown strategy: {strategy_id}. Choose from {list(STRATEGIES)}")
     cfg = load_maker_cfg(config_path)
