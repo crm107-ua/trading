@@ -165,6 +165,11 @@ def main() -> int:
     p.add_argument("--maker-rounds", type=int, default=3)
     p.add_argument("--maker-minutes", type=float, default=5.0)
     p.add_argument("--idle-sleeve", choices=sorted(IDLE_SLEEVES), default="grind")
+    p.add_argument(
+        "--micro-dry",
+        action="store_true",
+        help="Also run Temperature Ladder CLOB micro dry-run (DRY_RUN=1, restores SAFE)",
+    )
     args = p.parse_args()
     rep = asyncio.run(
         run_desk(
@@ -173,6 +178,18 @@ def main() -> int:
             idle_sleeve=args.idle_sleeve,
         )
     )
+    if args.micro_dry:
+        from polymarket.research.local_lab.weather_ladder_live import run_session
+
+        dry = run_session(
+            config_path=POLY / "config" / "weather_ladder_micro_dry.json",
+            mode="both",
+        )
+        rep["ladder_micro_dry"] = {
+            "overall_verdict": dry.get("overall_verdict"),
+            "session_id": dry.get("session_id"),
+            "safe_after": dry.get("safe_after"),
+        }
     print(json.dumps({k: rep[k] for k in rep if k not in ("ladder", "maker") or True}, indent=2, default=str)[:4000])
     print(
         f"\nDESK PnL={rep['combined_pnl_usdc']} WR={rep['combined_winrate']} "

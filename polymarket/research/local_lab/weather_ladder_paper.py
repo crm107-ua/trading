@@ -146,6 +146,10 @@ def plan_event(
     if not resolved and hz not in prefer:
         meta["skip"] = f"horizon_{hz}"
         return None, meta
+    # Live/micro-dry profiles can refuse resolved replay entirely.
+    if resolved and bool(cfg.get("open_only")):
+        meta["skip"] = "open_only"
+        return None, meta
     # Resolved replay window (research desk can widen via resolved_max_age_days)
     max_age = int(cfg.get("resolved_max_age_days", 1))
     if resolved and (hz > 0 or hz < -max_age):

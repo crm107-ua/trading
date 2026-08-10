@@ -28,6 +28,7 @@ class LadderLeg:
     dollars: float
     shares: float
     ev: float
+    token_id: str | None = None
 
 
 @dataclass(frozen=True)

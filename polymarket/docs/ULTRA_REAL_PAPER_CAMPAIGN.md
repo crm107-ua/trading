@@ -46,5 +46,6 @@ python -m polymarket.research.local_lab.weather_ladder_paper \
 ## Lectura operativa
 
 - Esta es la **única** estrategia validada para escalar hacia dinero real.
-- Paper positivo con fricción hostil ≠ garantía on-chain; el siguiente paso es micro dry-run (`DRY_RUN=1`, tope $10–25), no `ARMED=1` a ciegas.
+- Paper positivo con fricción hostil ≠ garantía on-chain.
+- Micro dry-run montado: ver `docs/LADDER_MICRO_DRY.md` (`MICRO_DRY_PATH_READY` el 2026-08-10).
 - Mantener `max_per_city=3` y diversificar SG/SH/HK/Beijing.

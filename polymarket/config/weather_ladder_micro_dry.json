@@ -1,0 +1,109 @@
+{
+  "strategy": "temperature_ladder_multi_sleeve",
+  "demo_label": "weather_ladder_micro_dry_v1",
+  "notes": "Micro dry-run profile for Temperature Ladder v3. Cap $25. DRY_RUN only unless explicitly overridden. Uses champion sleeves + live CLOB floors.",
+  "initial_capital_usdc": 25.0,
+  "budget_per_market_usdc": 8.0,
+  "max_markets_per_run": 2,
+  "max_per_city": 1,
+  "sort_mode": "horizon_first",
+  "limit_per_city": 6,
+  "resolved_max_age_days": 0,
+  "open_only": true,
+  "ladder_width": 3,
+  "max_basket_cost": 0.5,
+  "min_cluster_prob": 0.35,
+  "min_basket_ev": 0.01,
+  "min_leg_ask": 0.015,
+  "max_leg_ask": 0.7,
+  "max_leg_price": 0.39,
+  "require_underdispersion": false,
+  "bias_override_c": 0.5,
+  "prefer_horizons": [1, 2],
+  "volatile_only": true,
+  "use_clob_asks": true,
+  "mark_open_to_mid": true,
+  "enforce_live_floors": true,
+  "entry_slip_cents": 0.01,
+  "order_type": "FAK",
+  "abort_partial_basket": true,
+  "smoke_post_when_empty": true,
+  "cities": ["singapore", "shanghai", "hong-kong", "beijing"],
+  "city_priority": ["hong-kong", "singapore", "shanghai", "beijing"],
+  "exclude_cities": ["tokyo", "seoul", "miami", "wellington", "taipei", "paris", "london"],
+  "sleeves": [
+    {
+      "name": "core",
+      "cities": ["singapore", "shanghai", "hong-kong"],
+      "max_basket_cost": 0.5,
+      "max_leg_price": 0.39,
+      "min_cluster_prob": 0.35,
+      "min_basket_ev": 0.01,
+      "bias_override_c": 0.5,
+      "budget_per_market_usdc": 8.0,
+      "tiers": [
+        {
+          "name": "press_under",
+          "max_basket_cost": 0.5,
+          "max_leg_price": 0.39,
+          "min_cluster_prob": 0.35,
+          "min_basket_ev": 0.01,
+          "require_underdispersion": true,
+          "bias_override_c": 0.5,
+          "budget_mult": 1.0,
+          "ladder_width": 3
+        },
+        {
+          "name": "select",
+          "max_basket_cost": 0.5,
+          "max_leg_price": 0.39,
+          "min_cluster_prob": 0.35,
+          "min_basket_ev": 0.01,
+          "require_underdispersion": false,
+          "bias_override_c": 0.5,
+          "budget_mult": 1.0,
+          "ladder_width": 3
+        }
+      ]
+    },
+    {
+      "name": "beijing",
+      "cities": ["beijing"],
+      "max_basket_cost": 0.55,
+      "max_leg_price": 0.39,
+      "min_cluster_prob": 0.35,
+      "min_basket_ev": 0.01,
+      "bias_override_c": 1.0,
+      "budget_per_market_usdc": 8.0,
+      "tiers": [
+        {
+          "name": "press_under",
+          "max_basket_cost": 0.55,
+          "max_leg_price": 0.39,
+          "min_cluster_prob": 0.35,
+          "min_basket_ev": 0.01,
+          "require_underdispersion": true,
+          "bias_override_c": 1.0,
+          "budget_mult": 1.0,
+          "ladder_width": 3
+        },
+        {
+          "name": "select",
+          "max_basket_cost": 0.55,
+          "max_leg_price": 0.39,
+          "min_cluster_prob": 0.35,
+          "min_basket_ev": 0.01,
+          "require_underdispersion": false,
+          "bias_override_c": 1.0,
+          "budget_mult": 1.0,
+          "ladder_width": 3
+        }
+      ]
+    }
+  ],
+  "live": {
+    "max_capital_usdc": 25.0,
+    "require_dry_run": true,
+    "modes": ["book_sim", "clob_dry"]
+  }
+}
