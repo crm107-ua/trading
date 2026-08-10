@@ -15,6 +15,10 @@
 - Deep verify depósito → [`DEEP_VERIFY_DEPOSIT.md`](DEEP_VERIFY_DEPOSIT.md)
 - Runway → [`DEPOSIT_RUNWAY.md`](DEPOSIT_RUNWAY.md)
 
+## Mercado live (hiperrrealista)
+- `hyperreal_market_verify --write-docs` → [`HYPERREAL_MARKET_VERIFY.md`](HYPERREAL_MARKET_VERIFY.md)
+- VPS: `HYPERREAL_MARKET_LIVE_OK` · books CLOB reales · sin DNA take ahora (baskets >0.50)
+
 ## Camino
 1. **Puedes depositar $100 ahora** (runway, watch-only) — verificado en profundidad.
 2. Forward snapshots + resolve hasta n≥50 / Wilson≥0.80.
@@ -23,6 +27,7 @@
 
 ## Comandos
 ```bash
+python -m polymarket.research.local_lab.hyperreal_market_verify --write-docs
 python -m polymarket.research.local_lab.deep_verify_deposit --write-docs
 python -m polymarket.research.local_lab.verify_deposit_runway --deposit 100 --write-docs
 python -m polymarket.research.local_lab.long_term_robustness --write-docs
