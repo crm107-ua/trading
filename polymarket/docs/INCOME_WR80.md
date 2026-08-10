@@ -36,11 +36,14 @@ python3 -m polymarket.research.local_lab.assure_wr80_income
 
 ## Dinero real
 
-Este gate es la mejor aseguranza **paper/replay** posible aquí.  
-Ingresos on-chain siguen requiriendo: región sin geoblock + depósito ~$25 + `ladder_income_loop`.
+- Gate punto/OOS: `INCOME_WR80_POINT_ASSURED`
+- Simulación bankroll realista: **`INCOME_GENERATION_ASSURED`** → ver `docs/INCOME_GENERATION_ASSURED.md`
+- On-chain: región sin geoblock + depósito ~$25 + `ladder_income_loop`
 
 ```bash
+python3 -m polymarket.research.local_lab.simulate_real_income
 POLY_LADDER_REAL_CONFIRM=1 \
   python3 -m polymarket.research.local_lab.ladder_income_loop \
     --auto-execute --i-accept-real-loss YES --rounds 40 --interval 180
 ```
+
