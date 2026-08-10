@@ -25,7 +25,7 @@ from polymarket.src.weather.forecast import (
     fetch_historical_model_maxes,
     fetch_model_maxes,
 )
-from polymarket.src.weather.ladder import BucketQuote, LadderPlan, build_ladder_plan
+from polymarket.src.weather.ladder import BucketQuote, LadderPlan, build_ladder_plan, underdispersion_signal
 from polymarket.src.weather.markets import (
     TempEvent,
     discover_temperature_slugs,
@@ -277,6 +277,9 @@ def plan_event(
             "take": take_ok,
             "reason": plan.reason,
             "legs": [asdict(x) for x in plan.legs],
+            "ud": underdispersion_signal(list(fc.models.values()), st.typical_model_spread_c),
+            "model_temps": list(fc.models.values()),
+            "typical_spread": st.typical_model_spread_c,
         }
         if take_ok:
             best_plan = plan

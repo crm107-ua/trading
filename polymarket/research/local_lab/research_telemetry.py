@@ -136,13 +136,23 @@ def write_forward_progress() -> dict[str, Any]:
             except Exception:
                 continue
     best: dict[str, dict[str, Any]] = {}
+    latest: dict[str, dict[str, Any]] = {}
     for r in rows:
         slug = str(r.get("slug") or "")
         if not slug or len(r.get("entries") or {}) < 3:
             continue
+        latest[slug] = r
         cur = best.get(slug)
         if cur is None or float(r.get("basket_cost") or 99) < float(cur.get("basket_cost") or 99):
-            best[slug] = r
+            best[slug] = dict(r)
+    # Overlay latest UD diagnostics onto best-basket row
+    for slug, row in best.items():
+        lat = latest.get(slug) or {}
+        if lat.get("ud") is not None:
+            row["ud"] = lat.get("ud")
+            row["underdispersed"] = lat.get("underdispersed")
+            row["model_temps"] = lat.get("model_temps")
+            row["typical_spread"] = lat.get("typical_spread")
     pending = []
     close = []
     for slug, r in sorted(best.items(), key=lambda kv: float(kv[1].get("basket_cost") or 99)):
@@ -154,6 +164,8 @@ def write_forward_progress() -> dict[str, Any]:
             "gap": round(max(0.0, float(r.get("basket_cost") or 0) - 0.50), 4),
             "entries_n": len(r.get("entries") or {}),
             "dna_take_seen": bool(r.get("dna_take")),
+            "underdispersed": r.get("underdispersed"),
+            "ud": r.get("ud"),
         }
         pending.append(item)
         if item["gap"] <= 0.12:
@@ -188,7 +200,11 @@ def write_forward_progress() -> dict[str, Any]:
         "## Close to DNA (gap ≤ 12¢)",
     ]
     for c in close:
-        lines.append(f"- {c['city']} {c['day']}: basket {c['best_basket']} (gap {c['gap']})")
+        ud = c.get("ud") or {}
+        lines.append(
+            f"- {c['city']} {c['day']}: basket {c['best_basket']} (gap {c['gap']}) "
+            f"UD={c.get('underdispersed')} ratio={ud.get('ratio')} spread={ud.get('spread')}/{ud.get('typical')}"
+        )
     if not close:
         lines.append("- (ninguno ahora)")
     lines.extend(["", "## All tracked", ""])
@@ -268,6 +284,8 @@ def log_watch_round(row: dict[str, Any], stack: dict[str, Any] | None = None) ->
                 "skip": nm.get("skip"),
                 "tier": nm.get("tier"),
                 **gaps,
+                "ud": nm.get("ud"),
+                "underdispersed": nm.get("underdispersed"),
                 "policy": "REJECT_DNA",
             },
         )
@@ -324,6 +342,10 @@ def log_watch_round(row: dict[str, Any], stack: dict[str, Any] | None = None) ->
                 "entries": entries,
                 "legs": block.get("legs"),
                 "dna_take": bool(block.get("dna_take") or block.get("accepted")),
+                "underdispersed": block.get("underdispersed"),
+                "ud": block.get("ud"),
+                "model_temps": block.get("model_temps"),
+                "typical_spread": block.get("typical_spread"),
                 "skip": block.get("skip"),
                 "source": "watch_live",
             },

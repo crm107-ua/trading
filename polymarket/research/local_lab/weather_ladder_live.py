@@ -213,6 +213,9 @@ def prepare_candidates(cfg: dict[str, Any]) -> dict[str, Any]:
                 "legs": legs,
                 "entries": entries,
                 "dna_take": False,
+                "ud": meta.get("ud"),
+                "model_temps": meta.get("model_temps"),
+                "typical_spread": meta.get("typical_spread"),
             }
             skipped.append(row)
             # Near-miss: positive EV but basket slightly above champion max
@@ -299,6 +302,9 @@ def prepare_candidates(cfg: dict[str, Any]) -> dict[str, Any]:
                 "entries": entries,
                 "models": meta.get("models"),
                 "dna_take": True,
+                "ud": meta.get("ud"),
+                "model_temps": meta.get("model_temps"),
+                "typical_spread": meta.get("typical_spread"),
                 "plan_reason": live_plan.reason,
                 "meta": {k: v for k, v in meta.items() if k not in ("legs",)},
             }

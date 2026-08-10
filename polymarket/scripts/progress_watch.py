@@ -138,6 +138,37 @@ def _maybe_refresh_scan(st: dict) -> None:
         print(f"scan_fail {type(exc).__name__}: {exc}", flush=True)
 
 
+def _close_call_alert(d: dict, st: dict) -> None:
+    """Telegram when books get within ~5¢ of DNA (research signal, no post)."""
+    gap = d.get("min_gap_basket")
+    if gap is None:
+        return
+    try:
+        gap_f = float(gap)
+    except Exception:
+        return
+    prev = st.get("best_gap")
+    improved = prev is None or gap_f < float(prev) - 0.004
+    if gap_f <= 0.05 + 1e-12:
+        st["best_gap"] = gap_f if prev is None else min(float(prev), gap_f)
+        if improved or not st.get("close_call_sent"):
+            st["close_call_sent"] = True
+            alert(
+                f"CASI EDGE gap={gap_f:.3f} round={d.get('round')} near={d.get('near_miss_n')} (WATCH ONLY, no post)",
+                title="AVANCE · CASI EDGE DNA",
+                fields={
+                    "gap_basket": round(gap_f, 4),
+                    "round": d.get("round"),
+                    "near_miss_n": d.get("near_miss_n"),
+                    "interval_s": d.get("interval_next_s"),
+                    "acción": "Vigilando; DNA intacta; NO se postea",
+                },
+            )
+    elif gap_f > 0.08:
+        # allow re-alert if we drift away then come back
+        st["close_call_sent"] = False
+
+
 def main():
     os.chdir(ROOT)
     os.environ.setdefault("PYTHONPATH", str(ROOT))
@@ -158,8 +189,10 @@ def main():
             d = rows[-1]
             r = int(d.get("round") or 0)
             acc = int(d.get("accepted_n") or 0)
-            if r > int(st.get("last_round") or 0):
-                st["last_round"] = r
+            if r > int(st.get("last_round") or 0) or d.get("ts_utc") != st.get("last_ts"):
+                st["last_round"] = max(r, int(st.get("last_round") or 0))
+                st["last_ts"] = d.get("ts_utc")
+                _close_call_alert(d, st)
                 if acc >= 1:
                     # New edge or still open: alert once per edge open cycle
                     if not st.get("had_edge"):
