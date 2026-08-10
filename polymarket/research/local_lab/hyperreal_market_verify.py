@@ -970,7 +970,8 @@ def run(*, budgets: list[float] | None = None, write_docs: bool = False, wide: b
         if ((b.get("fill_sims") or {}).get("budget_25") or {}).get("all_legs_complete_at_cap")
     )
     baskets = [float(b.get("plan_basket") or b.get("live_basket_best_ask_plus_slip") or 99) for b in dna_books]
-    baskets = [x for x in baskets if x < 90]
+    # Ignore nonsense / enriched-cheap stubs (<5¢ basket) and missing (99)
+    baskets = [x for x in baskets if 0.05 <= x < 90]
     closest_bc = min(baskets) if baskets else None
 
     many = contemplate_case_matrix(

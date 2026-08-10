@@ -1,6 +1,9 @@
+> Fuente: corrida en **VPS ES** (geo OK), scan wide + book-walk enriquecido.
+> Cloud Agent US queda geobloqueado para posts.
+
 # Hyperreal market verify — Polymarket LIVE
 
-**UTC:** `2026-08-10T14:04:36.903560+00:00`
+**UTC:** `2026-08-10T14:08:40.199281+00:00`
 **Veredicto:** `HYPERREAL_MARKET_LIVE_OK`
 
 Mercado live alcanzable; books CLOB leídos; DNA stack evaluado. NO hay take DNA executable ahora (normal: baskets ricos / UD stuck). Depósito runway $100 sigue válido; operar solo cuando aparezca edge.
@@ -20,9 +23,9 @@ Mercado live alcanzable; books CLOB leídos; DNA stack evaluado. NO hay take DNA
 ## Cobertura ampliada
 - wide=True horizons=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] cities=['singapore', 'shanghai', 'hong-kong', 'beijing', 'seoul', 'tokyo', 'taipei', 'miami', 'wellington', 'london', 'nyc', 'new-york-city', 'chicago', 'dallas', 'austin', 'los-angeles', 'san-francisco', 'toronto', 'paris', 'berlin', 'mumbai', 'delhi', 'bangkok', 'jakarta', 'manila', 'sydney', 'melbourne']
 - events_open=49 calendar_slugs=26 extras=0
-- book_walks=8 (DNA cities=8 extra=0)
-- fillable@$25: any=7 dna_cities=7
-- closest DNA-city basket live≈0.57
+- book_walks=48 (DNA cities=12 extra=36)
+- fillable@$25: any=18 dna_cities=10
+- closest DNA-city basket live≈0.003
 - histórico cases=136 dna_takes=11 WR=1.0 Wilson95=0.7412 days=32 (2026-07-10→2026-08-10)
 - streaks win=11 loss=0 basket_mean=0.3773
 - histórico by_city={'singapore': 32, 'shanghai': 32, 'tokyo': 1, 'seoul': 2, 'hong-kong': 32, 'miami': 2, 'wellington': 1, 'beijing': 32, 'taipei': 2} dna_takes_by_city={'singapore': 1, 'hong-kong': 5, 'beijing': 3, 'shanghai': 2}
@@ -30,9 +33,9 @@ Mercado live alcanzable; books CLOB leídos; DNA stack evaluado. NO hay take DNA
 
 ## Matriz de muchos casos
 - open_rows únicos=49
-- skip_taxonomy={'basket_cost=0.589>max=0.5+max_leg=0.400>0.39+ev=-0.0129<0.01+not_underdispersed': 1, 'basket_cost=0.590>max=0.5+not_underdispersed': 1, 'basket_cost=0.740>max=0.5+max_leg=0.420>0.39': 1, 'basket_cost=0.570>max=0.5+not_underdispersed': 1, 'basket_cost=0.770>max=0.5': 1, 'open_only': 4, 'no_sleeve_for_city': 13, 'not_volatile': 6, 'unknown_station': 18, 'basket_cost=1.010>max=0.5+max_leg=0.580>0.39+ev=-0.0806<0.01+not_underdispersed': 1, 'basket_cost=0.900>max=0.5+max_leg=0.440>0.39': 1, 'basket_cost=0.990>max=0.5+max_leg=0.530>0.39+ev=-0.0451<0.01+not_underdispersed': 1}
+- skip_taxonomy={'basket_cost=0.604>max=0.5+max_leg=0.420>0.39+ev=-0.0279<0.01+not_underdispersed': 1, 'basket_cost=0.590>max=0.5+not_underdispersed': 1, 'basket_cost=0.730>max=0.5+max_leg=0.430>0.39': 1, 'basket_cost=0.580>max=0.5+not_underdispersed': 1, 'basket_cost=0.770>max=0.5': 1, 'open_only': 4, 'no_sleeve_for_city': 13, 'not_volatile': 6, 'unknown_station': 18, 'basket_cost=1.010>max=0.5+max_leg=0.580>0.39+ev=-0.0806<0.01+not_underdispersed': 1, 'basket_cost=0.900>max=0.5+max_leg=0.440>0.39': 1, 'basket_cost=0.990>max=0.5+max_leg=0.530>0.39+ev=-0.0451<0.01+not_underdispersed': 1}
 - gate_taxonomy (b/l/u)={'b0_l0_u0': 44, 'b0_l1_u0': 2, 'b0_l0_u1': 2, 'b0_l1_u1': 1}
-- liquidity_taxonomy={'fillable_25': 7, 'abort_partial_25': 1}
+- liquidity_taxonomy={'fillable_25': 18, 'abort_partial_25': 30}
 
 ### Counterfactual basket (diagnóstico; DNA live sigue ≤0.50)
 - max_basket=0.5 → would_pass=0 (canonical_dna)
@@ -72,8 +75,8 @@ Mercado live alcanzable; books CLOB leídos; DNA stack evaluado. NO hay take DNA
 - dallas 2026-08-10 bc=None gates=0/3 ud=None skip=unknown_station
 - dallas 2026-08-11 bc=None gates=0/3 ud=None skip=unknown_station
 - hong-kong 2026-08-10 bc=None gates=0/3 ud=None skip=open_only
-- hong-kong 2026-08-11 bc=0.589 gates=0/3 ud=False skip=basket_cost=0.589>max=0.5+max_leg=0.400>0.39+ev=-0.0129<0.01+not_underdispersed
-- hong-kong 2026-08-12 bc=0.57 gates=1/3 ud=False skip=basket_cost=0.570>max=0.5+not_underdispersed
+- hong-kong 2026-08-11 bc=0.604 gates=0/3 ud=False skip=basket_cost=0.604>max=0.5+max_leg=0.420>0.39+ev=-0.0279<0.01+not_underdispersed
+- hong-kong 2026-08-12 bc=0.58 gates=1/3 ud=False skip=basket_cost=0.580>max=0.5+not_underdispersed
 - london 2026-08-10 bc=None gates=0/3 ud=None skip=not_volatile
 - london 2026-08-11 bc=None gates=0/3 ud=None skip=not_volatile
 - london 2026-08-12 bc=None gates=0/3 ud=None skip=not_volatile
@@ -97,7 +100,7 @@ Mercado live alcanzable; books CLOB leídos; DNA stack evaluado. NO hay take DNA
 - seoul 2026-08-12 bc=None gates=0/3 ud=None skip=no_sleeve_for_city
 - shanghai 2026-08-10 bc=None gates=0/3 ud=None skip=open_only
 - shanghai 2026-08-11 bc=0.9 gates=1/3 ud=True skip=basket_cost=0.900>max=0.5+max_leg=0.440>0.39
-- shanghai 2026-08-12 bc=0.74 gates=1/3 ud=True skip=basket_cost=0.740>max=0.5+max_leg=0.420>0.39
+- shanghai 2026-08-12 bc=0.73 gates=1/3 ud=True skip=basket_cost=0.730>max=0.5+max_leg=0.430>0.39
 - singapore 2026-08-10 bc=None gates=0/3 ud=None skip=open_only
 - singapore 2026-08-11 bc=1.01 gates=0/3 ud=False skip=basket_cost=1.010>max=0.5+max_leg=0.580>0.39+ev=-0.0806<0.01+not_underdispersed
 - singapore 2026-08-12 bc=0.99 gates=0/3 ud=False skip=basket_cost=0.990>max=0.5+max_leg=0.530>0.39+ev=-0.0451<0.01+not_underdispersed
@@ -108,7 +111,7 @@ Mercado live alcanzable; books CLOB leídos; DNA stack evaluado. NO hay take DNA
 - geoblock_blocked=False msg=ok
 
 ## Latency
-- `{'gamma_events': {'ok': True, 'status': 200, 'latency_ms': 86.5}, 'clob_time': {'ok': True, 'status': 200, 'latency_ms': 108.9}, 'clob_ok': {'ok': True, 'status': 200, 'latency_ms': 51.1}}`
+- `{'gamma_events': {'ok': True, 'status': 200, 'latency_ms': 88.1}, 'clob_time': {'ok': True, 'status': 200, 'latency_ms': 104.7}, 'clob_ok': {'ok': True, 'status': 200, 'latency_ms': 48.8}}`
 
 ## Stack high (live DNA scan)
 - events_open=8 accepted=0 near_miss=5 ready_to_arm=False
@@ -118,14 +121,54 @@ Mercado live alcanzable; books CLOB leídos; DNA stack evaluado. NO hay take DNA
 - beijing 2026-08-12 basket=0.77 max_leg=0.36 ud=True gates=2/3 gap_b=0.27 skip=basket_cost=0.770>max=0.5
 
 ## Book walks (todos)
-- `highest-temperature-in-hong-kong-on-august-11-2026` dna=False dna_city=True plan_bc=0.589 live_bc=0.627 fill25=True abort=False
+- `highest-temperature-in-hong-kong-on-august-11-2026` dna=False dna_city=True plan_bc=0.604 live_bc=0.633 fill25=True abort=False
 - `highest-temperature-in-beijing-on-august-11-2026` dna=False dna_city=True plan_bc=0.59 live_bc=0.62 fill25=True abort=False
-- `highest-temperature-in-shanghai-on-august-12-2026` dna=False dna_city=True plan_bc=0.74 live_bc=0.77 fill25=True abort=False
-- `highest-temperature-in-hong-kong-on-august-12-2026` dna=False dna_city=True plan_bc=0.57 live_bc=0.6 fill25=False abort=True
+- `highest-temperature-in-shanghai-on-august-12-2026` dna=False dna_city=True plan_bc=0.73 live_bc=0.77 fill25=False abort=True
+- `highest-temperature-in-hong-kong-on-august-12-2026` dna=False dna_city=True plan_bc=0.58 live_bc=0.6 fill25=False abort=True
 - `highest-temperature-in-beijing-on-august-12-2026` dna=False dna_city=True plan_bc=0.77 live_bc=0.8 fill25=True abort=False
 - `highest-temperature-in-shanghai-on-august-11-2026` dna=False dna_city=True plan_bc=0.9 live_bc=0.93 fill25=True abort=False
 - `highest-temperature-in-singapore-on-august-12-2026` dna=False dna_city=True plan_bc=0.99 live_bc=1.02 fill25=True abort=False
 - `highest-temperature-in-singapore-on-august-11-2026` dna=False dna_city=True plan_bc=1.01 live_bc=1.04 fill25=True abort=False
+- `highest-temperature-in-beijing-on-august-10-2026` dna=False dna_city=True plan_bc=0.003 live_bc=0.033 fill25=True abort=False
+- `highest-temperature-in-hong-kong-on-august-10-2026` dna=False dna_city=True plan_bc=0.003 live_bc=0.033 fill25=True abort=False
+- `highest-temperature-in-shanghai-on-august-10-2026` dna=False dna_city=True plan_bc=0.003 live_bc=0.033 fill25=True abort=False
+- `highest-temperature-in-singapore-on-august-10-2026` dna=False dna_city=True plan_bc=0.003 live_bc=0.033 fill25=True abort=False
+- `highest-temperature-in-miami-on-august-10-2026` dna=False dna_city=False plan_bc=0.003 live_bc=0.033 fill25=True abort=False
+- `highest-temperature-in-miami-on-august-11-2026` dna=False dna_city=False plan_bc=0.005 live_bc=0.035 fill25=False abort=True
+- `highest-temperature-in-seoul-on-august-10-2026` dna=False dna_city=False plan_bc=0.003 live_bc=0.033 fill25=True abort=False
+- `highest-temperature-in-seoul-on-august-11-2026` dna=False dna_city=False plan_bc=0.006 live_bc=0.036 fill25=False abort=True
+- `highest-temperature-in-seoul-on-august-12-2026` dna=False dna_city=False plan_bc=0.014 live_bc=0.044 fill25=False abort=True
+- `highest-temperature-in-taipei-on-august-10-2026` dna=False dna_city=False plan_bc=0.003 live_bc=0.033 fill25=True abort=False
+- `highest-temperature-in-taipei-on-august-11-2026` dna=False dna_city=False plan_bc=0.013 live_bc=0.043 fill25=False abort=True
+- `highest-temperature-in-taipei-on-august-12-2026` dna=False dna_city=False plan_bc=0.015 live_bc=0.045 fill25=False abort=True
+- `highest-temperature-in-tokyo-on-august-10-2026` dna=False dna_city=False plan_bc=0.003 live_bc=0.033 fill25=True abort=False
+- `highest-temperature-in-tokyo-on-august-11-2026` dna=False dna_city=False plan_bc=0.011 live_bc=0.041 fill25=False abort=True
+- `highest-temperature-in-tokyo-on-august-12-2026` dna=False dna_city=False plan_bc=0.013 live_bc=0.043 fill25=False abort=True
+- `highest-temperature-in-wellington-on-august-11-2026` dna=False dna_city=False plan_bc=0.003 live_bc=0.033 fill25=True abort=False
+- `highest-temperature-in-wellington-on-august-12-2026` dna=False dna_city=False plan_bc=0.012 live_bc=0.042 fill25=True abort=False
+- `highest-temperature-in-london-on-august-10-2026` dna=False dna_city=False plan_bc=0.003 live_bc=0.033 fill25=False abort=True
+- `highest-temperature-in-london-on-august-11-2026` dna=False dna_city=False plan_bc=0.003 live_bc=0.033 fill25=False abort=True
+- `highest-temperature-in-london-on-august-12-2026` dna=False dna_city=False plan_bc=0.009 live_bc=0.039 fill25=False abort=True
+- `highest-temperature-in-paris-on-august-10-2026` dna=False dna_city=False plan_bc=0.003 live_bc=0.033 fill25=False abort=True
+- `highest-temperature-in-paris-on-august-11-2026` dna=False dna_city=False plan_bc=0.003 live_bc=0.033 fill25=False abort=True
+- `highest-temperature-in-paris-on-august-12-2026` dna=False dna_city=False plan_bc=0.014 live_bc=0.043 fill25=False abort=True
+- `highest-temperature-in-austin-on-august-10-2026` dna=False dna_city=False plan_bc=0.004 live_bc=0.034 fill25=False abort=True
+- `highest-temperature-in-austin-on-august-11-2026` dna=False dna_city=False plan_bc=0.006 live_bc=0.036 fill25=False abort=True
+- `highest-temperature-in-chicago-on-august-10-2026` dna=False dna_city=False plan_bc=0.005 live_bc=0.035 fill25=False abort=True
+- `highest-temperature-in-chicago-on-august-11-2026` dna=False dna_city=False plan_bc=0.01 live_bc=0.04 fill25=False abort=True
+- `highest-temperature-in-dallas-on-august-10-2026` dna=False dna_city=False plan_bc=0.003 live_bc=0.033 fill25=False abort=True
+- `highest-temperature-in-dallas-on-august-11-2026` dna=False dna_city=False plan_bc=0.003 live_bc=0.033 fill25=False abort=True
+- `highest-temperature-in-los-angeles-on-august-10-2026` dna=False dna_city=False plan_bc=0.003 live_bc=0.033 fill25=False abort=True
+- `highest-temperature-in-los-angeles-on-august-11-2026` dna=False dna_city=False plan_bc=0.004 live_bc=0.034 fill25=False abort=True
+- `highest-temperature-in-manila-on-august-10-2026` dna=False dna_city=False plan_bc=0.003 live_bc=0.033 fill25=True abort=False
+- `highest-temperature-in-manila-on-august-11-2026` dna=False dna_city=False plan_bc=0.01 live_bc=0.04 fill25=False abort=True
+- `highest-temperature-in-manila-on-august-12-2026` dna=False dna_city=False plan_bc=0.012 live_bc=0.042 fill25=False abort=True
+- `highest-temperature-in-munich-on-august-10-2026` dna=False dna_city=False plan_bc=0.003 live_bc=0.033 fill25=True abort=False
+- `highest-temperature-in-nyc-on-august-10-2026` dna=False dna_city=False plan_bc=0.003 live_bc=0.033 fill25=False abort=True
+- `highest-temperature-in-nyc-on-august-11-2026` dna=False dna_city=False plan_bc=0.015 live_bc=0.045 fill25=False abort=True
+- `highest-temperature-in-san-francisco-on-august-10-2026` dna=False dna_city=False plan_bc=0.004 live_bc=0.034 fill25=False abort=True
+- `highest-temperature-in-san-francisco-on-august-11-2026` dna=False dna_city=False plan_bc=0.006 live_bc=0.036 fill25=False abort=True
+- `highest-temperature-in-toronto-on-august-10-2026` dna=False dna_city=False plan_bc=0.004 live_bc=0.034 fill25=False abort=True
 
 ## Invariantes
 
