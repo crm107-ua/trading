@@ -13,6 +13,53 @@ if [ "${POLY_LADDER_ALLOW_REARM:-0}" != "1" ]; then
   exit 2
 fi
 
+# Hard gate: rearm_income_gate must be READY_TO_REARM (reads live balance if possible)
+echo "Checking rearm_income_gate before live manager…"
+set +e
+GATE_JSON=$(python - <<'PY'
+import json, os, subprocess, sys
+from pathlib import Path
+os.environ["POLY_LIVE_ARMED"]="0"
+os.environ["POLY_LIVE_DRY_RUN"]="1"
+os.environ["PYTHONPATH"]="/var/www/html/trader"
+bal="3.4482"
+try:
+    from polymarket.src.ai.env_loader import load_repo_dotenv
+    load_repo_dotenv(override=True)
+    from polymarket.src.execution.clob_live import ClobLiveClient, read_gates
+    g=read_gates()
+    if g.signing_ready:
+        c=ClobLiveClient(); c.connect(derive_api_creds=True)
+        b=c.balance_collateral_usdc()
+        if b is not None:
+            bal=str(round(float(b),4))
+except Exception as e:
+    print(f"balance_probe_fail={type(e).__name__}", file=sys.stderr)
+proc=subprocess.run(
+    [sys.executable,"-m","polymarket.research.local_lab.rearm_income_gate",
+     "--balance", bal, "--run-income-tests"],
+    cwd="/var/www/html/trader", capture_output=True, text=True, timeout=240,
+    env={**os.environ, "PYTHONPATH":"/var/www/html/trader",
+         "POLY_LIVE_ARMED":"0","POLY_LIVE_DRY_RUN":"1"},
+)
+latest=Path("polymarket/data_local/local_lab/rearm_gate/latest.json")
+dec={}
+if latest.exists():
+    dec=(json.loads(latest.read_text()).get("decision") or {})
+print(json.dumps({"status": dec.get("status"), "can_enable": dec.get("can_enable_auto_execute"),
+                  "blockers": dec.get("blockers"), "exit": proc.returncode, "balance": bal}))
+PY
+)
+GATE_RC=$?
+set -e
+echo "$GATE_JSON"
+STATUS=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("status") or "")' "$GATE_JSON" 2>/dev/null || true)
+if [ "$STATUS" != "READY_TO_REARM" ]; then
+  echo "Refusing live manager: rearm_income_gate status='$STATUS' (need READY_TO_REARM)"
+  echo "Stay on private_manager_watch.sh until evidence+capital clear."
+  exit 2
+fi
+
 export POLY_LADDER_REAL_CONFIRM=1
 # Start SAFE; execute path arms temporarily if edge+gates OK
 export POLY_LIVE_ARMED=0
@@ -23,7 +70,7 @@ mkdir -p "$LOG_DIR"
 DAY=$(date -u +%Y%m%d)
 LOG="$LOG_DIR/private_manager_${DAY}.log"
 ALERTS="$LOG_DIR/ALERTS.log"
-STATUS="$LOG_DIR/LATEST_STATUS.md"
+STATUS_MD="$LOG_DIR/LATEST_STATUS.md"
 echo "AUTO_EXECUTE_ARMED_PATH" > "$LOG_DIR/MANAGER_MODE.txt"
 
 notify() {
@@ -57,12 +104,12 @@ for t,c in pairs:
 PY
 )"
 
-notify "GESTOR AUTO-EXECUTE activo (REARM permitido) | DNA | balance watch"
+notify "GESTOR AUTO-EXECUTE activo (REARM READY verificado) | DNA | balance watch"
 python3 - <<PY
 from pathlib import Path
-Path("$STATUS").write_text("""# Ladder Private Manager — AUTO-EXECUTE
+Path("$STATUS_MD").write_text("""# Ladder Private Manager — AUTO-EXECUTE
 
-- **Modo:** auto-execute DNA (tras rearm gate)
+- **Modo:** auto-execute DNA (tras rearm gate READY)
 - **VPS:** España
 - **SAFE default** hasta edge; arm temporal en post
 """)
@@ -83,7 +130,7 @@ python -u -m polymarket.research.local_lab.definitive_income_system \
       printf '%s\n' "# Estado $ts
 
 **AUTO-EXECUTE** · WAIT (sin take)
-" > "$STATUS"
+" > "$STATUS_MD"
     fi
     if echo "$line" | grep -q '"accepted_n": [1-9]'; then
       notify "EDGE DETECTADO — intentando execute real"
@@ -91,7 +138,7 @@ python -u -m polymarket.research.local_lab.definitive_income_system \
       printf '%s\n' "# Estado $ts
 
 **AUTO-EXECUTE** · EDGE → execute path
-" > "$STATUS"
+" > "$STATUS_MD"
     fi
   done
 

@@ -35,11 +35,12 @@
 
 ## Checklist pre-inversión (orden estricto)
 
-1. `EVIDENCE_PROGRESS.json` → n_to_go_micro = 0 y wilson_ok.
-2. `python3 -m polymarket.research.local_lab.rearm_income_gate --run-income-tests --write-docs` → `READY_TO_REARM`.
-3. Capital live ≥ floor (p.ej. $25 micro) y miss path no arruina.
-4. Geoblock OK desde VPS ES; SAFE flags verificados.
-5. Solo entonces: `POLY_LADDER_ALLOW_REARM=1` + confirmación explícita humana.
+1. `python3 -m polymarket.research.local_lab.verify_real_income_prep --write-docs` → veredicto.
+2. `EVIDENCE_PROGRESS.json` → n_to_go_micro = 0 y wilson_ok.
+3. `rearm_income_gate` → `READY_TO_REARM` (incluido en verify).
+4. Capital live ≥ floor (p.ej. $25 micro) y miss path no arruina (`can_recommend_deposit`).
+5. Geoblock OK desde VPS ES; SAFE flags verificados.
+6. Solo entonces: `POLY_LADDER_ALLOW_REARM=1` + PM2 `private_manager_live.sh` (el script revalida el gate al arrancar).
 
 ## Artefactos vivos
 
