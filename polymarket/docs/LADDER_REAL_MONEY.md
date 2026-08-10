@@ -1,79 +1,56 @@
 # Cómo queda todo para meter dinero real
 
+> **Sistema definitivo:** [`DEFINITIVE_INCOME_SYSTEM.md`](DEFINITIVE_INCOME_SYSTEM.md)  
+> Entrypoint: `python3 -m polymarket.research.local_lab.definitive_income_system`
+
 ## Foto del sistema
 
 ```
-Research / Paper (ya ganado)
-  └─ Temperature Ladder v3  →  WR100% research · paper +$418 · ultra-real +$502
+Research canónico
+  └─ weather_ladder_final_longterm  →  LONG_TERM_ROBUST
 
-Dry live (ya montado)
-  └─ weather_ladder_live --mode both  →  MICRO_DRY_PATH_READY
+Sistema definitivo (orquestador)
+  └─ definitive_income_system  →  CERTIFIED / OPERABLE / GO
 
-Real micro (listo, gated)
-  └─ weather_ladder_real  →  preflight por defecto
-       └─ --execute-real + confirmaciones  →  FAK 3 piernas · hold a resolución
+Manga real
+  └─ weather_ladder_definitive_real  →  ≤$5/sesión · press-only · hold resolución
 ```
 
 | Capa | Archivo | Dinero |
 |------|---------|--------|
-| Champion | `config/weather_ladder_champion_v2.json` | paper |
+| Final research | `config/weather_ladder_final_longterm.json` | paper |
 | Ultra-real sim | `config/weather_ladder_ultra_real_sim.json` | paper+friction |
 | Micro dry | `config/weather_ladder_micro_dry.json` | $0 (would_post) |
-| **Micro real** | `config/weather_ladder_micro_real.json` (DNA = `weather_ladder_final_longterm`) | **≤ $5 / sesión** |
+| **Definitive real** | `config/weather_ladder_definitive_real.json` | **≤ $5 / sesión** |
+| Micro real (alias) | `config/weather_ladder_micro_real.json` | ≤ $5 |
 
 ## Flujo operativo con capital real
 
-1. **Deposita** USDC en la wallet Polymarket (hoy ~$3.45 → ideal **$25–50** para operar holgado con floors de 5 shares × 3 piernas).
-2. **Preflight** (sin órdenes):
+1. **Deposita** USDC (≥**$25** recomendado; mínimo técnico ~$2).
+2. **Estado del sistema** (sin órdenes):
    ```bash
-   python3 -m polymarket.research.local_lab.weather_ladder_real
+   python3 -m polymarket.research.local_lab.definitive_income_system
    ```
-3. **Espera edge** (libros baratos):
-   ```bash
-   python3 -m polymarket.research.local_lab.weather_ladder_live \
-     --mode watch --watch-rounds 40 --watch-interval 180
-   ```
-4. **Ejecuta real** solo si preflight dice `can_execute_now=true`:
+3. **Ingreso automático** (región permitida):
    ```bash
    POLY_LADDER_REAL_CONFIRM=1 \
-     python3 -m polymarket.research.local_lab.weather_ladder_real \
-       --execute-real --i-accept-real-loss YES
+     python3 -m polymarket.research.local_lab.definitive_income_system \
+       --income-loop --auto-execute --i-accept-real-loss YES \
+       --rounds 40 --interval 180
    ```
-5. El bot compra las 3 piernes YES (FAK), **mantiene hasta resolución**, y deja el entorno en SAFE.
 
 ## Gates que deben pasar
 
-- `POLY_LADDER_REAL_CONFIRM=1`
-- `--i-accept-real-loss YES`
-- Geoblock OK
-- Balance ≥ $2 y ≥ notional del basket
-- Cap sesión ≤ **$5**
-- Take champion presente (no smoke, no near-miss forzado)
-- 1 mercado máx / sesión
+- DNA press-only alineado (final = definitive real)
+- `LONG_TERM_ROBUST` + WR80 + income-assured
+- `POLY_LADDER_REAL_CONFIRM=1` + `--i-accept-real-loss YES`
+- Geoblock OK · Balance ≥ notional · Cap ≤ $5 · 1 mercado
+- Take press abierto (no near-miss forzado)
 - Tras correr: `ARMED=0` `DRY_RUN=1`
 
-## Qué NO se hace en real (aún)
+## Qué NO se hace en real
 
-- No grind BTC idle
-- No copy de wallets virales
-- No escalar a $150 paper sizing hasta 3–5 resoluciones live verdes
+- No grind BTC idle / copy wallets virales
+- No escalar sizing paper hasta 3–5 resoluciones live verdes
 - No `DRY_RUN=0` permanente en `.env`
-
-## Estado típico “ahora”
-
-- Camino técnico: **listo**
-- Edge abierto champion: a menudo **0** (libros caros) → watch
-- Near-miss posible (ej. Shanghai basket 0.66 / EV+) → **no** se toma en real
-- Primer tamaño real: **$3–5** por basket, no el bankroll entero
-- **Geoblock US** en Cloud Agent → ingresos reales solo desde región permitida
-
-## Bucle de ingresos (comando único)
-
-```bash
-# En máquina/VPS con IP permitida + wallet fondeada (~25 USDC)
-POLY_LADDER_REAL_CONFIRM=1 \
-  python3 -m polymarket.research.local_lab.ladder_income_loop \
-    --auto-execute --i-accept-real-loss YES --rounds 40 --interval 180
-```
-
-Eso vigila libros → si aparece basket champion y pasan gates → compra real → hold a resolución.
+- No operar con veredicto `DEFINITIVE_NOT_READY`

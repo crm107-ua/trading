@@ -23,7 +23,9 @@ def test_final_longterm_config_shape():
         tiers = [t["name"] for t in s.get("tiers") or []]
         assert tiers == ["press_under"]
     lt = cfg.get("long_term") or {}
-    assert lt.get("verdict") == "LONG_TERM_ROBUST"
+    cert = lt.get("certification") or {}
+    verdict = cert.get("verdict") or lt.get("verdict")
+    assert verdict == "LONG_TERM_ROBUST"
     assert (lt.get("overall") or {}).get("wr", 0) >= 0.9
 
 

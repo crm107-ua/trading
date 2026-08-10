@@ -230,6 +230,34 @@ def prepare_candidates(cfg: dict[str, Any]) -> dict[str, Any]:
                 }
             )
             continue
+        # Definitive gate: reject if live-normalized basket blows past post/max cap.
+        post_b = cfg.get("post_max_basket_cost")
+        hard_b = float(cfg.get("max_basket_cost") or 0.50)
+        live_bc = float(live_plan.basket_cost)
+        lim = float(post_b) if post_b is not None else hard_b + 0.02
+        if live_bc > lim + 1e-12:
+            skipped.append(
+                {
+                    "slug": event.slug,
+                    "city": event.city,
+                    "day": event.day.isoformat(),
+                    "skip": f"live_basket>{lim}",
+                    "basket_cost": live_bc,
+                    "tier": meta.get("tier"),
+                }
+            )
+            continue
+        if not live_plan.underdispersed and bool(cfg.get("require_underdispersion", True)):
+            skipped.append(
+                {
+                    "slug": event.slug,
+                    "city": event.city,
+                    "day": event.day.isoformat(),
+                    "skip": "not_underdispersed_live",
+                    "tier": meta.get("tier"),
+                }
+            )
+            continue
         by_city[city_l] = by_city.get(city_l, 0) + 1
         accepted.append(
             {

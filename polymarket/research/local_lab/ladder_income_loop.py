@@ -28,7 +28,7 @@ from polymarket.research.local_lab.weather_ladder_real import evaluate_real_stac
 from polymarket.src.ai.env_loader import load_repo_dotenv
 
 POLY = Path(__file__).resolve().parents[2]
-DEFAULT_CFG = POLY / "config" / "weather_ladder_micro_real.json"  # press-only WR80 / final-longterm DNA
+DEFAULT_CFG = POLY / "config" / "weather_ladder_definitive_real.json"  # definitive press-only DNA
 OUT = POLY / "data_local" / "local_lab" / "ladder_income"
 
 
@@ -110,13 +110,13 @@ def run_loop(
             )
         ),
         "income_recipe": {
-            "strategy": "temperature_ladder_champion_v3",
+            "strategy": "temperature_ladder_definitive",
             "session_cap_usdc": 5.0,
             "deposit_target_usdc": 25.0,
             "run_from": "Polymarket-allowed region (not US geoblock)",
             "command": (
-                "POLY_LADDER_REAL_CONFIRM=1 python3 -m polymarket.research.local_lab.ladder_income_loop "
-                "--auto-execute --i-accept-real-loss YES --rounds 40 --interval 180"
+                "POLY_LADDER_REAL_CONFIRM=1 python3 -m polymarket.research.local_lab.definitive_income_system "
+                "--income-loop --auto-execute --i-accept-real-loss YES --rounds 40 --interval 180"
             ),
         },
     }

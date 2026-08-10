@@ -1,6 +1,7 @@
 # Estrategia final a largo plazo
 
 **Config canónica:** `polymarket/config/weather_ladder_final_longterm.json`  
+**Sistema de producción:** [`DEFINITIVE_INCOME_SYSTEM.md`](DEFINITIVE_INCOME_SYSTEM.md)  
 **Veredicto:** `LONG_TERM_ROBUST` + `INCOME_GENERATION_ASSURED` + `INCOME_WR80_POINT_ASSURED`
 
 ## Qué la hace durable (no solo “ahora”)
@@ -39,6 +40,9 @@ Paper CLOB: **8/8 +$421**.
 ## Operación
 
 ```bash
+# Estado sistema definitivo
+python3 -m polymarket.research.local_lab.definitive_income_system
+
 # Certificar largo plazo
 python3 -m polymarket.research.local_lab.long_term_robustness
 
@@ -51,8 +55,8 @@ python3 -m polymarket.research.local_lab.weather_ladder_paper \
 
 # Ingresos live (región permitida + depósito)
 POLY_LADDER_REAL_CONFIRM=1 \
-  python3 -m polymarket.research.local_lab.ladder_income_loop \
-    --auto-execute --i-accept-real-loss YES --rounds 40 --interval 180
+  python3 -m polymarket.research.local_lab.definitive_income_system \
+    --income-loop --auto-execute --i-accept-real-loss YES --rounds 40 --interval 180
 ```
 
 ## Límite honesto

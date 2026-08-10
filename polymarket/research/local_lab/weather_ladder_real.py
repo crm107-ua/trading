@@ -46,10 +46,11 @@ from polymarket.src.execution.live_policy import (
 )
 
 POLY = Path(__file__).resolve().parents[2]
-DEFAULT_CFG = POLY / "config" / "weather_ladder_micro_real.json"
-# micro_real inherits income/final press-only DNA; final long-term is the research canonical.
+DEFAULT_CFG = POLY / "config" / "weather_ladder_definitive_real.json"
+# Definitive real sleeve = final long-term DNA; micro_real kept as alias path.
 OUT = POLY / "data_local" / "local_lab" / "weather_ladder_real"
 MAX_SESSION_CAP = 5.0
+STRATEGY_ID = "temperature_ladder_definitive"
 
 
 def _restore_safe() -> None:
@@ -141,7 +142,7 @@ def evaluate_real_stack(cfg: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "ts_utc": datetime.now(timezone.utc).isoformat(),
-        "strategy": "temperature_ladder_champion_v3",
+        "strategy": STRATEGY_ID,
         "config_demo": cfg.get("demo_label"),
         "wallet": {
             "eoa": gates0.eoa,
@@ -194,22 +195,28 @@ def evaluate_real_stack(cfg: dict[str, Any]) -> dict[str, Any]:
         + ([] if confirm_env else ["missing_POLY_LADDER_REAL_CONFIRM=1"])
         + ([] if accepted else ["no_champion_take_right_now"]),
         "how_it_works": [
-            "1. Mantienes USDC/pUSD en la wallet Polymarket (funder).",
-            "2. Watch/book_sim espera un basket champion (≤0.50, pierna ≤0.39).",
+            "1. Mantienes USDC/pUSD en la wallet Polymarket (funder) — ideal ≥$25.",
+            "2. Sistema definitivo espera basket press-only (≤0.50, pierna ≤0.39, underdispersion).",
             "3. Al aparecer: compra FAK las 3 piernas YES (min 5 shares c/u).",
             "4. Hold hasta resolución: la pierna ganadora paga $1/share.",
             "5. Cap sesión $5; tras correr vuelve SAFE (ARMED=0).",
-            "6. No grind/copy idle en real hasta que el ladder live sea estable.",
+            "6. Entrypoint: python3 -m polymarket.research.local_lab.definitive_income_system",
         ],
         "commands": {
+            "system_status": "python3 -m polymarket.research.local_lab.definitive_income_system",
             "preflight": "python3 -m polymarket.research.local_lab.weather_ladder_real",
             "watch_until_edge": (
                 "python3 -m polymarket.research.local_lab.weather_ladder_live "
-                "--mode watch --watch-rounds 40 --watch-interval 180"
+                "--mode watch --watch-rounds 40 --watch-interval 180 "
+                "--config polymarket/config/weather_ladder_definitive_real.json"
             ),
             "execute_real": (
                 "POLY_LADDER_REAL_CONFIRM=1 python3 -m polymarket.research.local_lab.weather_ladder_real "
                 "--execute-real --i-accept-real-loss YES"
+            ),
+            "income_loop": (
+                "POLY_LADDER_REAL_CONFIRM=1 python3 -m polymarket.research.local_lab.definitive_income_system "
+                "--income-loop --auto-execute --i-accept-real-loss YES --rounds 40 --interval 180"
             ),
         },
     }
@@ -275,6 +282,29 @@ def execute_real(
                 "balance": bal,
                 "notional": c["notional_usdc"],
             }
+        # DNA revalidation at post time (slip can inflate basket).
+        max_b = float(cfg.get("max_basket_cost") or 0.50)
+        post_b = cfg.get("post_max_basket_cost")
+        lim = float(post_b) if post_b is not None else max_b + 0.02
+        if float(c.get("basket_cost") or 99) > lim + 1e-12:
+            return {
+                "executed": False,
+                "reason": "basket_above_dna_at_post",
+                "basket_cost": c.get("basket_cost"),
+                "limit": lim,
+            }
+        if bool(cfg.get("require_underdispersion", True)) and not c.get("underdispersed", True):
+            return {"executed": False, "reason": "not_underdispersed_at_post"}
+        max_leg = float(cfg.get("max_leg_price") or 0.39)
+        for leg in c["legs"]:
+            if float(leg.get("price") or 99) > max_leg + 1e-12:
+                return {
+                    "executed": False,
+                    "reason": "leg_above_dna_at_post",
+                    "leg": leg.get("name"),
+                    "price": leg.get("price"),
+                    "max_leg": max_leg,
+                }
 
         basket_posts: list[dict[str, Any]] = []
         ok = True
