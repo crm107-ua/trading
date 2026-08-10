@@ -143,7 +143,11 @@ def backfill(
     max_new: int,
     max_age_days: int,
     cities: list[str],
+    start_age_days: int = 0,
+    build_timeout_s: float = 55.0,
 ) -> tuple[list[dict[str, Any]], int]:
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+
     cases: list[dict[str, Any]] = []
     if CASES.exists():
         cases = json.loads(CASES.read_text(encoding="utf-8"))
@@ -152,13 +156,14 @@ def backfill(
     today = datetime.now(timezone.utc).date()
     added = 0
     print(
-        f"backfill start cases={len(cases)} max_new={max_new} age={max_age_days} cities={cities}",
+        f"backfill start cases={len(cases)} max_new={max_new} age={max_age_days} "
+        f"start_age={start_age_days} cities={cities}",
         flush=True,
     )
-    with httpx.Client(timeout=httpx.Timeout(45.0, connect=15.0)) as clob, httpx.Client(
-        timeout=15.0
+    with httpx.Client(timeout=httpx.Timeout(20.0, connect=8.0)) as clob, httpx.Client(
+        timeout=12.0
     ) as gamma:
-        for delta in range(0, int(max_age_days) + 1):
+        for delta in range(int(start_age_days), int(max_age_days) + 1):
             if added >= max_new:
                 break
             d = today - timedelta(days=delta)
@@ -173,8 +178,19 @@ def backfill(
                     continue
                 if not _gamma_exists(gamma, slug):
                     continue
-                case = _build_case(slug, city, d, clob)
+                print(f"trying {slug} …", flush=True)
+                with ThreadPoolExecutor(max_workers=1) as pool:
+                    fut = pool.submit(_build_case, slug, city, d, clob)
+                    try:
+                        case = fut.result(timeout=float(build_timeout_s))
+                    except FuturesTimeout:
+                        print(f"timeout build {slug} (> {build_timeout_s}s)", flush=True)
+                        continue
+                    except Exception as exc:
+                        print(f"error build {slug}: {type(exc).__name__}: {exc}", flush=True)
+                        continue
                 if case is None:
+                    print(f"skip build {slug}", flush=True)
                     continue
                 cases.append(case)
                 have.add(slug)
@@ -182,24 +198,37 @@ def backfill(
                 added += 1
                 CASES.parent.mkdir(parents=True, exist_ok=True)
                 CASES.write_text(json.dumps(cases, indent=2), encoding="utf-8")
+                # live DNA probe for this case
+                from polymarket.research.local_lab.assure_wr80_income import BJ_PRESS, CORE_PRESS
+                from polymarket.research.local_lab.optimize_weather_ladder import _eval_case
+
+                filt = BJ_PRESS if city == "beijing" else CORE_PRESS
+                ev = _eval_case(case, filt)
+                dna = bool(ev and ev.get("taken"))
                 print(
-                    f"+{added} case#{len(cases)} {slug} winner={case['winner']}",
+                    f"+{added} case#{len(cases)} {slug} winner={case['winner']} dna_take={dna}",
                     flush=True,
                 )
-                time.sleep(0.15)
+                time.sleep(0.1)
     return cases, added
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--max-new", type=int, default=40, help="Max NEW cases this run")
-    ap.add_argument("--max-events", type=int, default=0, help="Deprecated alias; ignored if --max-new set")
+    ap.add_argument("--max-events", type=int, default=0, help="Deprecated compat")
     ap.add_argument("--max-age-days", type=int, default=110)
+    ap.add_argument(
+        "--start-age-days",
+        type=int,
+        default=0,
+        help="Skip recent N days (e.g. 32 jumps before 2026-07-10 from mid-Aug)",
+    )
+    ap.add_argument("--build-timeout", type=float, default=55.0)
     ap.add_argument("--skip-fetch", action="store_true")
     args = ap.parse_args()
     max_new = int(args.max_new)
     if args.max_events and args.max_events > 0 and max_new == 40:
-        # compat with older pm2 command using --max-events 220 meaning target universe size
         before_n = len(json.loads(CASES.read_text())) if CASES.exists() else 0
         max_new = max(10, min(60, int(args.max_events) - before_n))
 
@@ -213,7 +242,25 @@ def main() -> int:
         added = 0
         print(f"skip_fetch cases={len(cases)}", flush=True)
     else:
-        cases, added = backfill(max_new=max_new, max_age_days=int(args.max_age_days), cities=DNA_CITIES)
+        # Auto-jump past dense covered window if start not set
+        start_age = int(args.start_age_days)
+        if start_age == 0 and CASES.exists():
+            days = [c["day"] for c in json.loads(CASES.read_text(encoding="utf-8")) if c.get("city") in DNA_CITIES]
+            if days:
+                from datetime import date as date_cls
+
+                oldest = date_cls.fromisoformat(min(days))
+                today = datetime.now(timezone.utc).date()
+                # start one day older than oldest covered DNA day
+                start_age = max(0, (today - oldest).days + 1)
+                print(f"auto start_age_days={start_age} (oldest DNA day {oldest})", flush=True)
+        cases, added = backfill(
+            max_new=max_new,
+            max_age_days=int(args.max_age_days),
+            cities=DNA_CITIES,
+            start_age_days=start_age,
+            build_timeout_s=float(args.build_timeout),
+        )
 
     after_takes = take_income_wr80(cases)
     after = _score_takes(after_takes)
