@@ -2,19 +2,21 @@
 """
 Hyper-realistic LIVE market verification for Temperature Ladder (SAFE, no posts).
 
-Hits real Polymarket Gamma + CLOB right now:
-  1) Discover open weather markets (SG/SH/HK/BJ, horizons)
-  2) Pull full order books per ladder-leg token
-  3) Walk-the-book fill simulation at $12/$25/$50 budgets (FAK-like)
-  4) DNA revalidation at live asks (basket/leg/UD)
-  5) Spread, depth, latency, partial-fill / abort-partial risk
-  6) evaluate_real_stack (wallet + geo + accepted/near-miss)
-  7) What-if after $100 deposit: could we fill a DNA take NOW?
+Hits real Polymarket Gamma + CLOB right now across MANY cases:
+  1) Wide discover open weather markets (DNA + extra cities, horizons 0–14)
+  2) Calendar slug probes beyond search discovery
+  3) Pull full order books + walk-the-book at $12/$25/$50 (FAK-like)
+  4) DNA revalidation at live asks (basket/leg/UD) + near-miss taxonomy
+  5) Historical cases.json breadth (streaks, city/horizon, Wilson)
+  6) Counterfactual basket thresholds (diagnostic only; live DNA stays ≤0.50)
+  7) Slip stress + deposit what-ifs (miss runway)
+  8) evaluate_real_stack (wallet + geo + accepted/near-miss)
 
 Never sets ALLOW_REARM. Never posts orders.
 
   python3 -m polymarket.research.local_lab.hyperreal_market_verify
   python3 -m polymarket.research.local_lab.hyperreal_market_verify --write-docs
+  python3 -m polymarket.research.local_lab.hyperreal_market_verify --narrow
   python3 -m polymarket.research.local_lab.hyperreal_market_verify --budgets 12,25,50
 """
 
@@ -759,11 +761,72 @@ def run(*, budgets: list[float] | None = None, write_docs: bool = False, wide: b
         _add(skipped)
         _add(extra_rows)
 
+        # Contemplar también open rows SIN legs (unknown_station / no_sleeve / not_volatile):
+        # fetch event → top-3 asks diagnósticos → book-walk de liquidez.
+        print("enrich skipped-without-legs for book-walk…", flush=True)
+        bare = [
+            s
+            for s in (pack.get("skipped") or [])
+            if s.get("slug") and not s.get("legs") and s.get("slug") not in seen_t
+        ]
+        # Prefer DNA cities, then others; cap to keep CLOB polite
+        bare.sort(
+            key=lambda s: (
+                0 if str(s.get("city") or "").lower() in DNA_CITIES else 1,
+                str(s.get("skip") or ""),
+                str(s.get("slug") or ""),
+            )
+        )
+        enriched = 0
+        enrich_cap = 40 if wide else 8
+        for s0 in bare:
+            if enriched >= enrich_cap:
+                break
+            slug = s0.get("slug")
+            if not slug or slug in seen_t:
+                continue
+            try:
+                ev = fetch_temp_event(str(slug), use_clob=True)
+            except Exception:
+                continue
+            if ev is None or ev.closed:
+                continue
+            cheap = sorted([b for b in ev.buckets if b.ask is not None], key=lambda b: float(b.ask))[:3]
+            if len(cheap) < 2:
+                continue
+            bc = sum(float(b.ask) for b in cheap)
+            legs = [
+                {
+                    "name": b.name,
+                    "price": b.ask,
+                    "token_id": b.token_yes,
+                    "dollars": 4.0,
+                    "shares": 4.0 / float(b.ask) if b.ask else 0,
+                }
+                for b in cheap
+            ]
+            row = {
+                "slug": slug,
+                "city": s0.get("city") or getattr(ev, "city", None),
+                "day": s0.get("day")
+                or (ev.day.isoformat() if hasattr(ev.day, "isoformat") else str(ev.day)),
+                "skip": s0.get("skip") or "enriched_no_legs",
+                "basket_cost": round(bc, 4),
+                "legs": legs,
+                "underdispersed": s0.get("underdispersed"),
+                "dna_take": False,
+                "source": "enriched_skipped",
+            }
+            seen_t.add(slug)
+            targets.append(row)
+            enriched += 1
+
         print(
             f"book-walk {len(targets)} candidates "
             f"(accepted={len(pack.get('accepted') or [])} "
             f"near={len(pack.get('near_miss') or [])} "
-            f"skipped_legs={len(skipped)} calendar_extra={len(extra_rows)})…",
+            f"skipped_legs={len(skipped)} calendar_extra={len(extra_rows)} "
+            f"enriched_bare={enriched})…",
             flush=True,
         )
         book_reports = []
@@ -931,6 +994,7 @@ def run(*, budgets: list[float] | None = None, write_docs: bool = False, wide: b
             "targets_book_walked": len(targets),
             "calendar_slugs_found": len(cal_slugs),
             "calendar_extras_added": len(extra_rows),
+            "enriched_bare_skipped": enriched,
             "book_reports": len(book_reports),
             "dna_universe_books": len(dna_books),
             "extra_city_books": len(extra_books),
