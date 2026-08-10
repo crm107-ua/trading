@@ -35,4 +35,14 @@ Salida:
 
 El replay base hereda WR research (muestra pequeña, optimista). Usa `loss_stress` para el caso realista de miss.
 
-**Política:** el bot real **no** fuerza near-miss; solo DNA press ≤0.50 + underdispersion.
+## Informe de viabilidad
+
+Para el informe ejecutivo completo (MC, adequacy, scorecard GO/CONDITIONAL/NO-GO):
+
+```bash
+python3 -m polymarket.research.local_lab.ladder_viability_report \
+  --balance 3.4482 --mc-reps 2500 --live-book --write-docs
+```
+
+Ver también [`VIABILIDAD_LADDER.md`](VIABILIDAD_LADDER.md).
+
