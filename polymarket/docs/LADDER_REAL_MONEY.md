@@ -65,3 +65,15 @@ Real micro (listo, gated)
 - Edge abierto champion: a menudo **0** (libros caros) → watch
 - Near-miss posible (ej. Shanghai basket 0.66 / EV+) → **no** se toma en real
 - Primer tamaño real: **$3–5** por basket, no el bankroll entero
+- **Geoblock US** en Cloud Agent → ingresos reales solo desde región permitida
+
+## Bucle de ingresos (comando único)
+
+```bash
+# En máquina/VPS con IP permitida + wallet fondeada (~25 USDC)
+POLY_LADDER_REAL_CONFIRM=1 \
+  python3 -m polymarket.research.local_lab.ladder_income_loop \
+    --auto-execute --i-accept-real-loss YES --rounds 40 --interval 180
+```
+
+Eso vigila libros → si aparece basket champion y pasan gates → compra real → hold a resolución.
