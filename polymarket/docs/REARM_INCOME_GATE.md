@@ -1,6 +1,6 @@
 # Rearm Income Gate
 
-**UTC:** `2026-08-10T11:00:32.430410+00:00`
+**UTC:** `2026-08-10T12:33:02.800217+00:00`
 **Status:** `NOT_READY`
 
 Mantener WATCH_ONLY. Acumular takes DNA. No activar auto-execute. No depositar solo por MC.

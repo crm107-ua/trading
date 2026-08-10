@@ -218,8 +218,9 @@ def capital_what_if(balance: float) -> dict[str, Any]:
         rows[f"{bal:g}"] = {
             "balance": bal,
             "still_armed_after_1_miss": adeq.get("still_armed_after_1_miss"),
-            "notional": adeq.get("notional"),
+            "notional": adeq.get("notional_first") or adeq.get("notional"),
             "equity_after_1_miss": adeq.get("equity_after_1_miss"),
+            "executable": adeq.get("executable"),
         }
     return {"passed": True, "profiles": rows, "note_es": "What-if sim; no es orden de depósito."}
 

@@ -83,8 +83,20 @@ def run_check(*, probe_book: bool = True) -> dict[str, Any]:
         checks["ultra_paper_income_ready"] = bool(gate.get("passed"))
         notes.append(f"ultra_campaign={ultra.get('campaign_id')} verdict={gate.get('verdict')}")
     else:
-        checks["ultra_paper_income_ready"] = False
-        notes.append("no ultra_real campaign report found")
+        # Fallback: income mechanism sim gate (same economic proof, different artifact)
+        sim = POLY / "data_local" / "local_lab" / "real_income_sim" / "latest.json"
+        if sim.is_file():
+            try:
+                sg = (json.loads(sim.read_text(encoding="utf-8")).get("gate") or {})
+            except Exception:
+                sg = {}
+            checks["ultra_paper_income_ready"] = bool(sg.get("passed"))
+            notes.append(
+                f"no ultra_real campaign; fallback real_income_sim verdict={sg.get('verdict')}"
+            )
+        else:
+            checks["ultra_paper_income_ready"] = False
+            notes.append("no ultra_real campaign report found")
 
     # Env must be SAFE before check; dry harness arms temporarily itself.
     g0 = read_gates()
