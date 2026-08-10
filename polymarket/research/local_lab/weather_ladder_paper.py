@@ -249,6 +249,20 @@ def plan_event(
             press_on_underdispersion=require_ud,
             max_leg_price=float(tier_cfg.get("max_leg_price", 0.42)),
         )
+        # Optional long-term post filter (stricter than planner max)
+        post_b = tier_cfg.get("post_max_basket_cost", cfg.get("post_max_basket_cost"))
+        take_ok = bool(plan.take)
+        if take_ok and post_b is not None and float(plan.basket_cost) > float(post_b) + 1e-12:
+            take_ok = False
+            plan = LadderPlan(
+                legs=plan.legs,
+                basket_cost=plan.basket_cost,
+                basket_ev=plan.basket_ev,
+                center_temp=plan.center_temp,
+                underdispersed=plan.underdispersed,
+                take=False,
+                reason=plan.reason + f"+post_basket>{post_b}",
+            )
         last_extra = {
             "tier": tier.get("name", "default"),
             "bias_override_c": float(bias_override) if bias_override is not None else None,
@@ -259,11 +273,11 @@ def plan_event(
             "underdispersed": plan.underdispersed,
             "basket_cost": plan.basket_cost,
             "basket_ev": plan.basket_ev,
-            "take": plan.take,
+            "take": take_ok,
             "reason": plan.reason,
             "legs": [asdict(x) for x in plan.legs],
         }
-        if plan.take:
+        if take_ok:
             best_plan = plan
             break
 

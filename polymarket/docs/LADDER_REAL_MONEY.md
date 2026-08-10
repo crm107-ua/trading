@@ -19,7 +19,7 @@ Real micro (listo, gated)
 | Champion | `config/weather_ladder_champion_v2.json` | paper |
 | Ultra-real sim | `config/weather_ladder_ultra_real_sim.json` | paper+friction |
 | Micro dry | `config/weather_ladder_micro_dry.json` | $0 (would_post) |
-| **Micro real** | `config/weather_ladder_micro_real.json` | **≤ $5 / sesión** |
+| **Micro real** | `config/weather_ladder_micro_real.json` (DNA = `weather_ladder_final_longterm`) | **≤ $5 / sesión** |
 
 ## Flujo operativo con capital real
 

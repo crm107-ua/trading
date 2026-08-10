@@ -1,6 +1,8 @@
 # Aseguramiento WR ≥ 80% para ingresos
 
-**Perfil:** `weather_ladder_income_wr80.json`  
+> **Producción / largo plazo:** usar [`FINAL_LONGTERM_STRATEGY.md`](FINAL_LONGTERM_STRATEGY.md) y `weather_ladder_final_longterm.json` (mismo DNA, certificado `LONG_TERM_ROBUST`).
+
+**Perfil (alias histórico):** `weather_ladder_income_wr80.json`  
 **Veredicto:** `INCOME_WR80_POINT_ASSURED` (2026-08-10)
 
 ## Hallazgo clave al iterar

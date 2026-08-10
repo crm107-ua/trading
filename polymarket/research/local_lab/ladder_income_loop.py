@@ -28,7 +28,7 @@ from polymarket.research.local_lab.weather_ladder_real import evaluate_real_stac
 from polymarket.src.ai.env_loader import load_repo_dotenv
 
 POLY = Path(__file__).resolve().parents[2]
-DEFAULT_CFG = POLY / "config" / "weather_ladder_micro_real.json"
+DEFAULT_CFG = POLY / "config" / "weather_ladder_micro_real.json"  # press-only WR80 / final-longterm DNA
 OUT = POLY / "data_local" / "local_lab" / "ladder_income"
 
 

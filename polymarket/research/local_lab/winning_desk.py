@@ -31,7 +31,7 @@ from polymarket.src.ai.env_loader import load_repo_dotenv
 
 POLY = Path(__file__).resolve().parents[2]
 OUT = POLY / "data_local" / "local_lab" / "winning_desk"
-LADDER_CFG = POLY / "config" / "weather_ladder_champion_v2.json"
+LADDER_CFG = POLY / "config" / "weather_ladder_final_longterm.json"
 MAKER_CFG = POLY / "config" / "maker_demo_grind_nim_best.json"
 SPREAD_CFG = POLY / "config" / "maker_demo_copy_micro_spread.json"
 IDLE_SLEEVES = {

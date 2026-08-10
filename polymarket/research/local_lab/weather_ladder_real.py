@@ -47,6 +47,7 @@ from polymarket.src.execution.live_policy import (
 
 POLY = Path(__file__).resolve().parents[2]
 DEFAULT_CFG = POLY / "config" / "weather_ladder_micro_real.json"
+# micro_real inherits income/final press-only DNA; final long-term is the research canonical.
 OUT = POLY / "data_local" / "local_lab" / "weather_ladder_real"
 MAX_SESSION_CAP = 5.0
 
