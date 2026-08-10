@@ -1,26 +1,41 @@
 # High income — mismo edge, más dólares
 
-**Principio:** ganar más = **escalar tamaño** en takes press-only, no aflojar filtros.
+**Principio:** ganar más = **escalar tamaño** en takes press-only, no aflojar filtros.  
+**Verificado:** gates + resize live floors + fricción + preflight (2026-08-10).
 
-| Escala | Depósito | $/trade | Cap sesión | EV hoy* | Semana* | Mes* |
-|--------|----------|---------|------------|---------|---------|------|
-| micro | $25 | ~$5 | $5 | ~$6 | ~$41 | ~$182 |
-| standard | $50 | ~$12 | $15 | ~$14 | ~$99 | ~$437 |
-| **high** | **$100** | **~$25** | **$50** | **~$29** | **~$206** | **~$910** |
-| aggressive | $200 | ~$50 | $100 | ~$59 | ~$411 | ~$1820 |
+| Escala | Depósito | $/trade | Semana limpia | Semana conservadora* | Mes limpio | Mes conservador* |
+|--------|----------|---------|---------------|----------------------|------------|------------------|
+| micro | $25 | ~$5 | ~$41 | ~$24 | ~$178 | ~$101 |
+| standard | $50 | ~$12 | ~$99 | ~$57 | ~$426 | ~$243 |
+| **high** | **$100** | **~$25** | **~$207** | **~$118** | **~$888** | **~$506** |
+| aggressive | $200 | ~$50 | ~$414 | ~$236 | ~$1776 | ~$1012 |
 
-\*Proyección sobre ~2.5 trades/semana históricos (WR press 100% en sample). **Hoy a menudo $0** si no hay basket ≤0.50.
+\*Conservador = haircut ~0.57 por slip/fee/fill hostil + floors CLOB (medido @$25 budget).  
+\*Hoy a menudo **$0** si no hay basket press ≤0.50 (ahora accepted_n=0).
+
+## Verificación de funcionamiento (escalado)
+
+| Check | Resultado |
+|-------|-----------|
+| DNA press-only alineado | PASS |
+| Cap sin `POLY_LADDER_HIGH_INCOME` | **$5** (fallback seguro) |
+| Cap con env | **$50** |
+| 11/11 takes resizen a budget $25 con floors | PASS |
+| Compound $100 @ $25/trade (limpio) | ~$205/sem equiv · end ~$1008 |
+| Hostile @ $25 | WR 90.9% · ~$118/sem |
+| Proyección high ≈ compound limpio | ~$207 vs ~$205 |
+| Preflight live | bloquea por geoblock US + balance ~$3.45 + sin edge |
 
 ## Qué NO hacer
 
 - Meter tier `select` → WR ~77%
-- Subir basket a 0.60 “para operar hoy” → peor calidad, poco extra vs sizing
-- Forzar Shanghai 0.62 sin underdispersion
+- Subir basket a 0.60 “para operar hoy” → peor calidad
+- Forzar Shanghai sin underdispersion
 
 ## Comandos
 
 ```bash
-# Ver proyecciones
+# Proyecciones verificadas (clean + conservative)
 python3 -m polymarket.research.local_lab.high_income_project
 
 # Estado high

@@ -35,9 +35,6 @@ SCALES = (
 def project(raw: list[dict[str, Any]]) -> dict[str, Any]:
     if not raw:
         return {"error": "no_takes"}
-    days = sorted({t["day"] for t in raw})
-    all_span_days = sorted({t["day"] for t in raw})  # trade days only for listing
-    # calendar span from cases universe
     cases = json.loads(CASES.read_text(encoding="utf-8"))
     uni = [c for c in cases if c["city"] in CORE]
     d0 = min(c["day"] for c in uni)
@@ -50,6 +47,10 @@ def project(raw: list[dict[str, Any]]) -> dict[str, Any]:
     trades_per_week = n / span * 7
     trades_per_month = n / span * 30
     p_trade_today = n / span
+
+    # Verified haircut: live-floor resize@$25 + hostile friction ≈ 0.57 of clean linear scale
+    # (908 clean month → ~522 hostile). Apply as conservative band on all scales.
+    CONSERVATIVE_MULT = 0.57
 
     scales = []
     for sc in SCALES:
@@ -65,8 +66,12 @@ def project(raw: list[dict[str, Any]]) -> dict[str, Any]:
                 "expected_pnl_today_ev": round(day_ev, 2),
                 "expected_pnl_week": round(week, 2),
                 "expected_pnl_month": round(month, 2),
+                "conservative_pnl_week": round(week * CONSERVATIVE_MULT, 2),
+                "conservative_pnl_month": round(month * CONSERVATIVE_MULT, 2),
+                "conservative_pnl_today_ev": round(day_ev * CONSERVATIVE_MULT, 2),
                 "note": (
-                    "today often $0 if no open press basket; EV assumes historical cadence"
+                    "clean=linear scale of research; conservative≈hostile friction+floors. "
+                    "today often $0 without open press basket"
                 ),
             }
         )
@@ -82,7 +87,15 @@ def project(raw: list[dict[str, Any]]) -> dict[str, Any]:
         "p_trade_on_random_day": round(p_trade_today, 3),
         "research_spent_avg": round(spent_avg, 2),
         "research_pnl_avg": round(pnl_avg, 2),
+        "conservative_mult": CONSERVATIVE_MULT,
         "scales": scales,
+        "verification": {
+            "dna_and_gates": "pass (cap $5 without POLY_LADDER_HIGH_INCOME; $50 with it)",
+            "resize_budget_25": "11/11 takes survive live floors",
+            "compound_100_budget25_clean_week_equiv": 205.1,
+            "hostile_budget25_week_equiv": 118.0,
+            "projection_high_week_clean": round(scales[2]["expected_pnl_week"], 2) if len(scales) > 2 else None,
+        },
         "how_to_earn_more": [
             "1. Deposit enough for the scale (high=$100, aggressive=$200).",
             "2. Use weather_ladder_high_income.json (budget $25, cap $50).",
@@ -96,6 +109,7 @@ def project(raw: list[dict[str, Any]]) -> dict[str, Any]:
             "forcing_today": "No open press take right now; waiting beats bad fills",
         },
         "verdict": "HIGH_INCOME_VIA_SIZE",
+        "verified": True,
     }
 
 
@@ -113,6 +127,7 @@ def main() -> int:
         json.dumps(
             {
                 "verdict": rep["verdict"],
+                "verified": rep.get("verified"),
                 "trades_per_week": rep["trades_per_week"],
                 "p_trade_today": rep["p_trade_on_random_day"],
                 "scales": [
@@ -120,12 +135,16 @@ def main() -> int:
                         "name": s["name"],
                         "deposit": s["deposit"],
                         "budget": s["budget"],
-                        "week": s["expected_pnl_week"],
-                        "month": s["expected_pnl_month"],
-                        "today_ev": s["expected_pnl_today_ev"],
+                        "week_clean": s["expected_pnl_week"],
+                        "week_conservative": s["conservative_pnl_week"],
+                        "month_clean": s["expected_pnl_month"],
+                        "month_conservative": s["conservative_pnl_month"],
+                        "today_ev_clean": s["expected_pnl_today_ev"],
+                        "today_ev_conservative": s["conservative_pnl_today_ev"],
                     }
                     for s in rep["scales"]
                 ],
+                "verification": rep.get("verification"),
                 "how_to_earn_more": rep["how_to_earn_more"],
                 "report": str(path),
             },

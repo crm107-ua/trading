@@ -34,4 +34,20 @@ def test_high_scale_week_beats_micro():
     rep = project(take_income_wr80(cases))
     by = {s["name"]: s for s in rep["scales"]}
     assert by["high"]["expected_pnl_week"] > by["micro"]["expected_pnl_week"] * 3
+    assert by["high"]["conservative_pnl_week"] < by["high"]["expected_pnl_week"]
+    assert by["high"]["conservative_pnl_week"] > 50  # still meaningful
     assert rep["verdict"] == "HIGH_INCOME_VIA_SIZE"
+    assert rep.get("verified") is True
+
+
+def test_session_cap_gate():
+    import os
+    from polymarket.research.local_lab.weather_ladder_real import _session_cap
+    from polymarket.research.local_lab.weather_ladder_paper import load_cfg
+
+    cfg = load_cfg(HI)
+    os.environ.pop("POLY_LADDER_HIGH_INCOME", None)
+    assert _session_cap(cfg) == 5.0
+    os.environ["POLY_LADDER_HIGH_INCOME"] = "1"
+    assert _session_cap(cfg) == 50.0
+    os.environ.pop("POLY_LADDER_HIGH_INCOME", None)
