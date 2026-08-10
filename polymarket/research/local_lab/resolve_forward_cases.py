@@ -19,7 +19,7 @@ import argparse
 import json
 import math
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -124,8 +124,6 @@ def main() -> int:
     updated = 0
     resolved_checked = 0
     shadows: list[dict[str, Any]] = []
-
-    from datetime import date, timedelta
 
     cutoff = (datetime.now(timezone.utc).date() - timedelta(days=3)).isoformat()
     unfinished = [c["slug"] for c in cases if c.get("slug") and not c.get("resolved_closed")]

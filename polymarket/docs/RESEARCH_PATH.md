@@ -8,6 +8,16 @@
 | Edge live | HK gap~4¢ UD stuck; BJ 2/3 espera basket |
 | Capital | ~$3.45 no aguanta 1 miss (sim $25 sí) |
 
+## Sim ganancias (paper, cases reales)
+Correr grid+OOS sin tocar DNA live:
+```bash
+python -m polymarket.research.local_lab.sim_strategy_improve --write-docs
+python -m polymarket.research.local_lab.simulate_real_income
+```
+Veredicto actual: LIVE DNA ya es rentable en sim ($100 base ~+$628; OOS ~+$139).
+Paper más agresivo puede subir PnL relajando basket/UD, pero **no** se promueve a live.
+Informe: [`SIM_GAINS_REPORT.md`](SIM_GAINS_REPORT.md).
+
 ## Camino
 1. Forward snapshots D+0..D+3 + recheck denso (30–45s cerca).
 2. `resolve_forward_cases` añade **y actualiza** cases al cerrar.
@@ -19,4 +29,5 @@
 python -m polymarket.research.local_lab.resolve_forward_cases
 python -m polymarket.research.local_lab.assurance_research --write-docs
 python -m polymarket.research.local_lab.rearm_income_gate --run-income-tests
+python -m polymarket.research.local_lab.sim_strategy_improve --write-docs
 ```
