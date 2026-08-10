@@ -21,7 +21,7 @@
 
 ## Mejoras permitidas ahora
 
-- Timing/recheck (+30s/+90s) si el basket ronda 0.50–0.55.
+- **Activo:** recheck +30s si `gap_basket ≤ 0.08` (p.ej. HK 0.579) — DNA intacta.
 - Interval adaptativo por hora UTC (más denso en horas calientes).
 - Priorizar ciudades con menos BLOCKED por libro.
 - Digest Telegram periódico + `IMPROVEMENT_CANDIDATES.json`.

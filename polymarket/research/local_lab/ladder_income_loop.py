@@ -31,6 +31,47 @@ POLY = Path(__file__).resolve().parents[2]
 DEFAULT_CFG = POLY / "config" / "weather_ladder_definitive_real.json"  # definitive press-only DNA
 OUT = POLY / "data_local" / "local_lab" / "ladder_income"
 
+# Ops improvement (NOT DNA relaxation): if a near-miss basket is within this
+# gap over 0.50, recheck books once after a short wait in the same round.
+NEAR_MISS_RECHECK_GAP = 0.08
+NEAR_MISS_RECHECK_SLEEP_S = 30.0
+
+
+def _min_basket_gap(stack: dict[str, Any]) -> float | None:
+    misses = (stack.get("market_now") or {}).get("near_miss") or []
+    gaps: list[float] = []
+    for nm in misses:
+        b = nm.get("basket_cost")
+        if isinstance(b, (int, float)):
+            gaps.append(max(0.0, float(b) - 0.50))
+    return min(gaps) if gaps else None
+
+
+def _row_from_stack(
+    *,
+    stack: dict[str, Any],
+    round_id: int,
+    mode: str,
+    recheck: bool = False,
+) -> dict[str, Any]:
+    row: dict[str, Any] = {
+        "round": round_id,
+        "ts_utc": datetime.now(timezone.utc).isoformat(),
+        "balance_pusd": (stack.get("wallet") or {}).get("balance_pusd"),
+        "geoblock_ok": (stack.get("checks") or {}).get("geoblock_ok"),
+        "accepted_n": (stack.get("market_now") or {}).get("accepted_n"),
+        "near_miss_n": len((stack.get("market_now") or {}).get("near_miss") or []),
+        "ready_to_arm": stack.get("ready_to_arm"),
+        "can_execute_now": stack.get("can_execute_now"),
+        "blockers": stack.get("blockers"),
+        "accepted_slugs": [c["slug"] for c in (stack.get("market_now") or {}).get("accepted") or []],
+        "mode": mode,
+    }
+    if recheck:
+        row["recheck"] = True
+        row["min_gap_basket"] = _min_basket_gap(stack)
+    return row
+
 
 def run_loop(
     *,
@@ -49,25 +90,15 @@ def run_loop(
     history: list[dict[str, Any]] = []
     hit: dict[str, Any] | None = None
     edges_seen = 0
+    mode = "watch_only" if watch_only else ("auto_execute" if auto_execute else "manual_stop")
 
     if watch_only and auto_execute:
         raise RuntimeError("Refusing watch_only + auto_execute together")
 
     for i in range(rounds):
+        t0 = time.monotonic()
         stack = evaluate_real_stack(cfg)
-        row = {
-            "round": i + 1,
-            "ts_utc": datetime.now(timezone.utc).isoformat(),
-            "balance_pusd": (stack.get("wallet") or {}).get("balance_pusd"),
-            "geoblock_ok": (stack.get("checks") or {}).get("geoblock_ok"),
-            "accepted_n": (stack.get("market_now") or {}).get("accepted_n"),
-            "near_miss_n": len((stack.get("market_now") or {}).get("near_miss") or []),
-            "ready_to_arm": stack.get("ready_to_arm"),
-            "can_execute_now": stack.get("can_execute_now"),
-            "blockers": stack.get("blockers"),
-            "accepted_slugs": [c["slug"] for c in (stack.get("market_now") or {}).get("accepted") or []],
-            "mode": "watch_only" if watch_only else ("auto_execute" if auto_execute else "manual_stop"),
-        }
+        row = _row_from_stack(stack=stack, round_id=i + 1, mode=mode)
         history.append(row)
         print(json.dumps(row, indent=2), flush=True)
 
@@ -80,6 +111,32 @@ def run_loop(
             print(f"telemetry_fail {type(exc).__name__}: {exc}", flush=True)
 
         accepted_n = int((stack.get("market_now") or {}).get("accepted_n") or 0)
+        gap = _min_basket_gap(stack)
+        # Close near-miss recheck (ops only; DNA unchanged)
+        if (
+            watch_only
+            and accepted_n == 0
+            and gap is not None
+            and gap <= NEAR_MISS_RECHECK_GAP + 1e-12
+        ):
+            print(
+                f"=== NEAR_MISS RECHECK gap_basket={gap:.4f}≤{NEAR_MISS_RECHECK_GAP} "
+                f"sleep {NEAR_MISS_RECHECK_SLEEP_S:.0f}s (DNA unchanged) ===",
+                flush=True,
+            )
+            time.sleep(NEAR_MISS_RECHECK_SLEEP_S)
+            stack = evaluate_real_stack(cfg)
+            row = _row_from_stack(stack=stack, round_id=i + 1, mode=mode, recheck=True)
+            history.append(row)
+            print(json.dumps(row, indent=2), flush=True)
+            try:
+                from polymarket.research.local_lab.research_telemetry import log_watch_round
+
+                log_watch_round(row, stack)
+            except Exception as exc:
+                print(f"telemetry_fail {type(exc).__name__}: {exc}", flush=True)
+            accepted_n = int((stack.get("market_now") or {}).get("accepted_n") or 0)
+
         if accepted_n >= 1:
             edges_seen += 1
             if auto_execute and stack.get("ready_to_arm"):
@@ -118,7 +175,9 @@ def run_loop(
                 print("Auto-execute deshabilitado de facto por geoblock.", flush=True)
 
         if i + 1 < rounds:
-            time.sleep(max(5.0, float(interval_s)))
+            elapsed = time.monotonic() - t0
+            remaining = max(5.0, float(interval_s) - elapsed)
+            time.sleep(remaining)
 
     if hit and (hit.get("result") or {}).get("executed"):
         verdict = "INCOME_POSTED"
