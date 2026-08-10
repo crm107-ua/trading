@@ -1,7 +1,8 @@
 # High income — mismo edge, más dólares
 
 **Principio:** ganar más = **escalar tamaño** en takes press-only, no aflojar filtros.  
-**Verificado:** gates + resize live floors + fricción + preflight (2026-08-10).
+**Verificado:** gates + resize live floors + fricción + preflight (2026-08-10).  
+**Entorno real:** [`REAL_ENV_READY.md`](REAL_ENV_READY.md) → `python3 -m polymarket.research.local_lab.real_env_ready --scale high`
 
 | Escala | Depósito | $/trade | Semana limpia | Semana conservadora* | Mes limpio | Mes conservador* |
 |--------|----------|---------|---------------|----------------------|------------|------------------|
