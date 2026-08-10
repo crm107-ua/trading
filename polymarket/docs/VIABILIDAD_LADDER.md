@@ -1,6 +1,6 @@
 # Informe de Viabilidad — Temperature Ladder (micro)
 
-**UTC:** `2026-08-10T10:32:28.614511+00:00`  
+**UTC:** `2026-08-10T10:40:00.879228+00:00`  
 **Wallet analizado:** `$3.4482` · cap efectivo `$3.2758` · session cap `$5.0`  
 **Perfil:** `weather_ladder_definitive_real_v1` · press-only DNA · floors CLOB · hold-to-resolution  
 **Modo:** simulación only (sin órdenes on-chain)
@@ -9,26 +9,40 @@
 
 ## 0) Decisión ejecutiva
 
-### `CONDITIONAL`
+### `RESEARCH_ONLY`
 
-Take DNA cabe, pero 1 miss deja cash < $2 (no re-armar). Viable solo tras depositar ≥$25 o aceptar ruin risk del primer miss.
+Evidencia insuficiente para aumentar capital real: n=11 (mín. 30 para hablar de depósito; mín. 50 para GO_MICRO), Wilson95_lower=0.7412 (hace falta ≥0.80). El Monte Carlo remuestrea los mismos takes — no es validación OOS independiente. Riesgo material de overfitting DNA a ruido de julio–agosto.
 
-Checks: **6/8**
+Checks: **6/12**
 
 | Check | OK |
 |-------|----|
-| `dna_certified_research` | ✅ |
+| `n_ge_30_for_deposit_talk` | ❌ |
+| `n_ge_50_for_go` | ❌ |
+| `wilson95_ge_80` | ❌ |
+| `mc_is_not_independent_validation` | ❌ |
+| `overfit_risk_acknowledged` | ✅ |
+| `engineering_gates_ready` | ✅ |
 | `geoblock_ok_assumed_vps_es` | ✅ |
 | `take_sizeable_at_wallet` | ✅ |
 | `survives_one_miss_armed` | ❌ |
 | `mc80_ruin_prob_lt_25pct` | ✅ |
 | `mc80_median_pnl_positive` | ✅ |
-| `deposit_25_recommended_clear` | ✅ |
 | `live_book_has_dna_take_now` | ❌ |
 
 ### Recomendación operativa
 
-Viabilidad CONDICIONAL: el sistema técnico está listo (VPS ES + DNA + Telegram), pero el bankroll actual no sobrevive 1 miss. Depositar ≥$25 antes del primer take; mientras, WAIT DNA-gated sin forzar near-miss.
+RESEARCH_ONLY: la ingeniería está lista, la evidencia no. n=11 y Wilson~0.74 no justifican depósito nuevo ni GO. Seguir en sim/vigilante DNA-gated; acumular ≥30 takes (ideal ≥50) antes de plantear más capital. No forzar near-miss. No martingale.
+
+**Caveat MC:** Las celdas MC (ruin%, median PnL a 4 decimales) NO validan el edge: bootstrapean la misma muestra DNA. Tratarlas como sensibilidad de bankroll, no como prueba de WR.
+
+### Umbrales de evidencia (duros)
+
+| Umbral | Requerido | Observado |
+|--------|----------:|----------:|
+| n para hablar de depósito | 30 | 11 |
+| n para GO_MICRO | 50 | 11 |
+| Wilson95 lower | 0.8 | 0.7412 |
 
 ---
 
@@ -38,7 +52,8 @@ Viabilidad CONDICIONAL: el sistema técnico está listo (VPS ES + DNA + Telegram
 - Días: `2026-07-12, 2026-07-14, 2026-07-15, 2026-07-16, 2026-07-17, 2026-07-22, 2026-07-27, 2026-08-03, 2026-08-04, 2026-08-07, 2026-08-09`
 - WR research puntual: **1.0** (wins=11/11)
 - Wilson 95% lower: **0.7412**
-- Caveat: muestra pequeña; no afirmar CI>80% salvo que el lower bound lo soporte.
+- Lectura honesta: con n=11, WR puntual=100% **no** se distingue estadísticamente de un sistema ~74% (o peor).
+- Riesgo overfitting: el DNA puede estar memorizando coincidencias de esa ventana climática, no un edge estable.
 
 ---
 
@@ -76,70 +91,72 @@ Template: `hong-kong` `2026-07-17` basket=0.4245
 
 ---
 
-## 4) Monte Carlo (bootstrap WR × depósito × fricción)
+## 4) Monte Carlo (sensibilidad de bankroll — NO validación del edge)
 
-Reps por celda: **2500**. Cada take histórico se sizea con floors; win→settle con fricción; miss→−notional.
+Reps por celda: **1500**. Cada take histórico se sizea con floors; win→settle con fricción; miss→−notional.
 
-| Start | WR | Friction | Ruin% | Median PnL | P05 PnL | Mean End | P(profit) |
-|------:|---:|----------|------:|-----------:|--------:|---------:|----------:|
-| 3.4482 | 0.75 | base | 0.2548 | 46.0895 | -3.2739 | 41.8174 | 0.6652 |
-| 3.4482 | 0.75 | hostile | 0.336 | 28.9529 | -3.2739 | 27.7769 | 0.664 |
-| 3.4482 | 0.8 | base | 0.1992 | 57.573 | -3.2739 | 50.0485 | 0.75 |
-| 3.4482 | 0.8 | hostile | 0.2504 | 37.4981 | -3.2739 | 33.7706 | 0.7492 |
-| 3.4482 | 0.9 | base | 0.0828 | 75.8568 | -3.2739 | 68.4714 | 0.9032 |
-| 3.4482 | 0.9 | hostile | 0.0968 | 51.0 | -3.2739 | 47.3723 | 0.9032 |
+**Importante:** este MC **remuestrea los mismos n takes DNA**. No es validación OOS independiente. Los 4 decimales (ruin%, median) miden sensibilidad de capital bajo un WR *asumido*, no demuestran ese WR. Tratar la tabla como stress de bankroll.
+
+| Start | WR asumido | Friction | Ruin% | Median PnL | P05 PnL | Mean End | P(profit) |
+|------:|-----------:|----------|------:|-----------:|--------:|---------:|----------:|
+| 3.4482 | 0.75 | base | 0.2607 | 46.0895 | -3.2739 | 41.5021 | 0.6627 |
+| 3.4482 | 0.75 | hostile | 0.3393 | 28.7288 | -3.2739 | 27.5274 | 0.6607 |
+| 3.4482 | 0.8 | base | 0.1993 | 57.573 | -3.2739 | 50.1942 | 0.7493 |
+| 3.4482 | 0.8 | hostile | 0.2507 | 37.4981 | -3.2739 | 33.9377 | 0.7493 |
+| 3.4482 | 0.9 | base | 0.0727 | 75.8568 | -3.2739 | 69.4482 | 0.9113 |
+| 3.4482 | 0.9 | hostile | 0.0887 | 51.0 | -3.2739 | 48.0667 | 0.9113 |
 | 3.4482 | 1.0 | base | 0.0 | 82.4632 | 82.4632 | 85.9114 | 1.0 |
 | 3.4482 | 1.0 | hostile | 0.0 | 57.134 | 57.134 | 60.5822 | 1.0 |
-| 5.0 | 0.75 | base | 0.2536 | 61.4552 | -4.7472 | 57.4776 | 0.7464 |
-| 5.0 | 0.75 | hostile | 0.3008 | 38.7424 | -4.7472 | 37.6031 | 0.6968 |
-| 5.0 | 0.8 | base | 0.1992 | 74.189 | -4.7472 | 67.5033 | 0.8008 |
-| 5.0 | 0.8 | hostile | 0.2252 | 50.57 | -4.7472 | 45.9448 | 0.7732 |
-| 5.0 | 0.9 | base | 0.0876 | 97.3242 | -4.7472 | 90.5883 | 0.9124 |
-| 5.0 | 0.9 | hostile | 0.1056 | 66.8005 | -4.7472 | 62.8475 | 0.894 |
+| 5.0 | 0.75 | base | 0.248 | 61.821 | -4.7472 | 58.2731 | 0.752 |
+| 5.0 | 0.75 | hostile | 0.2793 | 40.2236 | -4.7472 | 38.9017 | 0.7193 |
+| 5.0 | 0.8 | base | 0.186 | 76.5332 | -4.7472 | 68.7655 | 0.814 |
+| 5.0 | 0.8 | hostile | 0.2253 | 50.57 | -4.7472 | 45.9602 | 0.7733 |
+| 5.0 | 0.9 | base | 0.08 | 97.3242 | -4.7472 | 91.1361 | 0.92 |
+| 5.0 | 0.9 | hostile | 0.0993 | 66.8005 | -4.7472 | 63.3843 | 0.9 |
 | 5.0 | 1.0 | base | 0.0 | 108.0298 | 108.0298 | 113.0298 | 1.0 |
 | 5.0 | 1.0 | hostile | 0.0 | 75.8659 | 75.8659 | 80.8659 | 1.0 |
-| 10.0 | 0.75 | base | 0.0736 | 69.6683 | -9.7494 | 74.6272 | 0.926 |
-| 10.0 | 0.75 | hostile | 0.0668 | 45.0321 | -9.7494 | 52.0283 | 0.914 |
-| 10.0 | 0.8 | base | 0.0432 | 79.3756 | 18.1117 | 84.2999 | 0.9568 |
-| 10.0 | 0.8 | hostile | 0.0444 | 52.6866 | -7.9021 | 59.2475 | 0.946 |
-| 10.0 | 0.9 | base | 0.01 | 98.0252 | 56.9924 | 102.0145 | 0.99 |
-| 10.0 | 0.9 | hostile | 0.01 | 67.1725 | 36.2862 | 73.0851 | 0.9884 |
+| 10.0 | 0.75 | base | 0.0653 | 69.7827 | -9.7494 | 75.2508 | 0.934 |
+| 10.0 | 0.75 | hostile | 0.062 | 45.1516 | -9.7494 | 52.3675 | 0.9193 |
+| 10.0 | 0.8 | base | 0.0413 | 79.3756 | 18.2073 | 84.5742 | 0.9587 |
+| 10.0 | 0.8 | hostile | 0.0433 | 52.351 | -7.9021 | 59.3647 | 0.9473 |
+| 10.0 | 0.9 | base | 0.01 | 98.0252 | 59.3867 | 102.1599 | 0.99 |
+| 10.0 | 0.9 | hostile | 0.0113 | 67.1725 | 38.4023 | 73.0889 | 0.9873 |
 | 10.0 | 1.0 | base | 0.0 | 108.8264 | 108.8264 | 118.8264 | 1.0 |
 | 10.0 | 1.0 | hostile | 0.0 | 76.462 | 76.462 | 86.462 | 1.0 |
-| 25.0 | 0.75 | base | 0.0016 | 72.087 | 23.751 | 93.7629 | 0.9948 |
-| 25.0 | 0.75 | hostile | 0.0008 | 45.9927 | 9.7884 | 69.3037 | 0.9788 |
-| 25.0 | 0.8 | base | 0.0016 | 79.3756 | 32.8898 | 101.5081 | 0.9976 |
-| 25.0 | 0.8 | hostile | 0.0016 | 52.1269 | 18.5485 | 75.6821 | 0.9932 |
-| 25.0 | 0.9 | base | 0.0 | 98.0252 | 61.6515 | 118.1137 | 1.0 |
-| 25.0 | 0.9 | hostile | 0.0 | 67.1725 | 39.4808 | 88.927 | 1.0 |
+| 25.0 | 0.75 | base | 0.0013 | 72.1431 | 22.4533 | 93.776 | 0.994 |
+| 25.0 | 0.75 | hostile | 0.0013 | 46.1124 | 10.5253 | 69.6017 | 0.9807 |
+| 25.0 | 0.8 | base | 0.0027 | 79.3756 | 34.4965 | 101.2867 | 0.9967 |
+| 25.0 | 0.8 | hostile | 0.0027 | 52.1269 | 19.3043 | 75.5262 | 0.992 |
+| 25.0 | 0.9 | base | 0.0 | 98.0252 | 61.6515 | 117.819 | 1.0 |
+| 25.0 | 0.9 | hostile | 0.0 | 67.1725 | 39.4808 | 88.6982 | 1.0 |
 | 25.0 | 1.0 | base | 0.0 | 108.8264 | 108.8264 | 133.8264 | 1.0 |
 | 25.0 | 1.0 | hostile | 0.0 | 76.462 | 76.462 | 101.462 | 1.0 |
-| 50.0 | 0.75 | base | 0.0 | 72.4527 | 24.2391 | 119.5344 | 0.9952 |
-| 50.0 | 0.75 | hostile | 0.0 | 46.8259 | 10.8706 | 95.0612 | 0.984 |
-| 50.0 | 0.8 | base | 0.0 | 80.86 | 34.3513 | 126.792 | 0.9976 |
-| 50.0 | 0.8 | hostile | 0.0 | 52.8404 | 19.3162 | 100.8793 | 0.9948 |
-| 50.0 | 0.9 | base | 0.0 | 98.0252 | 61.6515 | 143.3353 | 1.0 |
-| 50.0 | 0.9 | hostile | 0.0 | 67.1725 | 39.0728 | 114.0819 | 1.0 |
+| 50.0 | 0.75 | base | 0.0 | 72.916 | 25.8367 | 120.4717 | 0.996 |
+| 50.0 | 0.75 | hostile | 0.0 | 48.2501 | 12.121 | 95.7564 | 0.9853 |
+| 50.0 | 0.8 | base | 0.0 | 80.5692 | 35.3416 | 126.4831 | 0.998 |
+| 50.0 | 0.8 | hostile | 0.0 | 52.4625 | 19.3162 | 100.6422 | 0.9953 |
+| 50.0 | 0.9 | base | 0.0 | 98.0252 | 61.6515 | 143.3205 | 1.0 |
+| 50.0 | 0.9 | hostile | 0.0 | 67.1725 | 39.7472 | 114.0622 | 1.0 |
 | 50.0 | 1.0 | base | 0.0 | 108.8264 | 108.8264 | 158.8264 | 1.0 |
 | 50.0 | 1.0 | hostile | 0.0 | 76.462 | 76.462 | 126.462 | 1.0 |
-| 100.0 | 0.75 | base | 0.0 | 72.656 | 25.7235 | 169.7214 | 0.9956 |
-| 100.0 | 0.75 | hostile | 0.0 | 47.1194 | 11.285 | 145.203 | 0.9824 |
-| 100.0 | 0.8 | base | 0.0 | 79.3756 | 33.669 | 176.4992 | 0.9988 |
-| 100.0 | 0.8 | hostile | 0.0 | 52.1269 | 18.9264 | 150.6909 | 0.9948 |
-| 100.0 | 0.9 | base | 0.0 | 98.0252 | 58.5579 | 192.6413 | 1.0 |
-| 100.0 | 0.9 | hostile | 0.0 | 67.1725 | 38.0883 | 163.5047 | 0.9996 |
+| 100.0 | 0.75 | base | 0.0 | 72.656 | 26.7467 | 169.9533 | 0.9967 |
+| 100.0 | 0.75 | hostile | 0.0 | 47.5525 | 12.534 | 145.4067 | 0.9833 |
+| 100.0 | 0.8 | base | 0.0 | 79.6594 | 34.1869 | 176.9721 | 0.9987 |
+| 100.0 | 0.8 | hostile | 0.0 | 52.351 | 19.3043 | 151.0372 | 0.9947 |
+| 100.0 | 0.9 | base | 0.0 | 98.0252 | 58.2433 | 192.537 | 1.0 |
+| 100.0 | 0.9 | hostile | 0.0 | 67.1725 | 36.677 | 163.4303 | 1.0 |
 | 100.0 | 1.0 | base | 0.0 | 108.8264 | 108.8264 | 208.8264 | 1.0 |
 | 100.0 | 1.0 | hostile | 0.0 | 76.462 | 76.462 | 176.462 | 1.0 |
 
 ### Lectura MC @ wallet actual (WR=0.80, base)
 
-- Ruin prob: **0.1992**
+- Ruin prob: **0.1993**
 - Median PnL: **57.573** · P05: **-3.2739**
-- Mean end equity: **50.0485**
+- Mean end equity: **50.1942**
 
 ### Comparativa @ $25 (WR=0.80, base)
 
-- Ruin prob: **0.0016**
+- Ruin prob: **0.0027**
 - Median PnL: **79.3756**
 
 ---
@@ -202,32 +219,32 @@ Con wallet micro, el PnL/$ por take win sized ~$3 es modesto (~+$1.2 a +$2 segú
 
 ## 7) Libro vivo
 
-Open=8 · accepted_DNA=0 · near_miss=2
-- `shanghai` basket=0.68 · `basket_cost=0.680>max=0.5+max_leg=0.410>0.39`
-- `hong-kong` basket=0.57 · `basket_cost=0.570>max=0.5+ev=0.0080<0.01+not_underdispersed`
-
-### Contrafactual (NO ejecutar)
-- **shanghai** 0.68 → `REJECT — DNA gate` (EV$ approx if forced 1.1387)
-- **hong-kong** 0.57 → `REJECT — DNA gate` (EV$ approx if forced 0.0421)
+_Error: `Server error '503 Service Unavailable' for url 'https://api.open-meteo.com/v1/forecast?latitude=31.1443&longitude=121.8083&daily=temperature_2m_max&timezone=Asia%2FShanghai&forecast_days=3&models=ecmwf_ifs025'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/503`_
 
 ---
 
 ## 8) Riesgos y límites del informe
 
-1. No es fill on-chain; FAK parcial / gap de libro pueden empeorar el miss.
-2. n=11 research es pequeño; Wilson lower ~0.74 — no vender certeza 95%>80%.
-3. Geoblock / keys / SAFE gates deben seguir OK en VPS ES.
-4. Near-miss ricos **no** son edge; forzarlos rompe la certificación.
-5. Hold-to-resolution: capital queda locked hasta settle del día.
+1. **n pequeño:** n=11; Wilson95 lower ~0.74. No vender certeza 95%>80%.
+2. **MC ≠ validación:** bootstrap sobre los mismos takes; ilusión de precisión ≠ evidencia.
+3. **Overfitting DNA:** filtros press-only pueden memorizar ruido de esas fechas.
+4. **Depósito nuevo:** no justificado por este informe hasta n≥30 y Wilson≥0.80 (y GO solo con n≥50).
+5. No es fill on-chain; FAK parcial / gap de libro pueden empeorar el miss.
+6. Geoblock / keys / SAFE gates deben seguir OK en VPS ES.
+7. Near-miss ricos **no** son edge; forzarlos rompe la disciplina.
+8. Hold-to-resolution: capital locked hasta settle.
 
 ---
 
-## 9) Plan GO (si se acepta CONDITIONAL)
+## 9) Plan RESEARCH_ONLY (postura actual)
 
-1. Depositar hasta **≥ $25 USDC** (ideal) antes del primer take.
-2. Mantener `POLY_LIVE_DRY_RUN` según política hasta armar explícito.
-3. Auto-execute solo DNA: basket≤0.50 + UD + leg≤0.39.
-4. Tras 1 miss: revisar bankroll; no martingale ni aflojar gates.
-5. Canal Telegram para EDGE / EJECUCIÓN / FIN.
+1. **No** depositar capital adicional solo por este informe.
+2. Seguir en sim / paper / vigilante DNA-gated; acumular takes hasta n≥30 (ideal ≥50).
+3. Recalcular Wilson95 lower en cada nuevo take DNA; no usar WR puntual.
+4. Mantener SAFE (`DRY_RUN` según política) hasta evidencia + capital runway.
+5. Auto-execute solo si DNA estricto y el operador arma explícitamente tras umbrales.
+6. Tras cualquier miss: no martingale ni aflojar gates.
+7. Telegram: EDGE / EJECUCIÓN / FIN — sin spam de near-miss.
 
-_Generado por `ladder_viability_report` · 2026-08-10T10:32:28.614511+00:00_
+_Generado por `ladder_viability_report` · 2026-08-10T10:40:00.879228+00:00_

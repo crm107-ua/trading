@@ -213,13 +213,22 @@ def cadence_projection(*, wr: float, takes_per_week: float = 2.5) -> dict[str, A
     }
 
 
+# Minimum independent DNA takes before any "deposit more / GO" language is allowed.
+MIN_N_FOR_CAPITAL_INCREASE = 30
+MIN_N_FOR_GO_MICRO = 50
+MIN_WILSON95_FOR_GO = 0.80
+
+
 def scorecard(report: dict[str, Any]) -> dict[str, Any]:
     bal = float(report["wallet"]["balance_usdc"])
     what = report["what_if_take_now"]
     adeq_map = report["capital_adequacy"]
     adeq = adeq_map.get(f"{bal:g}") or adeq_map.get(str(bal)) or next(iter(adeq_map.values()))
     mc = report["monte_carlo"]
-    # pick MC rows for this balance @ wr 0.80 base
+    rs = report.get("research_stats") or {}
+    n = int(rs.get("n") or report.get("dna_universe_n") or 0)
+    wilson = float(rs.get("wilson95_lower") or 0.0)
+
     row80 = next(
         (
             r
@@ -236,36 +245,56 @@ def scorecard(report: dict[str, Any]) -> dict[str, Any]:
         ),
         None,
     )
+
+    # Evidence gates dominate capital/MC cosmetics.
+    evidence = {
+        "n_ge_30_for_deposit_talk": n >= MIN_N_FOR_CAPITAL_INCREASE,
+        "n_ge_50_for_go": n >= MIN_N_FOR_GO_MICRO,
+        "wilson95_ge_80": wilson + 1e-12 >= MIN_WILSON95_FOR_GO,
+        "mc_is_not_independent_validation": False,  # always fails: honesty marker
+        "overfit_risk_acknowledged": True,  # process check (doc section present)
+    }
     checks = {
-        "dna_certified_research": True,
+        **evidence,
+        "engineering_gates_ready": True,
         "geoblock_ok_assumed_vps_es": True,
         "take_sizeable_at_wallet": bool(what.get("executable_now")),
         "survives_one_miss_armed": bool(adeq.get("still_armed_after_1_miss")),
         "mc80_ruin_prob_lt_25pct": bool(row80 and (row80.get("ruin_prob") or 1) < 0.25),
         "mc80_median_pnl_positive": bool(row80 and (row80.get("median_pnl") or -1) > 0),
-        "deposit_25_recommended_clear": bool(
-            row80_25 and (row80_25.get("ruin_prob") or 1) < 0.10 and row80_25.get("median_pnl", -1) > 0
-        ),
         "live_book_has_dna_take_now": bool((report.get("live_book") or {}).get("accepted_n")),
     }
+    # Explicit: MC bootstrap on same n trades is NOT independent evidence
+    checks["mc_is_not_independent_validation"] = False
+
     passed = sum(1 for v in checks.values() if v)
     total = len(checks)
-    # Decision
-    if not checks["take_sizeable_at_wallet"]:
+
+    if n < MIN_N_FOR_CAPITAL_INCREASE or wilson < MIN_WILSON95_FOR_GO:
+        decision = "RESEARCH_ONLY"
+        reason = (
+            f"Evidencia insuficiente para aumentar capital real: n={n} "
+            f"(mín. {MIN_N_FOR_CAPITAL_INCREASE} para hablar de depósito; "
+            f"mín. {MIN_N_FOR_GO_MICRO} para GO_MICRO), Wilson95_lower={wilson:.4f} "
+            f"(hace falta ≥{MIN_WILSON95_FOR_GO:.2f}). "
+            "El Monte Carlo remuestrea los mismos takes — no es validación OOS independiente. "
+            "Riesgo material de overfitting DNA a ruido de julio–agosto."
+        )
+    elif not checks["take_sizeable_at_wallet"]:
         decision = "NO-GO"
         reason = "Wallet no puede sizear basket DNA con floors CLOB."
     elif not checks["survives_one_miss_armed"]:
-        decision = "CONDITIONAL"
+        decision = "CONDITIONAL_CAPITAL"
         reason = (
-            "Take DNA cabe, pero 1 miss deja cash < $2 (no re-armar). "
-            "Viable solo tras depositar ≥$25 o aceptar ruin risk del primer miss."
+            "Evidencia OK en umbrales, pero 1 miss deja cash < $2. "
+            "Solo entonces plantear depósito para runway — no antes."
         )
-    elif checks["mc80_ruin_prob_lt_25pct"] and checks["mc80_median_pnl_positive"]:
+    elif n >= MIN_N_FOR_GO_MICRO and checks["wilson95_ge_80"] and checks["survives_one_miss_armed"]:
         decision = "GO_MICRO"
-        reason = "Capital aguanta ≥1 miss y MC@WR80 es aceptable."
+        reason = "Muestra y capital adeudan umbrales mínimos; DNA estricto + caps."
     else:
-        decision = "CONDITIONAL"
-        reason = "Métricas mixtas; reforzar bankroll antes de primer take real."
+        decision = "RESEARCH_ONLY"
+        reason = "Seguir acumulando takes DNA / paper antes de comprometer más USDC."
 
     return {
         "decision": decision,
@@ -273,8 +302,20 @@ def scorecard(report: dict[str, Any]) -> dict[str, Any]:
         "checks_passed": passed,
         "checks_total": total,
         "checks": checks,
+        "evidence_thresholds": {
+            "min_n_deposit_talk": MIN_N_FOR_CAPITAL_INCREASE,
+            "min_n_go_micro": MIN_N_FOR_GO_MICRO,
+            "min_wilson95_go": MIN_WILSON95_FOR_GO,
+            "observed_n": n,
+            "observed_wilson95_lower": wilson,
+        },
         "mc80_at_wallet": row80,
         "mc80_at_25": row80_25,
+        "mc_caveat": (
+            "Las celdas MC (ruin%, median PnL a 4 decimales) NO validan el edge: "
+            "bootstrapean la misma muestra DNA. Tratarlas como sensibilidad de bankroll, "
+            "no como prueba de WR."
+        ),
     }
 
 
@@ -312,6 +353,19 @@ def render_viability_md(report: dict[str, Any]) -> str:
         "",
         report["recommendation_es"],
         "",
+        f"**Caveat MC:** {sc.get('mc_caveat')}",
+        "",
+        "### Umbrales de evidencia (duros)",
+        "",
+        "| Umbral | Requerido | Observado |",
+        "|--------|----------:|----------:|",
+    ]
+    et = sc.get("evidence_thresholds") or {}
+    lines += [
+        f"| n para hablar de depósito | {et.get('min_n_deposit_talk')} | {et.get('observed_n')} |",
+        f"| n para GO_MICRO | {et.get('min_n_go_micro')} | {et.get('observed_n')} |",
+        f"| Wilson95 lower | {et.get('min_wilson95_go')} | {et.get('observed_wilson95_lower')} |",
+        "",
         "---",
         "",
         "## 1) Contexto DNA y muestra",
@@ -321,7 +375,8 @@ def render_viability_md(report: dict[str, Any]) -> str:
         f"- WR research puntual: **{report['research_stats']['wr_point']}** "
         f"(wins={report['research_stats']['wins']}/{report['research_stats']['n']})",
         f"- Wilson 95% lower: **{report['research_stats']['wilson95_lower']}**",
-        f"- Caveat: muestra pequeña; no afirmar CI>80% salvo que el lower bound lo soporte.",
+        "- Lectura honesta: con n=11, WR puntual=100% **no** se distingue estadísticamente de un sistema ~74% (o peor).",
+        "- Riesgo overfitting: el DNA puede estar memorizando coincidencias de esa ventana climática, no un edge estable.",
         "",
         "---",
         "",
@@ -359,13 +414,17 @@ def render_viability_md(report: dict[str, Any]) -> str:
         "",
         "---",
         "",
-        "## 4) Monte Carlo (bootstrap WR × depósito × fricción)",
+        "## 4) Monte Carlo (sensibilidad de bankroll — NO validación del edge)",
         "",
         f"Reps por celda: **{report['mc_reps']}**. Cada take histórico se sizea con floors; "
         "win→settle con fricción; miss→−notional.",
         "",
-        "| Start | WR | Friction | Ruin% | Median PnL | P05 PnL | Mean End | P(profit) |",
-        "|------:|---:|----------|------:|-----------:|--------:|---------:|----------:|",
+        "**Importante:** este MC **remuestrea los mismos n takes DNA**. No es validación OOS "
+        "independiente. Los 4 decimales (ruin%, median) miden sensibilidad de capital bajo un WR "
+        "*asumido*, no demuestran ese WR. Tratar la tabla como stress de bankroll.",
+        "",
+        "| Start | WR asumido | Friction | Ruin% | Median PnL | P05 PnL | Mean End | P(profit) |",
+        "|------:|-----------:|----------|------:|-----------:|--------:|---------:|----------:|",
     ]
     for r in report["monte_carlo"]:
         # keep table readable: only base+hostile and key WRs
@@ -459,21 +518,26 @@ def render_viability_md(report: dict[str, Any]) -> str:
         "",
         "## 8) Riesgos y límites del informe",
         "",
-        "1. No es fill on-chain; FAK parcial / gap de libro pueden empeorar el miss.",
-        "2. n=11 research es pequeño; Wilson lower ~0.74 — no vender certeza 95%>80%.",
-        "3. Geoblock / keys / SAFE gates deben seguir OK en VPS ES.",
-        "4. Near-miss ricos **no** son edge; forzarlos rompe la certificación.",
-        "5. Hold-to-resolution: capital queda locked hasta settle del día.",
+        "1. **n pequeño:** n=11; Wilson95 lower ~0.74. No vender certeza 95%>80%.",
+        "2. **MC ≠ validación:** bootstrap sobre los mismos takes; ilusión de precisión ≠ evidencia.",
+        "3. **Overfitting DNA:** filtros press-only pueden memorizar ruido de esas fechas.",
+        "4. **Depósito nuevo:** no justificado por este informe hasta n≥30 y Wilson≥0.80 (y GO solo con n≥50).",
+        "5. No es fill on-chain; FAK parcial / gap de libro pueden empeorar el miss.",
+        "6. Geoblock / keys / SAFE gates deben seguir OK en VPS ES.",
+        "7. Near-miss ricos **no** son edge; forzarlos rompe la disciplina.",
+        "8. Hold-to-resolution: capital locked hasta settle.",
         "",
         "---",
         "",
-        "## 9) Plan GO (si se acepta CONDITIONAL)",
+        "## 9) Plan RESEARCH_ONLY (postura actual)",
         "",
-        "1. Depositar hasta **≥ $25 USDC** (ideal) antes del primer take.",
-        "2. Mantener `POLY_LIVE_DRY_RUN` según política hasta armar explícito.",
-        "3. Auto-execute solo DNA: basket≤0.50 + UD + leg≤0.39.",
-        "4. Tras 1 miss: revisar bankroll; no martingale ni aflojar gates.",
-        "5. Canal Telegram para EDGE / EJECUCIÓN / FIN.",
+        "1. **No** depositar capital adicional solo por este informe.",
+        "2. Seguir en sim / paper / vigilante DNA-gated; acumular takes hasta n≥30 (ideal ≥50).",
+        "3. Recalcular Wilson95 lower en cada nuevo take DNA; no usar WR puntual.",
+        "4. Mantener SAFE (`DRY_RUN` según política) hasta evidencia + capital runway.",
+        "5. Auto-execute solo si DNA estricto y el operador arma explícitamente tras umbrales.",
+        "6. Tras cualquier miss: no martingale ni aflojar gates.",
+        "7. Telegram: EDGE / EJECUCIÓN / FIN — sin spam de near-miss.",
         "",
         f"_Generado por `ladder_viability_report` · {report['ts_utc']}_",
         "",
@@ -614,15 +678,23 @@ def main() -> int:
     # Human recommendation in Spanish
     dec = report["scorecard"]["decision"]
     if dec == "NO-GO":
-        rec = "No operar takes reales hasta depositar lo suficiente para sizear el basket DNA."
-    elif dec == "CONDITIONAL":
+        rec = "No operar takes reales: wallet no sizea el basket DNA."
+    elif dec == "RESEARCH_ONLY":
         rec = (
-            "Viabilidad CONDICIONAL: el sistema técnico está listo (VPS ES + DNA + Telegram), "
-            "pero el bankroll actual no sobrevive 1 miss. Depositar ≥$25 antes del primer take; "
-            "mientras, WAIT DNA-gated sin forzar near-miss."
+            "RESEARCH_ONLY: la ingeniería está lista, la evidencia no. "
+            "n=11 y Wilson~0.74 no justifican depósito nuevo ni GO. "
+            "Seguir en sim/vigilante DNA-gated; acumular ≥30 takes (ideal ≥50) "
+            "antes de plantear más capital. No forzar near-miss. No martingale."
         )
+    elif dec == "CONDITIONAL_CAPITAL":
+        rec = (
+            "Evidencia OK en umbrales, pero el bankroll no aguanta 1 miss. "
+            "Solo entonces valorar depósito para runway — nunca al revés."
+        )
+    elif dec == "GO_MICRO":
+        rec = "GO micro: muestra y capital en umbrales; DNA estricto + caps."
     else:
-        rec = "GO micro: capital adecuado para ≥1 miss; mantener DNA estricto y caps."
+        rec = "Seguir en research/sim hasta aclarar evidencia y capital."
     report["recommendation_es"] = rec
 
     OUT.mkdir(parents=True, exist_ok=True)
