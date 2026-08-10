@@ -13,6 +13,7 @@
 - `long_term_robustness --write-docs`: elige por **robustez** (walk-forward/semanas/ciudades/fricción).
 - Óptimo durable actual = DNA `income_wr80` → [`LONG_HORIZON_OPTIMAL.md`](LONG_HORIZON_OPTIMAL.md).
 - Más ingreso durable = más capital + más n forward, **no** baskets más caros / sin UD.
+- Prep capital ($100–$1000): `prepare_capital_scale --write-docs` → [`CAPITAL_SCALE_PREP.md`](CAPITAL_SCALE_PREP.md).
 
 ## Camino
 1. Forward snapshots D+0..D+3 + recheck denso (30–45s cerca).
@@ -26,5 +27,6 @@ python -m polymarket.research.local_lab.resolve_forward_cases
 python -m polymarket.research.local_lab.assurance_research --write-docs
 python -m polymarket.research.local_lab.rearm_income_gate --run-income-tests
 python -m polymarket.research.local_lab.long_term_robustness --write-docs
+python -m polymarket.research.local_lab.prepare_capital_scale --write-docs
 python -m polymarket.research.local_lab.sim_strategy_improve --write-docs
 ```

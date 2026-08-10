@@ -29,6 +29,8 @@ SCALES = (
     {"name": "standard", "budget": 12.0, "deposit": 50.0, "session_cap": 15.0},
     {"name": "high", "budget": 25.0, "deposit": 100.0, "session_cap": 50.0},
     {"name": "aggressive", "budget": 50.0, "deposit": 200.0, "session_cap": 100.0},
+    {"name": "pro", "budget": 75.0, "deposit": 500.0, "session_cap": 150.0},
+    {"name": "desk", "budget": 100.0, "deposit": 1000.0, "session_cap": 200.0},
 )
 
 
@@ -97,11 +99,12 @@ def project(raw: list[dict[str, Any]]) -> dict[str, Any]:
             "projection_high_week_clean": round(scales[2]["expected_pnl_week"], 2) if len(scales) > 2 else None,
         },
         "how_to_earn_more": [
-            "1. Deposit enough for the scale (high=$100, aggressive=$200).",
-            "2. Use weather_ladder_high_income.json (budget $25, cap $50).",
+            "1. Deposit enough for the scale when READY_TO_REARM (high=$100, aggressive=$200, pro=$500).",
+            "2. Use weather_ladder_high_income.json (budget $25+, same DNA).",
             "3. Keep press-only DNA — do NOT loosen basket to chase trades.",
             "4. POLY_LADDER_HIGH_INCOME=1 + POLY_LADDER_REAL_CONFIRM=1 for real >$5.",
             "5. Run from Polymarket-allowed region.",
+            "6. Prep: python3 -m polymarket.research.local_lab.prepare_capital_scale --write-docs",
         ],
         "rejected_levers": {
             "select_tier": "WR drops to ~77% — more trades, worse income quality",

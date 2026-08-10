@@ -33,12 +33,14 @@ POLY = Path(__file__).resolve().parents[2]
 CASES = POLY / "data_local" / "local_lab" / "weather_optimize" / "cases.json"
 OUT = POLY / "data_local" / "local_lab" / "real_income_sim"
 
-STARTS = (25.0, 50.0, 100.0)
+STARTS = (25.0, 50.0, 100.0, 200.0, 500.0)
 # Per-trade budget targets (scaled down for micro; pressed by underdispersion in plan)
 BUDGET_FRACS = {
     25.0: 0.32,   # ~$8 / trade — survives live floors after hostile partial fills
     50.0: 0.18,   # ~$9
     100.0: 0.12,  # ~$12
+    200.0: 0.10,  # ~$20
+    500.0: 0.08,  # ~$40
 }
 
 STRESS = [

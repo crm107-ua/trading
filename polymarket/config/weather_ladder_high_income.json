@@ -22,7 +22,7 @@
   "require_underdispersion": true,
   "post_max_basket_cost": 0.52,
   "bias_override_c": 0.5,
-  "prefer_horizons": [1, 2],
+  "prefer_horizons": [0, 1, 2, 3],
   "volatile_only": true,
   "use_clob_asks": true,
   "mark_open_to_mid": true,
@@ -33,7 +33,7 @@
   "smoke_post_when_empty": false,
   "block_floor_trap": true,
   "cities": ["singapore", "shanghai", "beijing", "hong-kong"],
-  "city_priority": ["singapore", "shanghai", "beijing", "hong-kong"],
+  "city_priority": ["hong-kong", "beijing", "singapore", "shanghai"],
   "exclude_cities": ["tokyo", "seoul", "miami", "wellington", "taipei", "paris", "london"],
   "sleeves": [
     {
@@ -89,11 +89,13 @@
     "max_session_loss_usdc": 25.0,
     "hold_to_resolution": true,
     "deposit_target_usdc": 100.0,
-    "min_balance_to_arm_usdc": 25.0,
+    "min_balance_to_arm_usdc": 50.0,
     "high_income": true,
-    "requires_env": "POLY_LADDER_HIGH_INCOME=1"
+    "requires_env": "POLY_LADDER_HIGH_INCOME=1",
+    "capital_scale_playbook": "prepare_capital_scale --write-docs",
+    "stretch_deposit_usdc": 200.0
   },
-  "projections_note": "Historical ~2.5 press takes/week. At ~$25/trade expected ~+$150-220/week if cadence holds; ~$40/week at $5 micro. Today often $0 without open edge.",
+  "projections_note": "Historical ~2.5 press takes/week. At ~$25/trade expected ~+$150-220/week if cadence holds. Prep target $100; stretch $200 after clean weeks. Same DNA as long-term optimal.",
   "dna": {
     "profile": "income_wr80",
     "press_only": true,
